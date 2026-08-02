@@ -1,0 +1,161 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搜索结果 - 定时资讯</title>
+    <link rel="icon" href="/images/sign.png" type="image/png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=22">
+    <style>
+        .search-results-container {
+            padding: 40px 24px 60px;
+        }
+        .search-results-header {
+            margin-bottom: 32px;
+            padding: 24px 28px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        .search-results-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent-gold);
+        }
+        .search-results-header h1 {
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: 0.05em;
+        }
+        .search-results-header .search-keyword {
+            color: var(--accent-gold);
+        }
+        .search-results-header p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        .search-results-header .search-count {
+            font-weight: 600;
+            color: var(--accent-gold);
+        }
+    </style>
+</head>
+<body>
+    {% include "_header.html" %}
+
+    <main>
+        <div class="search-results-container">
+            <div class="search-results-header">
+                <h1>搜索结果</h1>
+                <p id="searchInfo">正在搜索...</p>
+            </div>
+            <div class="news-grid" id="searchResults">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <span>定时资讯 &copy; 2024 &mdash; AI 新闻聚合平台</span>
+    </footer>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const keyword = params.get('q') || '';
+        const searchInput = document.getElementById('searchInput');
+        searchInput.value = keyword;
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        function createNewsCard(item) {
+            const el = document.createElement('div');
+            el.className = 'news-card';
+            el.setAttribute('data-cat', item.category_name || '');
+            el.style.setProperty('--cat', item.category_color || '#8a8690');
+
+            const coverHtml = item.cover_url
+                ? `<img src="${escapeHtml(item.cover_url)}" alt="${escapeHtml(item.title)}" loading="lazy">`
+                : `<div class="card-cover-placeholder">CN</div>`;
+
+            const sourceHtml = item.source_url
+                ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener" class="card-source" onclick="event.stopPropagation()">${escapeHtml(item.source || '来源')}</a>`
+                : `<span class="card-source">${escapeHtml(item.source || '未知来源')}</span>`;
+
+            const readStatus = item.is_read
+                ? '<span class="card-read-status read">已读</span>'
+                : '<span class="card-read-status unread">未读</span>';
+
+            el.innerHTML = `
+                <div class="card-cover">${coverHtml}</div>
+                <div class="card-body">
+                    <span class="card-category" data-cat="${escapeHtml(item.category_name || '')}">${escapeHtml(item.category_name || '默认')}</span>
+                    <h3 class="card-title">${escapeHtml(item.title)}</h3>
+                    <p class="card-summary">${escapeHtml(item.summary || '')}</p>
+                    <div class="card-footer">
+                        ${sourceHtml}
+                        <span class="card-time">${formatDate(item.collected_at)}</span>
+                        ${readStatus}
+                    </div>
+                </div>
+            `;
+            el.addEventListener('click', (e) => {
+                if (e.target.closest('a')) return;
+                window.location.href = `/news/${item.id}`;
+            });
+            return el;
+        }
+
+        async function searchNews() {
+            if (!keyword) {
+                document.getElementById('searchInfo').innerHTML = '请输入搜索关键词';
+                document.getElementById('searchResults').innerHTML = '';
+                return;
+            }
+
+            try {
+                const resp = await fetch(`/api/news?keyword=${encodeURIComponent(keyword)}&page_size=50`);
+                const data = await resp.json();
+
+                document.getElementById('searchInfo').innerHTML = `找到 <span class="search-count">${data.total}</span> 条与 "<span class="search-keyword">${escapeHtml(keyword)}</span>" 相关的新闻`;
+
+                const grid = document.getElementById('searchResults');
+                if (data.items.length === 0) {
+                    grid.innerHTML = '<div class="empty-state"><p>未找到相关新闻</p></div>';
+                    return;
+                }
+
+                grid.innerHTML = '';
+                data.items.forEach(item => {
+                    grid.appendChild(createNewsCard(item));
+                });
+            } catch (e) {
+                document.getElementById('searchResults').innerHTML = '<div class="empty-state"><p>搜索失败，请稍后重试</p></div>';
+            }
+        }
+
+        searchNews();
+    </script>
+</body>
+</html>

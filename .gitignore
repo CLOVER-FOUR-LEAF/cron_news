@@ -1,0 +1,35 @@
+# 环境变量（含 API Key 等敏感信息）
+.env
+.env.*
+
+# 数据库
+database/
+*.db
+*.sqlite
+*.sqlite3
+
+# 图片资源
+images/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+
+# 工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 系统/编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 日志
+*.log

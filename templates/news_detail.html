@@ -1,0 +1,250 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新闻详情 - 定时资讯</title>
+    <link rel="icon" href="/images/sign.png" type="image/png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=22">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .markdown-body {
+            font-family: var(--font-body);
+            color: var(--text-secondary);
+            line-height: 1.9;
+            font-size: 1.05rem;
+        }
+        .markdown-body h1,
+        .markdown-body h2,
+        .markdown-body h3,
+        .markdown-body h4 {
+            color: var(--text-primary);
+            font-family: var(--font-display);
+            margin-top: 1.8em;
+            margin-bottom: 0.8em;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+        .markdown-body h1 { font-size: 2rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.3em; }
+        .markdown-body h2 { font-size: 1.6rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.2em; }
+        .markdown-body h3 { font-size: 1.3rem; }
+        .markdown-body h4 { font-size: 1.1rem; }
+        .markdown-body p { margin-bottom: 1em; }
+        .markdown-body ul,
+        .markdown-body ol {
+            margin-bottom: 1em;
+            padding-left: 1.5em;
+        }
+        .markdown-body li { margin-bottom: 0.4em; }
+        .markdown-body blockquote {
+            border-left: 3px solid var(--accent-gold);
+            margin: 1em 0;
+            padding: 0.5em 1em;
+            background: rgba(200, 168, 82, 0.06);
+            color: var(--text-secondary);
+        }
+        .markdown-body blockquote p:last-child { margin-bottom: 0; }
+        .markdown-body code {
+            background: var(--bg-elevated);
+            padding: 0.15em 0.4em;
+            border-radius: 3px;
+            font-size: 0.9em;
+            color: var(--accent-gold);
+        }
+        .markdown-body pre {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 1em;
+            overflow-x: auto;
+            margin-bottom: 1em;
+        }
+        .markdown-body pre code {
+            background: none;
+            padding: 0;
+            color: var(--text-primary);
+        }
+        .markdown-body table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1em;
+        }
+        .markdown-body th,
+        .markdown-body td {
+            border: 1px solid var(--border-subtle);
+            padding: 0.6em 1em;
+            text-align: left;
+        }
+        .markdown-body th {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        .markdown-body tr:hover { background: rgba(255, 255, 255, 0.02); }
+        .markdown-body a {
+            color: var(--accent-gold);
+            text-decoration: none;
+        }
+        .markdown-body a:hover { text-decoration: underline; }
+        .markdown-body strong { color: var(--text-primary); }
+        .markdown-body hr {
+            border: none;
+            border-top: 1px solid var(--border-subtle);
+            margin: 2em 0;
+        }
+        .markdown-body img {
+            max-width: 100%;
+            border-radius: var(--radius-md);
+            margin: 1em 0;
+        }
+    </style>
+</head>
+<body>
+    {% include "_header.html" %}
+
+    <main>
+        <div class="detail-layout">
+            <div class="detail-main" id="newsDetail">
+                <div class="loading">加载中...</div>
+            </div>
+            <aside class="detail-sidebar">
+                <div class="sidebar-title">相关内容</div>
+                <div class="related-list" id="relatedList">
+                    <div class="loading">加载中...</div>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <span>定时资讯 &copy; 2024 &mdash; AI 新闻聚合平台</span>
+    </footer>
+
+    <script>
+        const NEWS_ID = {{ news_id }};
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        function renderMarkdown(md) {
+            if (!md) return '<p>暂无正文内容</p>';
+            marked.setOptions({ breaks: true, gfm: true });
+            return marked.parse(md);
+        }
+
+        function estimateReadTime(content) {
+            if (!content) return 1;
+            const chars = content.length;
+            return Math.max(1, Math.ceil(chars / 500));
+        }
+
+        async function loadDetail() {
+            const container = document.getElementById('newsDetail');
+            try {
+                const resp = await fetch(`/api/news/${NEWS_ID}`);
+                if (!resp.ok) {
+                    container.innerHTML = '<div class="empty-state"><p>新闻不存在</p><a href="/">返回首页</a></div>';
+                    return;
+                }
+                const news = await resp.json();
+
+                fetch(`/api/news/${NEWS_ID}/read`, { method: 'POST' });
+
+                const sourceName = news.source_url
+                    ? `<a href="${escapeHtml(news.source_url)}" target="_blank" rel="noopener" class="detail-source-name">${escapeHtml(news.source || '来源')}</a>`
+                    : `<span>${escapeHtml(news.source || '未知来源')}</span>`;
+
+                const sourceLink = news.source_url
+                    ? `<a href="${escapeHtml(news.source_url)}" target="_blank" rel="noopener" class="detail-source-link">查看原文 &rarr;</a>`
+                    : '';
+
+                const readTime = estimateReadTime(news.content);
+
+                const mdContent = renderMarkdown(news.content);
+
+                container.innerHTML = `
+                    <a href="javascript:void(0)" onclick="window.history.back()" class="detail-back">&larr; 返回</a>
+                    <div class="detail-meta">
+                        <span class="detail-category" data-cat="${escapeHtml(news.category_name || '')}" style="--cat: ${escapeHtml(news.category_color || '#8a8690')}">${escapeHtml(news.category_name || '默认')}</span>
+                        ${sourceName}
+                        <span>收录于 ${formatDate(news.collected_at)}</span>
+                        <span class="detail-read-time">约 ${readTime} 分钟阅读</span>
+                    </div>
+                    <h1 class="detail-title">${escapeHtml(news.title)}</h1>
+                    <div class="markdown-body">${mdContent}</div>
+                    <div class="detail-actions">
+                        ${sourceLink}
+                    </div>
+                `;
+
+                document.title = `${news.title} - 定时资讯`;
+                loadRelated(news.category_name, news.id);
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state"><p>加载失败</p><a href="/">返回首页</a></div>';
+            }
+        }
+
+        async function loadRelated(category, excludeId) {
+            const container = document.getElementById('relatedList');
+            try {
+                const resp = await fetch(`/api/news?category=${encodeURIComponent(category)}&page_size=20`);
+                const data = await resp.json();
+                const items = data.items.filter(item => item.id !== excludeId);
+
+                if (items.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>暂无相关内容</p></div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                items.forEach(item => {
+                    container.appendChild(createRelatedCard(item));
+                });
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+            }
+        }
+
+        function createRelatedCard(item) {
+            const el = document.createElement('div');
+            el.className = 'related-card';
+
+            const sourceHtml = item.source_url
+                ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener" class="related-source" onclick="event.stopPropagation()">${escapeHtml(item.source || '来源')}</a>`
+                : `<span class="related-source">${escapeHtml(item.source || '未知来源')}</span>`;
+
+            const readStatus = item.is_read
+                ? '<span class="related-read-status read">已读</span>'
+                : '<span class="related-read-status unread">未读</span>';
+
+            el.innerHTML = `
+                <div class="related-title">${escapeHtml(item.title)}</div>
+                <div class="related-summary">${escapeHtml(item.summary || '')}</div>
+                <div class="related-meta">
+                    ${sourceHtml}
+                    <span>${formatDate(item.collected_at)}</span>
+                    ${readStatus}
+                </div>
+            `;
+            el.addEventListener('click', (e) => {
+                if (e.target.closest('a')) return;
+                window.location.href = `/news/${item.id}`;
+            });
+            return el;
+        }
+
+        loadDetail();
+    </script>
+</body>
+</html>

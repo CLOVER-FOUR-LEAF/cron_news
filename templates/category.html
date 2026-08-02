@@ -1,0 +1,194 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ category }} - 定时资讯</title>
+    <link rel="icon" href="/images/sign.png" type="image/png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=22">
+</head>
+<body>
+    {% include "_header.html" %}
+
+    <main>
+        <div class="category-hero" data-cat="{{ category }}" style="--cat: {{ cat_colors.get(category, '#8a8690') }}">
+            <div class="category-hero-top">
+                <h1>{{ category }}</h1>
+                <div class="date-filter" id="dateFilter">
+                    <div class="date-filter-btn" id="dateFilterBtn">
+                        <span class="date-filter-icon">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                <path d="M2 6h12M5 3v2M11 3v2M3.5 2h9a1 1 0 011 1v10a1 1 0 01-1 1h-9a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <span class="date-filter-text" id="dateFilterText">全部日期</span>
+                        <span class="date-filter-arrow">
+                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                                <path d="M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                    </div>
+                    <div class="date-dropdown" id="dateDropdown"></div>
+                </div>
+                <span class="category-subtitle">
+                    {% if category == '科技' %}TECHNOLOGY
+                    {% elif category == '军事' %}MILITARY
+                    {% elif category == '政治' %}POLITICS
+                    {% elif category == '经济' %}ECONOMY
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <div class="news-grid" id="newsGrid">
+            <div class="loading">加载中...</div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <span>定时资讯 &copy; 2024 &mdash; AI 新闻聚合平台</span>
+    </footer>
+
+    <script>
+        const CATEGORY = '{{ category }}';
+        const dateFilterBtn = document.getElementById('dateFilterBtn');
+        const dateFilterText = document.getElementById('dateFilterText');
+        const dateDropdown = document.getElementById('dateDropdown');
+        const dateFilter = document.getElementById('dateFilter');
+        let isOpen = false;
+        let currentDate = '';
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        function getDateList() {
+            const list = [{ value: '', label: '全部日期' }];
+            const today = new Date();
+            const labels = ['今天', '昨天', '前天'];
+
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(today);
+                d.setDate(d.getDate() - i);
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const value = `${yyyy}-${mm}-${dd}`;
+                const label = i < 3 ? `${mm}月${dd}日 ${labels[i]}` : `${mm}月${dd}日`;
+                list.push({ value, label });
+            }
+            return list;
+        }
+
+        function renderDropdown() {
+            const dates = getDateList();
+            dateDropdown.innerHTML = dates.map(d =>
+                `<div class="date-dropdown-item${d.value === currentDate ? ' active' : ''}" data-value="${d.value}">${d.label}</div>`
+            ).join('');
+
+            dateDropdown.querySelectorAll('.date-dropdown-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    currentDate = item.dataset.value;
+                    dateFilterText.textContent = item.textContent;
+                    closeDropdown();
+                    loadNews(currentDate || null);
+                    renderDropdown();
+                });
+            });
+        }
+
+        function toggleDropdown() {
+            isOpen = !isOpen;
+            dateDropdown.classList.toggle('show', isOpen);
+            dateFilterBtn.classList.toggle('active', isOpen);
+        }
+
+        function closeDropdown() {
+            isOpen = false;
+            dateDropdown.classList.remove('show');
+            dateFilterBtn.classList.remove('active');
+        }
+
+        function createNewsCard(item) {
+            const el = document.createElement('div');
+            el.className = 'news-card';
+            el.setAttribute('data-cat', item.category_name || '');
+            el.style.setProperty('--cat', item.category_color || '#8a8690');
+
+            const coverHtml = item.cover_url
+                ? `<img src="${escapeHtml(item.cover_url)}" alt="${escapeHtml(item.title)}" loading="lazy">`
+                : `<div class="card-cover-placeholder">CN</div>`;
+
+            const sourceHtml = item.source_url
+                ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener" class="card-source" onclick="event.stopPropagation()">${escapeHtml(item.source || '来源')}</a>`
+                : `<span class="card-source">${escapeHtml(item.source || '未知来源')}</span>`;
+
+            const readStatus = item.is_read
+                ? '<span class="card-read-status read">已读</span>'
+                : '<span class="card-read-status unread">未读</span>';
+
+            el.innerHTML = `
+                <div class="card-cover">${coverHtml}</div>
+                <div class="card-body">
+                    <span class="card-category" data-cat="${escapeHtml(item.category_name || '')}">${escapeHtml(item.category_name || '默认')}</span>
+                    <h3 class="card-title">${escapeHtml(item.title)}</h3>
+                    <p class="card-summary">${escapeHtml(item.summary || '')}</p>
+                    <div class="card-footer">
+                        ${sourceHtml}
+                        <span class="card-time">${formatDate(item.collected_at)}</span>
+                        ${readStatus}
+                    </div>
+                </div>
+            `;
+            el.addEventListener('click', (e) => {
+                if (e.target.closest('a')) return;
+                window.location.href = `/news/${item.id}`;
+            });
+            return el;
+        }
+
+        async function loadNews(dateVal) {
+            const grid = document.getElementById('newsGrid');
+            grid.innerHTML = '<div class="loading">加载中...</div>';
+
+            let url = `/api/news?category=${encodeURIComponent(CATEGORY)}&page_size=50`;
+            if (dateVal) url += `&date_filter=${dateVal}`;
+
+            try {
+                const resp = await fetch(url);
+                const data = await resp.json();
+                if (data.items.length === 0) {
+                    grid.innerHTML = '<div class="empty-state"><p>暂无相关新闻</p></div>';
+                    return;
+                }
+                grid.innerHTML = '';
+                data.items.forEach(item => grid.appendChild(createNewsCard(item)));
+            } catch (e) {
+                grid.innerHTML = '<div class="empty-state"><p>加载失败，请稍后重试</p></div>';
+            }
+        }
+
+        dateFilterBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleDropdown();
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!dateFilter.contains(e.target)) closeDropdown();
+        });
+
+        renderDropdown();
+        loadNews();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1609 @@
+﻿<div class="toast-container" id="toastContainer"></div>
+
+<header class="site-header">
+    <div class="header-inner">
+        <div class="header-left">
+            <div class="site-title">
+                <a href="/"><span class="dot"></span>定时资讯</a>
+            </div>
+            <nav class="main-nav">
+                <a href="/" class="nav-link {{ 'active' if active_page == 'home' else '' }}">首页</a>
+                {% for cat in categories %}
+                <a href="/category/{{ cat }}" class="nav-link {{ 'active' if active_page == 'category' and active_category == cat else '' }}" data-cat="{{ cat }}" style="--cat: {{ cat_colors.get(cat, '#8a8690') }}">{{ cat }}</a>
+                {% endfor %}
+            </nav>
+        </div>
+        <div class="header-right">
+            <div class="search-box">
+                <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+                    <path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+                <input type="text" id="searchInput" class="search-input" placeholder="搜索新闻..." />
+                <button id="searchBtn" class="search-btn">搜索</button>
+            </div>
+            <a href="/stats" class="header-icon-btn {{ 'active' if active_page == 'stats' else '' }}" title="阅读统计">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <rect x="2" y="10" width="3" height="6" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
+                    <rect x="7.5" y="6" width="3" height="10" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
+                    <rect x="13" y="2" width="3" height="14" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+            </a>
+            <div class="profile-wrap" id="profileWrap">
+                <button type="button" class="header-icon-btn profile-trigger" id="profileBtn" title="个人中心">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <circle cx="9" cy="6" r="3.5" stroke="currentColor" stroke-width="1.2"/>
+                        <path d="M2 16c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <div class="profile-panel" id="profilePanel">
+                    <div class="panel-greeting">
+                        <div class="panel-avatar" id="panelAvatar"><span>访</span></div>
+                        <div class="panel-greeting-text">
+                            <div class="panel-hello">你好，<span id="panelNickname">访客</span></div>
+                            <div class="panel-sub">管理你的资讯偏好</div>
+                        </div>
+                    </div>
+                    <div class="panel-menu">
+                        <button type="button" class="panel-item" data-action="profile">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="5.5" r="3" stroke="currentColor" stroke-width="1.2"/>
+                                    <path d="M2.5 14c0-2.8 2.5-4.5 5.5-4.5s5.5 1.7 5.5 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            个人资料
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
+                        <button type="button" class="panel-item" data-action="category">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                                    <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                                    <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                                    <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                                </svg>
+                            </span>
+                            分类管理
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
+                        <button type="button" class="panel-item" data-action="llm">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <rect x="4.5" y="4.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                                    <path d="M6.5 2v2.5M9.5 2v2.5M6.5 11.5V14M9.5 11.5V14M2 6.5h2.5M2 9.5h2.5M11.5 6.5H14M11.5 9.5H14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            大模型配置
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
+                        <button type="button" class="panel-item" data-action="search">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
+                                    <path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12" stroke="currentColor" stroke-width="1.2"/>
+                                </svg>
+                            </span>
+                            搜索服务配置
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
+                        <button type="button" class="panel-item" data-action="task">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
+                                    <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            自动任务配置
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<div id="profileModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3>个人资料</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="avatar-picker" id="avatarPicker" title="点击更换头像">
+                <div class="avatar-placeholder" id="avatarPlaceholder">访</div>
+                <img id="avatarPreview" alt="" style="display:none">
+                <div class="avatar-overlay">更换头像</div>
+                <input type="file" id="avatarInput" accept="image/*" hidden>
+            </div>
+            <div class="form-group">
+                <label>昵称</label>
+                <input type="text" id="nicknameInput" maxlength="20">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="saveProfileBtn">保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="categoryModal" class="modal">
+    <div class="modal-content modal-wide">
+        <div class="modal-header">
+            <h3>分类管理</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-toolbar">
+                <p class="modal-desc">拖拽色块调整顺序，排序会同步到导航栏和首页</p>
+                <button class="btn-primary" id="addCategoryBtn">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                        <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    添加分类
+                </button>
+                <span class="limit-hint" id="categoryLimitHint" style="display:none">分类已达上限（最多 10 个）</span>
+            </div>
+            <div id="categoryList" class="category-sort-list">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="categoryEditModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3 id="categoryEditTitle">添加分类</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>分类名称</label>
+                <input type="text" id="categoryNameInput" maxlength="50">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="saveCategoryBtn">确定</button>
+        </div>
+    </div>
+</div>
+
+<div id="categoryDeleteModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3>确认删除</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>确定要删除分类"<span id="deleteCategoryName"></span>"吗？</p>
+            <p class="text-dim">该分类下的新闻将自动归入默认分类。</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-danger" id="confirmDeleteCategoryBtn">删除</button>
+        </div>
+    </div>
+</div>
+
+<div id="llmModal" class="modal">
+    <div class="modal-content modal-wide">
+        <div class="modal-header">
+            <h3>大模型配置</h3>
+            <div class="modal-header-actions">
+                <button class="btn-primary btn-compact" id="addLLMBtn">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                        <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    新增配置
+                </button>
+                <button class="modal-close" data-close>&times;</button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <p class="modal-desc">模型调用三要素：Base URL · API Key · Model，同一时间仅可启用一个配置</p>
+            <div id="llmConfigList" class="llm-config-list"></div>
+        </div>
+    </div>
+</div>
+
+<div id="llmEditModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3 id="llmEditTitle">新增配置</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>模型厂商</label>
+                <select id="llmProviderSelect" class="form-select"></select>
+            </div>
+            <div class="form-group collapsible collapsed" id="llmNameGroup">
+                <label>名称</label>
+                <input type="text" id="llmNameInput" maxlength="30">
+            </div>
+            <div class="form-group">
+                <label>Base URL</label>
+                <input type="text" id="llmUrlInput">
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="llmApiKeyInput">
+                    <button type="button" class="btn-toggle" data-toggle="llmApiKeyInput">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.2"/>
+                            <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Model</label>
+                <input type="text" id="llmModelInput">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="saveLLMBtn">保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="llmDeleteModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3>确认删除</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>确定要删除配置"<span id="deleteLLMName"></span>"吗？</p>
+            <p class="text-dim">删除后该配置立即失效，此操作不可恢复。</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-danger" id="confirmDeleteLLMBtn">删除</button>
+        </div>
+    </div>
+</div>
+
+<div id="searchModal" class="modal">
+    <div class="modal-content modal-wide">
+        <div class="modal-header">
+            <h3>搜索服务配置</h3>
+            <div class="modal-header-actions">
+                <button class="btn-primary btn-compact" id="addSearchBtn">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                        <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    新增配置
+                </button>
+                <button class="modal-close" data-close>&times;</button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <p class="modal-desc">配置联网搜索服务商，同一时间仅可启用一个配置</p>
+            <div id="searchConfigList" class="llm-config-list"></div>
+        </div>
+    </div>
+</div>
+
+<div id="searchEditModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3 id="searchEditTitle">新增配置</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>搜索服务商</label>
+                <select id="searchProviderSelect" class="form-select"></select>
+            </div>
+            <div class="form-group collapsible collapsed" id="searchNameGroup">
+                <label>名称</label>
+                <input type="text" id="searchNameInput" maxlength="30">
+            </div>
+            <div class="form-group">
+                <label>Base URL</label>
+                <input type="text" id="searchUrlInput">
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="searchApiKeyInput">
+                    <button type="button" class="btn-toggle" data-toggle="searchApiKeyInput">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.2"/>
+                            <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="saveSearchBtn">保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="searchDeleteModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3>确认删除</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>确定要删除配置"<span id="deleteSearchName"></span>"吗？</p>
+            <p class="text-dim">删除后该配置立即失效，此操作不可恢复。</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-danger" id="confirmDeleteSearchBtn">删除</button>
+        </div>
+    </div>
+</div>
+
+<div id="taskModal" class="modal">
+    <div class="modal-content modal-wide">
+        <div class="modal-header">
+            <h3>自动任务配置</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="task-status">
+                <div class="task-status-item">
+                    <span class="task-status-label">调度状态</span>
+                    <span class="task-status-value" id="taskStatusRunning">-</span>
+                </div>
+                <div class="task-status-item">
+                    <span class="task-status-label">上次执行</span>
+                    <span class="task-status-value" id="taskStatusLastRun">-</span>
+                </div>
+                <div class="task-status-item">
+                    <span class="task-status-label">下次执行</span>
+                    <span class="task-status-value" id="taskStatusNextRun">-</span>
+                </div>
+            </div>
+
+            <div class="task-field">
+                <div class="task-field-head">
+                    <label class="task-label">触发频率</label>
+                </div>
+                <p class="task-hint">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.2"/>
+                        <path d="M8 7v3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                        <circle cx="8" cy="4.8" r="0.8" fill="currentColor"/>
+                    </svg>
+                    采集频率越高消耗的 AI Token 越多，请按需设置合理间隔
+                </p>
+                <div class="segmented">
+                    <button type="button" class="segmented-btn" id="taskModePresetBtn">预设</button>
+                    <button type="button" class="segmented-btn" id="taskModeCustomBtn">自定义</button>
+                </div>
+            </div>
+
+            <div class="task-field task-sub-section" id="taskCustomSection" style="display:none">
+                <div class="task-field-head">
+                    <label class="task-label">Cron 表达式</label>
+                </div>
+                <input type="text" id="taskCronInput" class="task-cron-input">
+                <span class="input-hint">例：0 */6 * * * 表示每 6 小时执行一次</span>
+            </div>
+
+            <div class="task-field task-sub-section" id="taskIntervalSection">
+                <div class="task-field-head">
+                    <label class="task-label">时间间隔</label>
+                </div>
+                <div class="cron-presets" id="intervalChips">
+                    <button type="button" class="cron-chip" data-hours="1">每 1 小时</button>
+                    <button type="button" class="cron-chip" data-hours="3">每 3 小时</button>
+                    <button type="button" class="cron-chip" data-hours="6">每 6 小时</button>
+                    <button type="button" class="cron-chip" data-hours="8">每 8 小时</button>
+                    <button type="button" class="cron-chip" data-hours="12">每 12 小时</button>
+                    <button type="button" class="cron-chip" data-hours="24">每 24 小时</button>
+                </div>
+            </div>
+
+            <div class="task-field task-sub-section" id="taskStartSection">
+                <div class="task-field-head">
+                    <label class="task-label">每日开始时间</label>
+                </div>
+                <div class="cron-presets" id="startHourChips">
+                    <button type="button" class="cron-chip" data-hour="0">每日 0 点</button>
+                    <button type="button" class="cron-chip" data-hour="4">每日 4 点</button>
+                </div>
+            </div>
+
+            <div class="task-field">
+                <div class="task-field-head">
+                    <label class="task-label">分类选择</label>
+                    <button type="button" class="btn-mini" id="toggleAllCatsBtn">取消全选</button>
+                </div>
+                <div class="cat-chip-grid" id="taskCatChips"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="triggerTaskBtn">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                    <path d="M13 1L5 8M13 1L9 13M13 1L1 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                立即执行
+            </button>
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="saveTaskBtn">保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="terminalModal" class="modal">
+    <div class="modal-content modal-wide terminal-modal">
+        <div class="terminal-header">
+            <div class="terminal-dots">
+                <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
+            </div>
+            <span class="terminal-title">agent@cron-news ~ 采集任务日志</span>
+            <span class="terminal-status running" id="terminalStatus">运行中</span>
+        </div>
+        <div class="terminal-body" id="terminalBody"></div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="terminalClearBtn">清空</button>
+            <button class="btn-primary" id="terminalCloseBtn" disabled>关闭</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const LLM_PROVIDERS = [
+        { id: 'custom', name: '自定义', url: '', color: '#8a8690' },
+        { id: 'deepseek', name: 'DeepSeek', url: 'https://api.deepseek.com/v1', color: '#4d6bfe' },
+        { id: 'kimi', name: 'Kimi', url: 'https://api.moonshot.cn/v1', color: '#14b8a6' },
+        { id: 'zhipu', name: '智谱AI', url: 'https://open.bigmodel.cn/api/paas/v4', color: '#3b82f6' },
+        { id: 'minimax', name: 'MiniMax', url: 'https://api.minimax.chat/v1', color: '#a855f7' },
+        { id: 'mimo', name: 'MiMo', url: 'https://api.mimo.xiaomi.com/v1', color: '#ff6900' },
+        { id: 'bailian', name: '阿里云百炼', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', color: '#f59e0b' },
+        { id: 'volcano', name: '字节方舟', url: 'https://ark.cn-beijing.volces.com/api/v3', color: '#06b6d4' },
+        { id: 'hunyuan', name: '腾讯混元', url: 'https://api.hunyuan.cloud.tencent.com/v1', color: '#f43f5e' }
+    ];
+
+    const SEARCH_PROVIDERS = [
+        { id: 'custom', name: '自定义', url: '', color: '#8a8690' },
+        { id: 'tavily', name: 'Tavily', url: 'https://api.tavily.com', color: '#0ea5e9' },
+        { id: 'mimo', name: 'MiMo', url: 'https://api.mimo.xiaomi.com/v1', color: '#ff6900' },
+        { id: 'kimi', name: 'Kimi', url: 'https://api.moonshot.cn/v1', color: '#14b8a6' }
+    ];
+
+    const state = {
+        categories: [],
+        llmConfigs: {},
+        activeLLM: null,
+        nickname: '访客',
+        avatar: '',
+        editingCatId: null,
+        deletingCatId: null,
+        editingLLM: null,
+        searchConfigs: [],
+        activeSearch: null,
+        editingSearch: null,
+        deletingSearch: null,
+        dragItem: null,
+        dragOverItem: null
+    };
+
+    const $ = id => document.getElementById(id);
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
+    function openModal(id) { $(id).classList.add('show'); }
+    function closeModal(id) { $(id).classList.remove('show'); }
+
+    document.querySelectorAll('.modal').forEach(m => {
+        m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
+        m.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => m.classList.remove('show')));
+    });
+
+    document.querySelectorAll('[data-toggle]').forEach(b => {
+        b.addEventListener('click', () => {
+            const inp = $(b.dataset.toggle);
+            inp.type = inp.type === 'password' ? 'text' : 'password';
+        });
+    });
+
+    /* ===== 个人中心悬浮面板 ===== */
+    const profileWrap = $('profileWrap');
+    const profilePanel = $('profilePanel');
+    const profileBtn = $('profileBtn');
+    let hideTimer = null;
+
+    function showPanel() {
+        clearTimeout(hideTimer);
+        profilePanel.classList.add('show');
+        profileWrap.classList.add('open');
+    }
+    function hidePanel() {
+        clearTimeout(hideTimer);
+        profilePanel.classList.remove('show');
+        profileWrap.classList.remove('open');
+    }
+    function scheduleHide() {
+        hideTimer = setTimeout(hidePanel, 200);
+    }
+
+    profileWrap.addEventListener('mouseenter', showPanel);
+    profileWrap.addEventListener('mouseleave', scheduleHide);
+    profileBtn.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (profilePanel.classList.contains('show')) hidePanel();
+        else showPanel();
+    });
+    document.addEventListener('click', e => {
+        if (!profileWrap.contains(e.target)) hidePanel();
+    });
+
+    document.querySelectorAll('.panel-item').forEach(item => {
+        item.addEventListener('click', () => {
+            hidePanel();
+            const action = item.dataset.action;
+            if (action === 'profile') openProfileModal();
+            else if (action === 'category') { renderCategories(); openModal('categoryModal'); }
+            else if (action === 'llm') { refreshConfig().then(() => { renderLLMList(); openModal('llmModal'); }); }
+            else if (action === 'search') { refreshConfig().then(() => { renderSearchList(); openModal('searchModal'); }); }
+            else if (action === 'task') { refreshConfig().then(() => { loadTaskForm(); openModal('taskModal'); }); }
+        });
+    });
+
+    /* ===== 配置加载 ===== */
+    async function refreshConfig() {
+        try {
+            const resp = await fetch('/api/config');
+            const data = await resp.json();
+            state.nickname = data.nickname || '访客';
+            state.avatar = data.avatar_url || '';
+            state.llmConfigs = data.llm_configs || [];
+            state.activeLLM = data.active_llm || null;
+            state.searchConfigs = data.search_configs || [];
+            state.activeSearch = data.active_search || null;
+            state.searchConfig = data;
+            renderGreeting();
+            return data;
+        } catch (e) {
+            console.error('Failed to load config:', e);
+            return null;
+        }
+    }
+
+    function renderGreeting() {
+        $('panelNickname').textContent = state.nickname;
+        const av = $('panelAvatar');
+        if (state.avatar) {
+            av.innerHTML = `<img src="${escapeHtml(state.avatar)}" alt="">`;
+        } else {
+            av.innerHTML = `<span>${escapeHtml(state.nickname.charAt(0) || '访')}</span>`;
+        }
+    }
+
+    /* ===== 个人资料 ===== */
+    function openProfileModal() {
+        $('nicknameInput').value = state.nickname === '访客' ? '' : state.nickname;
+        renderAvatarPreview();
+        openModal('profileModal');
+    }
+
+    function renderAvatarPreview() {
+        const img = $('avatarPreview');
+        const ph = $('avatarPlaceholder');
+        if (state.avatar) {
+            img.src = state.avatar;
+            img.style.display = 'block';
+            ph.style.display = 'none';
+        } else {
+            img.style.display = 'none';
+            ph.style.display = 'flex';
+            ph.textContent = state.nickname.charAt(0) || '访';
+        }
+    }
+
+    $('avatarPicker').addEventListener('click', () => $('avatarInput').click());
+
+    $('avatarInput').addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const resp = await fetch('/api/config/avatar', { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (resp.ok) {
+                state.avatar = data.avatar_url;
+                renderAvatarPreview();
+            } else {
+                showToast(data.detail || '上传失败', 'error');
+            }
+        } catch (err) {
+            showToast('上传失败', 'error');
+        }
+        e.target.value = '';
+    });
+
+    $('saveProfileBtn').addEventListener('click', async () => {
+        const nickname = $('nicknameInput').value.trim() || '访客';
+        try {
+            const resp = await fetch('/api/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nickname, avatar_url: state.avatar })
+            });
+            if (resp.ok) {
+                state.nickname = nickname;
+                renderGreeting();
+                closeModal('profileModal');
+            } else {
+                showToast('保存失败', 'error');
+            }
+        } catch (e) {
+            showToast('保存失败', 'error');
+        }
+    });
+
+    /* ===== 分类管理 ===== */
+    async function loadCategories() {
+        try {
+            const resp = await fetch('/api/categories');
+            const data = await resp.json();
+            state.categories = data.items || [];
+            renderCategories();
+        } catch (e) {
+            console.error('Failed to load categories:', e);
+        }
+    }
+
+    function renderCategories() {
+        const container = $('categoryList');
+        if (!container) return;
+
+        const atLimit = state.categories.length >= 10;
+        $('addCategoryBtn').style.display = atLimit ? 'none' : '';
+        $('categoryLimitHint').style.display = atLimit ? '' : 'none';
+
+        if (state.categories.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>暂无分类</p></div>';
+            return;
+        }
+
+        container.innerHTML = state.categories.map(cat => {
+            const color = cat.color || '#8a8690';
+            const isDefault = cat.is_default;
+            return `
+                <div class="cat-sort-item ${isDefault ? 'is-default' : ''}"
+                     data-id="${cat.id}" style="--cat: ${color}"
+                     draggable="${isDefault ? 'false' : 'true'}">
+                    <span class="cat-grip">
+                        <svg width="10" height="14" viewBox="0 0 10 16" fill="currentColor">
+                            <circle cx="2.5" cy="2.5" r="1.4"/><circle cx="7.5" cy="2.5" r="1.4"/>
+                            <circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/>
+                            <circle cx="2.5" cy="13.5" r="1.4"/><circle cx="7.5" cy="13.5" r="1.4"/>
+                        </svg>
+                    </span>
+                    <span class="cat-swatch"></span>
+                    <span class="cat-name">${escapeHtml(cat.name)}</span>
+                    <div class="cat-sort-actions">
+                        ${isDefault ? '' : `
+                            <button type="button" class="btn-icon cat-edit-btn" title="编辑">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                            <button type="button" class="btn-icon btn-icon-danger cat-delete-btn" title="删除">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('.cat-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseInt(btn.closest('.cat-sort-item').dataset.id);
+                const cat = state.categories.find(c => c.id === id);
+                if (cat && !cat.is_default) {
+                    state.editingCatId = id;
+                    $('categoryEditTitle').textContent = '编辑分类';
+                    $('categoryNameInput').value = cat.name;
+                    openModal('categoryEditModal');
+                }
+            });
+        });
+
+        container.querySelectorAll('.cat-delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = parseInt(btn.closest('.cat-sort-item').dataset.id);
+                const cat = state.categories.find(c => c.id === id);
+                if (cat && !cat.is_default) {
+                    state.deletingCatId = id;
+                    $('deleteCategoryName').textContent = cat.name;
+                    openModal('categoryDeleteModal');
+                }
+            });
+        });
+
+        initDragAndDrop();
+    }
+
+    function flipMove(list, dragEl, insertBeforeNode) {
+        const items = [...list.querySelectorAll('.cat-sort-item')];
+        const firstTops = new Map(items.map(el => [el, el.getBoundingClientRect().top]));
+
+        list.insertBefore(dragEl, insertBeforeNode);
+
+        items.forEach(el => {
+            const dy = firstTops.get(el) - el.getBoundingClientRect().top;
+            if (Math.abs(dy) < 1) return;
+            el.style.transition = 'none';
+            el.style.transform = `translateY(${dy}px)`;
+            void el.offsetHeight;
+            el.style.transition = '';
+            el.style.transform = '';
+        });
+    }
+
+    function initDragAndDrop() {
+        const list = $('categoryList');
+        if (!list) return;
+
+        list.querySelectorAll('.cat-sort-item[draggable="true"]').forEach(item => {
+            item.addEventListener('dragstart', e => {
+                state.dragItem = item;
+                requestAnimationFrame(() => item.classList.add('dragging'));
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', ''); } catch (_) {}
+            });
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                state.dragItem = null;
+                syncCategoryOrderFromDom();
+            });
+        });
+
+        list.addEventListener('dragover', e => {
+            e.preventDefault();
+            const dragging = state.dragItem;
+            const target = e.target.closest('.cat-sort-item');
+            if (!dragging || !target || target === dragging) return;
+
+            const rect = target.getBoundingClientRect();
+            const before = e.clientY < rect.top + rect.height / 2;
+
+            if (target.classList.contains('is-default') && !before) return;
+
+            const insertBeforeNode = before ? target : target.nextElementSibling;
+            if (insertBeforeNode === dragging || dragging.nextElementSibling === insertBeforeNode) return;
+
+            flipMove(list, dragging, insertBeforeNode);
+        });
+
+        list.addEventListener('drop', e => e.preventDefault());
+    }
+
+    function syncCategoryOrderFromDom() {
+        const list = $('categoryList');
+        const idOrder = [...list.querySelectorAll('.cat-sort-item')].map(el => parseInt(el.dataset.id));
+        const byId = new Map(state.categories.map(c => [c.id, c]));
+        state.categories = idOrder.map(id => byId.get(id)).filter(Boolean);
+        saveCategoryOrder();
+    }
+
+    async function saveCategoryOrder() {
+        const total = state.categories.length;
+        const updates = state.categories
+            .map((cat, index) => ({ id: cat.id, is_default: cat.is_default, sort_order: total - index }))
+            .filter(u => !u.is_default);
+        try {
+            for (const update of updates) {
+                await fetch(`/api/categories/${update.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sort_order: update.sort_order })
+                });
+            }
+        } catch (e) {
+            console.error('Failed to save order:', e);
+        }
+    }
+
+    $('addCategoryBtn').addEventListener('click', () => {
+        state.editingCatId = null;
+        $('categoryEditTitle').textContent = '添加分类';
+        $('categoryNameInput').value = '';
+        openModal('categoryEditModal');
+        $('categoryNameInput').focus();
+    });
+
+    $('saveCategoryBtn').addEventListener('click', async () => {
+        const name = $('categoryNameInput').value.trim();
+        if (!name) { showToast('请输入分类名称', 'error'); return; }
+        try {
+            let resp;
+            if (state.editingCatId) {
+                resp = await fetch(`/api/categories/${state.editingCatId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+            } else {
+                resp = await fetch('/api/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, sort_order: 0 })
+                });
+            }
+            if (resp.ok) {
+                closeModal('categoryEditModal');
+                await loadCategories();
+            } else {
+                const data = await resp.json();
+                showToast(data.detail || '操作失败', 'error');
+            }
+        } catch (e) {
+            showToast('操作失败', 'error');
+        }
+    });
+
+    $('categoryNameInput').addEventListener('keypress', e => {
+        if (e.key === 'Enter') $('saveCategoryBtn').click();
+    });
+
+    $('confirmDeleteCategoryBtn').addEventListener('click', async () => {
+        if (!state.deletingCatId) return;
+        try {
+            const resp = await fetch(`/api/categories/${state.deletingCatId}`, { method: 'DELETE' });
+            if (resp.ok) {
+                closeModal('categoryDeleteModal');
+                state.deletingCatId = null;
+                await loadCategories();
+            } else {
+                const data = await resp.json();
+                showToast(data.detail || '删除失败', 'error');
+            }
+        } catch (e) {
+            showToast('删除失败', 'error');
+        }
+    });
+
+    /* ===== 大模型配置 ===== */
+    const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+    function providerById(id) {
+        return LLM_PROVIDERS.find(p => p.id === id) || LLM_PROVIDERS[0];
+    }
+
+    function initProviderSelect() {
+        const sel = $('llmProviderSelect');
+        sel.innerHTML = '<option value="" disabled hidden>下拉选择提供商</option>' +
+            LLM_PROVIDERS.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        sel.addEventListener('change', applyProviderState);
+    }
+
+    function applyProviderState() {
+        const val = $('llmProviderSelect').value;
+        const isCustom = val === 'custom';
+        $('llmNameGroup').classList.toggle('collapsed', !isCustom);
+        const urlInput = $('llmUrlInput');
+        if (val && !isCustom) {
+            urlInput.value = providerById(val).url;
+            urlInput.setAttribute('readonly', 'readonly');
+            urlInput.classList.add('input-readonly');
+        } else {
+            urlInput.removeAttribute('readonly');
+            urlInput.classList.remove('input-readonly');
+        }
+    }
+
+    function renderLLMList() {
+        const container = $('llmConfigList');
+        if (!state.llmConfigs.length) {
+            container.innerHTML = `
+                <div class="llm-empty">
+                    <svg width="40" height="40" viewBox="0 0 16 16" fill="none">
+                        <rect x="4.5" y="4.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="0.8"/>
+                        <path d="M6.5 2v2.5M9.5 2v2.5M6.5 11.5V14M9.5 11.5V14M2 6.5h2.5M2 9.5h2.5M11.5 6.5H14M11.5 9.5H14" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"/>
+                    </svg>
+                    <p>暂无模型配置</p>
+                    <span>点击右上角「新增配置」创建第一个模型配置</span>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = state.llmConfigs.map(cfg => {
+            const provider = providerById(cfg.provider);
+            const isActive = state.activeLLM === cfg.id;
+            const color = provider.color;
+            const activeStyle = isActive
+                ? `background:${color}16;border-color:${color}66;box-shadow:inset 3px 0 0 ${color};`
+                : '';
+            return `
+                <div class="llm-config-item ${isActive ? 'is-active' : ''}" data-id="${cfg.id}" style="${activeStyle}">
+                    <div class="llm-config-main">
+                        <div class="llm-config-name">
+                            ${escapeHtml(cfg.name || provider.name)}
+                            ${isActive ? `<span class="llm-enabled-badge" style="background:${color};color:#0b0b0f">已启用</span>` : ''}
+                        </div>
+                        <div class="llm-config-sub">${escapeHtml(provider.name)} · ${escapeHtml(cfg.model || '未设置模型')} · ${escapeHtml(cfg.url || '')}</div>
+                    </div>
+                    <div class="llm-config-actions">
+                        <button type="button" class="btn-icon llm-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '停用' : '启用'}">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M8 1.5v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                                <path d="M4.2 3.8a5.5 5.5 0 107.6 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="btn-icon llm-edit-btn" title="编辑">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="btn-icon btn-icon-danger llm-del-btn" title="删除">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('.llm-enable-btn').forEach(btn => {
+            btn.addEventListener('click', () => toggleLLMEnable(btn.closest('.llm-config-item').dataset.id));
+        });
+        container.querySelectorAll('.llm-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => openLLMEdit(btn.closest('.llm-config-item').dataset.id));
+        });
+        container.querySelectorAll('.llm-del-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.closest('.llm-config-item').dataset.id;
+                const cfg = state.llmConfigs.find(c => c.id === id);
+                if (!cfg) return;
+                state.deletingLLM = id;
+                $('deleteLLMName').textContent = cfg.name || providerById(cfg.provider).name;
+                openModal('llmDeleteModal');
+            });
+        });
+    }
+
+    function openLLMEdit(configId) {
+        state.editingLLM = configId || null;
+        const cfg = configId ? state.llmConfigs.find(c => c.id === configId) : null;
+
+        $('llmEditTitle').textContent = cfg ? '编辑配置' : '新增配置';
+
+        const sel = $('llmProviderSelect');
+        sel.value = cfg ? (cfg.provider || 'custom') : '';
+        if (cfg && !sel.value) sel.value = '';
+
+        $('llmNameInput').value = cfg && cfg.provider === 'custom' ? (cfg.name || '') : '';
+        $('llmUrlInput').value = cfg ? (cfg.url || '') : '';
+        $('llmApiKeyInput').value = cfg ? (cfg.api_key || '') : '';
+        $('llmApiKeyInput').type = 'password';
+        $('llmModelInput').value = cfg ? (cfg.model || '') : '';
+
+        applyProviderState();
+        openModal('llmEditModal');
+    }
+
+    $('addLLMBtn').addEventListener('click', () => openLLMEdit(null));
+
+    $('saveLLMBtn').addEventListener('click', async () => {
+        const val = $('llmProviderSelect').value;
+        const isCustom = val === '' || val === 'custom';
+        const providerId = isCustom ? 'custom' : val;
+        const provider = providerById(providerId);
+
+        const url = $('llmUrlInput').value.trim();
+        const apiKey = $('llmApiKeyInput').value.trim();
+        const model = $('llmModelInput').value.trim();
+
+        let name = '';
+        if (isCustom) {
+            name = $('llmNameInput').value.trim();
+            if (!name) { showToast('请输入配置名称', 'error'); return; }
+        } else {
+            name = provider.name;
+        }
+
+        if (!url) { showToast('请输入 Base URL', 'error'); return; }
+        if (!apiKey) { showToast('请输入 API Key', 'error'); return; }
+        if (!model) { showToast('请输入 Model', 'error'); return; }
+
+        if (state.editingLLM) {
+            const cfg = state.llmConfigs.find(c => c.id === state.editingLLM);
+            if (cfg) Object.assign(cfg, { name, provider: providerId, url, api_key: apiKey, model });
+        } else {
+            state.llmConfigs.push({ id: genId(), name, provider: providerId, url, api_key: apiKey, model });
+        }
+
+        try {
+            await persistLLM();
+            closeModal('llmEditModal');
+            renderLLMList();
+        } catch (e) {
+            showToast('保存失败', 'error');
+        }
+    });
+
+    async function toggleLLMEnable(id) {
+        if (state.activeLLM === id) {
+            state.activeLLM = '';
+        } else {
+            const cfg = state.llmConfigs.find(c => c.id === id);
+            if (!cfg || !cfg.api_key || !cfg.model) {
+                showToast('请先完善 API Key 和 Model 再启用', 'error');
+                return;
+            }
+            state.activeLLM = id;
+        }
+        try {
+            await persistLLM();
+            renderLLMList();
+        } catch (e) {
+            showToast('操作失败', 'error');
+        }
+    }
+
+    $('confirmDeleteLLMBtn').addEventListener('click', async () => {
+        if (!state.deletingLLM) return;
+        state.llmConfigs = state.llmConfigs.filter(c => c.id !== state.deletingLLM);
+        if (state.activeLLM === state.deletingLLM) state.activeLLM = '';
+        state.deletingLLM = null;
+        try {
+            await persistLLM();
+            closeModal('llmDeleteModal');
+            renderLLMList();
+        } catch (e) {
+            showToast('删除失败', 'error');
+        }
+    });
+
+    async function persistLLM() {
+        const resp = await fetch('/api/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ llm_configs: state.llmConfigs, active_llm: state.activeLLM })
+        });
+        if (!resp.ok) throw new Error('persist failed');
+        return resp.json();
+    }
+
+    /* ===== 搜索服务配置 ===== */
+    function searchProviderById(id) {
+        return SEARCH_PROVIDERS.find(p => p.id === id) || SEARCH_PROVIDERS[0];
+    }
+
+    function initSearchProviderSelect() {
+        const sel = $('searchProviderSelect');
+        sel.innerHTML = '<option value="" disabled hidden>下拉选择服务商</option>' +
+            SEARCH_PROVIDERS.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        sel.addEventListener('change', applySearchProviderState);
+    }
+
+    function applySearchProviderState() {
+        const val = $('searchProviderSelect').value;
+        const isCustom = val === 'custom';
+        $('searchNameGroup').classList.toggle('collapsed', !isCustom);
+        const urlInput = $('searchUrlInput');
+        if (val && !isCustom) {
+            urlInput.value = searchProviderById(val).url;
+            urlInput.setAttribute('readonly', 'readonly');
+            urlInput.classList.add('input-readonly');
+        } else {
+            urlInput.removeAttribute('readonly');
+            urlInput.classList.remove('input-readonly');
+        }
+    }
+
+    function renderSearchList() {
+        const container = $('searchConfigList');
+        if (!state.searchConfigs.length) {
+            container.innerHTML = `
+                <div class="llm-empty">
+                    <svg width="40" height="40" viewBox="0 0 16 16" fill="none">
+                        <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="0.8"/>
+                        <path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"/>
+                    </svg>
+                    <p>暂无搜索服务配置</p>
+                    <span>点击右上角「新增配置」创建第一个搜索服务配置</span>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = state.searchConfigs.map(cfg => {
+            const provider = searchProviderById(cfg.provider);
+            const isActive = state.activeSearch === cfg.id;
+            const color = provider.color;
+            const activeStyle = isActive
+                ? `background:${color}16;border-color:${color}66;box-shadow:inset 3px 0 0 ${color};`
+                : '';
+            return `
+                <div class="llm-config-item ${isActive ? 'is-active' : ''}" data-id="${cfg.id}" style="${activeStyle}">
+                    <div class="llm-config-main">
+                        <div class="llm-config-name">
+                            ${escapeHtml(cfg.name || provider.name)}
+                            ${isActive ? `<span class="llm-enabled-badge" style="background:${color};color:#0b0b0f">已启用</span>` : ''}
+                        </div>
+                        <div class="llm-config-sub">${escapeHtml(provider.name)} · ${escapeHtml(cfg.url || '')}</div>
+                    </div>
+                    <div class="llm-config-actions">
+                        <button type="button" class="btn-icon search-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '停用' : '启用'}">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M8 1.5v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                                <path d="M4.2 3.8a5.5 5.5 0 107.6 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="btn-icon search-edit-btn" title="编辑">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button type="button" class="btn-icon btn-icon-danger search-del-btn" title="删除">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.querySelectorAll('.search-enable-btn').forEach(btn => {
+            btn.addEventListener('click', () => toggleSearchEnable(btn.closest('.llm-config-item').dataset.id));
+        });
+        container.querySelectorAll('.search-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => openSearchEdit(btn.closest('.llm-config-item').dataset.id));
+        });
+        container.querySelectorAll('.search-del-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.closest('.llm-config-item').dataset.id;
+                const cfg = state.searchConfigs.find(c => c.id === id);
+                if (!cfg) return;
+                state.deletingSearch = id;
+                $('deleteSearchName').textContent = cfg.name || searchProviderById(cfg.provider).name;
+                openModal('searchDeleteModal');
+            });
+        });
+    }
+
+    function openSearchEdit(configId) {
+        state.editingSearch = configId || null;
+        const cfg = configId ? state.searchConfigs.find(c => c.id === configId) : null;
+
+        $('searchEditTitle').textContent = cfg ? '编辑配置' : '新增配置';
+
+        const sel = $('searchProviderSelect');
+        sel.value = cfg ? (cfg.provider || 'custom') : '';
+
+        $('searchNameInput').value = cfg && cfg.provider === 'custom' ? (cfg.name || '') : '';
+        $('searchUrlInput').value = cfg ? (cfg.url || '') : '';
+        $('searchApiKeyInput').value = cfg ? (cfg.api_key || '') : '';
+        $('searchApiKeyInput').type = 'password';
+
+        applySearchProviderState();
+        openModal('searchEditModal');
+    }
+
+    $('addSearchBtn').addEventListener('click', () => openSearchEdit(null));
+
+    $('saveSearchBtn').addEventListener('click', async () => {
+        const val = $('searchProviderSelect').value;
+        const isCustom = val === '' || val === 'custom';
+        const providerId = isCustom ? 'custom' : val;
+        const provider = searchProviderById(providerId);
+
+        const url = $('searchUrlInput').value.trim();
+        const apiKey = $('searchApiKeyInput').value.trim();
+
+        let name = '';
+        if (isCustom) {
+            name = $('searchNameInput').value.trim();
+            if (!name) { showToast('请输入配置名称', 'error'); return; }
+        } else {
+            name = provider.name;
+        }
+
+        if (!url) { showToast('请输入 Base URL', 'error'); return; }
+        if (!apiKey) { showToast('请输入 API Key', 'error'); return; }
+
+        if (state.editingSearch) {
+            const cfg = state.searchConfigs.find(c => c.id === state.editingSearch);
+            if (cfg) Object.assign(cfg, { name, provider: providerId, url, api_key: apiKey });
+        } else {
+            state.searchConfigs.push({ id: genId(), name, provider: providerId, url, api_key: apiKey });
+        }
+
+        try {
+            await persistSearch();
+            closeModal('searchEditModal');
+            renderSearchList();
+        } catch (e) {
+            showToast('保存失败', 'error');
+        }
+    });
+
+    async function toggleSearchEnable(id) {
+        if (state.activeSearch === id) {
+            state.activeSearch = '';
+        } else {
+            const cfg = state.searchConfigs.find(c => c.id === id);
+            if (!cfg || !cfg.api_key) {
+                showToast('请先完善 API Key 再启用', 'error');
+                return;
+            }
+            state.activeSearch = id;
+        }
+        try {
+            await persistSearch();
+            renderSearchList();
+        } catch (e) {
+            showToast('操作失败', 'error');
+        }
+    }
+
+    $('confirmDeleteSearchBtn').addEventListener('click', async () => {
+        if (!state.deletingSearch) return;
+        state.searchConfigs = state.searchConfigs.filter(c => c.id !== state.deletingSearch);
+        if (state.activeSearch === state.deletingSearch) state.activeSearch = '';
+        state.deletingSearch = null;
+        try {
+            await persistSearch();
+            closeModal('searchDeleteModal');
+            renderSearchList();
+        } catch (e) {
+            showToast('删除失败', 'error');
+        }
+    });
+
+    async function persistSearch() {
+        const resp = await fetch('/api/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ search_configs: state.searchConfigs, active_search: state.activeSearch })
+        });
+        if (!resp.ok) throw new Error('persist failed');
+        return resp.json();
+    }
+
+    /* ===== 自动任务配置 ===== */
+    state.taskForm = { mode: 'preset', intervalHours: 6, startHour: 0, customCron: '', selectedCategories: [] };
+
+    function selectableCatNames() {
+        return state.categories.filter(c => !c.is_default).map(c => c.name);
+    }
+
+    function loadTaskForm() {
+        const data = state.searchConfig || {};
+        const cats = selectableCatNames();
+
+        state.taskForm.mode = data.task_mode === 'custom' ? 'custom' : 'preset';
+        state.taskForm.intervalHours = data.task_interval_hours || 6;
+        state.taskForm.startHour = data.task_start_hour || 0;
+        state.taskForm.customCron = data.task_custom_cron || '';
+
+        const saved = data.task_selected_categories;
+        if (Array.isArray(saved) && saved.length) {
+            state.taskForm.selectedCategories = saved.filter(n => cats.includes(n));
+        } else {
+            state.taskForm.selectedCategories = [...cats];
+        }
+
+        renderTaskForm();
+        refreshTaskStatus();
+    }
+
+    function renderTaskForm() {
+        const form = state.taskForm;
+        const isPreset = form.mode === 'preset';
+
+        $('taskModePresetBtn').classList.toggle('active', isPreset);
+        $('taskModeCustomBtn').classList.toggle('active', !isPreset);
+        $('taskCustomSection').style.display = isPreset ? 'none' : '';
+        $('taskIntervalSection').style.display = isPreset ? '' : 'none';
+        $('taskStartSection').style.display = isPreset ? '' : 'none';
+
+        $('taskCronInput').value = form.customCron;
+
+        document.querySelectorAll('#intervalChips .cron-chip').forEach(chip => {
+            chip.classList.toggle('active', parseInt(chip.dataset.hours) === form.intervalHours);
+        });
+        document.querySelectorAll('#startHourChips .cron-chip').forEach(chip => {
+            chip.classList.toggle('active', parseInt(chip.dataset.hour) === form.startHour);
+        });
+
+        renderTaskCatChips();
+    }
+
+    function renderTaskCatChips() {
+        const container = $('taskCatChips');
+        const cats = state.categories.filter(c => !c.is_default);
+
+        if (!cats.length) {
+            container.innerHTML = '<span class="input-hint">暂无可选分类</span>';
+            updateToggleAllBtn();
+            return;
+        }
+
+        container.innerHTML = cats.map(c => {
+            const selected = state.taskForm.selectedCategories.includes(c.name);
+            return `
+                <button type="button" class="cat-chip ${selected ? 'selected' : ''}"
+                        data-name="${escapeHtml(c.name)}" style="--cat: ${c.color || '#8a8690'}">
+                    <span class="cat-chip-dot"></span>
+                    ${escapeHtml(c.name)}
+                    <svg class="cat-chip-check" width="12" height="12" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8.5l3.5 3.5L13 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            `;
+        }).join('');
+
+        container.querySelectorAll('.cat-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const name = chip.dataset.name;
+                const list = state.taskForm.selectedCategories;
+                const idx = list.indexOf(name);
+                if (idx === -1) list.push(name);
+                else list.splice(idx, 1);
+                chip.classList.toggle('selected');
+                updateToggleAllBtn();
+            });
+        });
+
+        updateToggleAllBtn();
+    }
+
+    function updateToggleAllBtn() {
+        const cats = selectableCatNames();
+        const allSelected = cats.length > 0 && cats.every(n => state.taskForm.selectedCategories.includes(n));
+        $('toggleAllCatsBtn').textContent = allSelected ? '取消全选' : '全选';
+    }
+
+    $('toggleAllCatsBtn').addEventListener('click', () => {
+        const cats = selectableCatNames();
+        const allSelected = cats.length > 0 && cats.every(n => state.taskForm.selectedCategories.includes(n));
+        state.taskForm.selectedCategories = allSelected ? [] : [...cats];
+        renderTaskCatChips();
+    });
+
+    $('taskModePresetBtn').addEventListener('click', () => {
+        state.taskForm.mode = 'preset';
+        renderTaskForm();
+    });
+
+    $('taskModeCustomBtn').addEventListener('click', () => {
+        state.taskForm.mode = 'custom';
+        renderTaskForm();
+    });
+
+    document.querySelectorAll('#intervalChips .cron-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            state.taskForm.intervalHours = parseInt(chip.dataset.hours);
+            document.querySelectorAll('#intervalChips .cron-chip').forEach(c => c.classList.toggle('active', c === chip));
+        });
+    });
+
+    document.querySelectorAll('#startHourChips .cron-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            state.taskForm.startHour = parseInt(chip.dataset.hour);
+            document.querySelectorAll('#startHourChips .cron-chip').forEach(c => c.classList.toggle('active', c === chip));
+        });
+    });
+
+    async function refreshTaskStatus() {
+        try {
+            const resp = await fetch('/api/scheduler/status');
+            const data = await resp.json();
+            const runningEl = $('taskStatusRunning');
+            runningEl.textContent = data.running ? '运行中' : '等待中';
+            runningEl.classList.toggle('on', data.running);
+            $('taskStatusLastRun').textContent = data.last_run ? new Date(data.last_run).toLocaleString() : '-';
+            $('taskStatusNextRun').textContent = data.next_run ? new Date(data.next_run).toLocaleString() : '-';
+        } catch (e) {
+            console.error('Failed to load scheduler status:', e);
+        }
+    }
+
+    $('saveTaskBtn').addEventListener('click', async () => {
+        const form = state.taskForm;
+        const payload = {
+            task_mode: form.mode,
+            task_interval_hours: form.intervalHours,
+            task_start_hour: form.startHour,
+            task_custom_cron: $('taskCronInput').value.trim(),
+            task_selected_categories: form.selectedCategories
+        };
+
+        if (form.mode === 'custom' && !payload.task_custom_cron) {
+            showToast('请输入 Cron 表达式', 'error');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (resp.ok) {
+                closeModal('taskModal');
+                await refreshConfig();
+                refreshTaskStatus();
+            } else {
+                showToast('保存失败', 'error');
+            }
+        } catch (e) {
+            showToast('保存失败', 'error');
+        }
+    });
+
+    $('triggerTaskBtn').addEventListener('click', () => {
+        startTerminalStream();
+    });
+
+    /* ===== Toast ===== */
+    function showToast(message, type = 'info') {
+        const container = $('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        const icons = {
+            success: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/><path d="M5 8.2l2 2L11 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            error: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+            info: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="4.8" r="0.9" fill="currentColor"/></svg>'
+        };
+        toast.innerHTML = `${icons[type] || icons.info}<span>${escapeHtml(message)}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add('leaving');
+            toast.addEventListener('animationend', () => toast.remove());
+        }, 3200);
+    }
+
+    /* ===== 终端日志 ===== */
+    const TERM_TAGS = {
+        thinking: { label: '思考', cls: 'tag-thinking' },
+        tool: { label: '工具', cls: 'tag-tool' },
+        result: { label: '结果', cls: 'tag-result' },
+        save: { label: '入库', cls: 'tag-save' },
+        error: { label: '错误', cls: 'tag-error' },
+        info: { label: '信息', cls: 'tag-info' },
+        success: { label: '完成', cls: 'tag-success' }
+    };
+
+    let terminalES = null;
+    let terminalTotal = null;
+
+    function termTime() {
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function appendTermLine(type, text) {
+        const body = $('terminalBody');
+        const tag = TERM_TAGS[type] || TERM_TAGS.info;
+
+        const oldCursor = body.querySelector('.term-cursor-line');
+        if (oldCursor) oldCursor.remove();
+
+        const line = document.createElement('div');
+        line.className = 'term-line';
+        line.innerHTML = `
+            <span class="term-time">${termTime()}</span>
+            <span class="term-tag ${tag.cls}">${tag.label}</span>
+            <span class="term-text">${escapeHtml(text)}</span>
+        `;
+        body.appendChild(line);
+
+        const cursor = document.createElement('div');
+        cursor.className = 'term-line term-cursor-line';
+        cursor.innerHTML = `<span class="term-time">${termTime()}</span><span class="term-tag tag-info">等待</span><span class="term-cursor"></span>`;
+        body.appendChild(cursor);
+
+        body.scrollTop = body.scrollHeight;
+    }
+
+    function setTerminalStatus(state) {
+        const el = $('terminalStatus');
+        el.className = 'terminal-status ' + state;
+        el.textContent = state === 'running' ? '运行中' : (state === 'finished' ? '已完成' : '异常终止');
+    }
+
+    function finishTerminal(state) {
+        if (terminalES) {
+            terminalES.close();
+            terminalES = null;
+        }
+        const body = $('terminalBody');
+        const cursor = body.querySelector('.term-cursor-line');
+        if (cursor) cursor.remove();
+        setTerminalStatus(state);
+        $('terminalCloseBtn').disabled = false;
+
+        if (state === 'finished' && terminalTotal !== null) {
+            showToast(`采集完成，新增 ${terminalTotal} 条新闻`, terminalTotal > 0 ? 'success' : 'info');
+        } else if (state === 'failed') {
+            showToast('采集任务执行失败', 'error');
+        }
+        terminalTotal = null;
+        refreshTaskStatus();
+    }
+
+    function startTerminalStream() {
+        closeModal('taskModal');
+        openModal('terminalModal');
+
+        const body = $('terminalBody');
+        body.innerHTML = '';
+        terminalTotal = null;
+        $('terminalCloseBtn').disabled = true;
+        setTerminalStatus('running');
+        appendTermLine('info', '建立连接，准备执行采集任务…');
+
+        terminalES = new EventSource('/api/scheduler/trigger/stream');
+        terminalES.onmessage = (e) => {
+            let data;
+            try { data = JSON.parse(e.data); } catch (_) { return; }
+            if (data.type === 'done') {
+                finishTerminal('finished');
+                return;
+            }
+            if (typeof data.total_new === 'number') terminalTotal = data.total_new;
+            appendTermLine(data.type, data.text || '');
+        };
+        terminalES.onerror = () => {
+            if (terminalES && terminalES.readyState === EventSource.CLOSED) return;
+            appendTermLine('error', '与服务器的连接中断');
+            finishTerminal('failed');
+        };
+    }
+
+    $('terminalCloseBtn').addEventListener('click', () => {
+        if (terminalES) { terminalES.close(); terminalES = null; }
+        closeModal('terminalModal');
+        refreshConfig();
+    });
+
+    $('terminalClearBtn').addEventListener('click', () => {
+        $('terminalBody').innerHTML = '';
+    });
+
+    /* ===== 顶部搜索 ===== */
+    function doSearch() {
+        const keyword = $('searchInput').value.trim();
+        if (keyword) {
+            window.location.href = `/search?q=${encodeURIComponent(keyword)}`;
+        }
+    }
+    $('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') doSearch(); });
+    $('searchBtn').addEventListener('click', doSearch);
+
+    /* ===== 初始化 ===== */
+    initProviderSelect();
+    initSearchProviderSelect();
+    refreshConfig();
+    loadCategories();
+    setInterval(() => {
+        if ($('taskModal').classList.contains('show')) refreshTaskStatus();
+    }, 15000);
+})();
+</script>

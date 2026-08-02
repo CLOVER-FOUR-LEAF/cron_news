@@ -1,0 +1,224 @@
+import json
+import time
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from pydantic import BaseModel
+
+from app.config import settings, BASE_DIR
+from app.env_store import read_env_file, write_env_file
+
+router = APIRouter(prefix="/api/config", tags=["config"])
+
+IMAGES_DIR = BASE_DIR / "images"
+ALLOWED_AVATAR_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
+
+class ConfigUpdate(BaseModel):
+    llm_configs: list | None = None
+    active_llm: str | None = None
+    search_configs: list | None = None
+    active_search: str | None = None
+    nickname: str | None = None
+    avatar_url: str | None = None
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
+    llm_model: str | None = None
+    search_base_url: str | None = None
+    search_api_key: str | None = None
+    search_cron: str | None = None
+    task_mode: str | None = None
+    task_interval_hours: int | None = None
+    task_start_hour: int | None = None
+    task_custom_cron: str | None = None
+    task_selected_categories: list | None = None
+
+
+class ConfigResponse(BaseModel):
+    llm_configs: list = []
+    active_llm: str = ""
+    search_configs: list = []
+    active_search: str = ""
+    nickname: str = ""
+    avatar_url: str = ""
+    llm_base_url: str = ""
+    llm_model: str = ""
+    search_base_url: str = ""
+    search_cron: str = ""
+    has_llm_key: bool = False
+    has_search_key: bool = False
+    task_mode: str = "preset"
+    task_interval_hours: int = 6
+    task_start_hour: int = 0
+    task_custom_cron: str = ""
+    task_selected_categories: list = []
+
+
+def _parse_json_list(raw: str) -> list:
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return list(parsed.values())
+        if isinstance(parsed, list):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+    return []
+
+
+def _parse_int(raw: str, default: int) -> int:
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        return default
+
+
+def derive_task_cron(mode: str, interval_hours: int, start_hour: int, custom_cron: str) -> str:
+    if mode == "custom":
+        return custom_cron.strip() or "0 */6 * * *"
+    interval_hours = max(1, interval_hours)
+    if interval_hours == 1:
+        return "0 * * * *"
+    if start_hour <= 0:
+        return f"0 */{interval_hours} * * *"
+    return f"0 {start_hour}/{interval_hours} * * *"
+
+
+@router.get("", response_model=ConfigResponse)
+async def get_config():
+    env_vars = read_env_file()
+
+    return ConfigResponse(
+        llm_configs=_parse_json_list(env_vars.get("LLM_CONFIGS", "")),
+        active_llm=env_vars.get("ACTIVE_LLM", ""),
+        search_configs=_parse_json_list(env_vars.get("SEARCH_CONFIGS", "")),
+        active_search=env_vars.get("ACTIVE_SEARCH", ""),
+        nickname=env_vars.get("NICKNAME", ""),
+        avatar_url=env_vars.get("AVATAR_URL", ""),
+        llm_base_url=env_vars.get("LLM_BASE_URL", ""),
+        llm_model=env_vars.get("LLM_MODEL", ""),
+        search_base_url=env_vars.get("SEARCH_BASE_URL", ""),
+        search_cron=env_vars.get("SEARCH_CRON", "0 */6 * * *"),
+        has_llm_key=bool(env_vars.get("LLM_API_KEY", "")),
+        has_search_key=bool(env_vars.get("SEARCH_API_KEY", "")),
+        task_mode=env_vars.get("TASK_MODE", "preset"),
+        task_interval_hours=_parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 6),
+        task_start_hour=_parse_int(env_vars.get("TASK_START_HOUR", ""), 0),
+        task_custom_cron=env_vars.get("TASK_CUSTOM_CRON", ""),
+        task_selected_categories=_parse_json_list(env_vars.get("TASK_SELECTED_CATEGORIES", "")),
+    )
+
+
+@router.put("")
+async def update_config(config: ConfigUpdate):
+    env_vars = read_env_file()
+
+    if config.llm_configs is not None:
+        env_vars["LLM_CONFIGS"] = json.dumps(config.llm_configs, ensure_ascii=False)
+
+    if config.active_llm is not None:
+        env_vars["ACTIVE_LLM"] = config.active_llm
+
+        configs = config.llm_configs
+        if configs is None:
+            configs = _parse_json_list(env_vars.get("LLM_CONFIGS", ""))
+
+        if config.active_llm and configs:
+            active = next((c for c in configs if isinstance(c, dict) and c.get("id") == config.active_llm), None)
+            if active:
+                env_vars["LLM_BASE_URL"] = active.get("url", "")
+                env_vars["LLM_API_KEY"] = active.get("api_key", "")
+                env_vars["LLM_MODEL"] = active.get("model", "")
+
+    if config.search_configs is not None:
+        env_vars["SEARCH_CONFIGS"] = json.dumps(config.search_configs, ensure_ascii=False)
+
+    if config.active_search is not None:
+        env_vars["ACTIVE_SEARCH"] = config.active_search
+
+        s_configs = config.search_configs
+        if s_configs is None:
+            s_configs = _parse_json_list(env_vars.get("SEARCH_CONFIGS", ""))
+
+        if config.active_search and s_configs:
+            active = next((c for c in s_configs if isinstance(c, dict) and c.get("id") == config.active_search), None)
+            if active:
+                env_vars["SEARCH_BASE_URL"] = active.get("url", "")
+                env_vars["SEARCH_API_KEY"] = active.get("api_key", "")
+
+    task_touched = any(v is not None for v in (
+        config.task_mode, config.task_interval_hours, config.task_start_hour,
+        config.task_custom_cron, config.task_selected_categories,
+    ))
+
+    if config.task_mode is not None:
+        env_vars["TASK_MODE"] = config.task_mode
+    if config.task_interval_hours is not None:
+        env_vars["TASK_INTERVAL_HOURS"] = str(config.task_interval_hours)
+    if config.task_start_hour is not None:
+        env_vars["TASK_START_HOUR"] = str(config.task_start_hour)
+    if config.task_custom_cron is not None:
+        env_vars["TASK_CUSTOM_CRON"] = config.task_custom_cron
+    if config.task_selected_categories is not None:
+        env_vars["TASK_SELECTED_CATEGORIES"] = json.dumps(config.task_selected_categories, ensure_ascii=False)
+
+    if task_touched:
+        env_vars["SEARCH_CRON"] = derive_task_cron(
+            env_vars.get("TASK_MODE", "preset"),
+            _parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 6),
+            _parse_int(env_vars.get("TASK_START_HOUR", ""), 0),
+            env_vars.get("TASK_CUSTOM_CRON", ""),
+        )
+
+    if config.nickname is not None:
+        env_vars["NICKNAME"] = config.nickname
+    if config.avatar_url is not None:
+        env_vars["AVATAR_URL"] = config.avatar_url
+    if config.llm_base_url is not None:
+        env_vars["LLM_BASE_URL"] = config.llm_base_url
+    if config.llm_api_key is not None:
+        env_vars["LLM_API_KEY"] = config.llm_api_key
+    if config.llm_model is not None:
+        env_vars["LLM_MODEL"] = config.llm_model
+    if config.search_base_url is not None:
+        env_vars["SEARCH_BASE_URL"] = config.search_base_url
+    if config.search_api_key is not None:
+        env_vars["SEARCH_API_KEY"] = config.search_api_key
+    if config.search_cron is not None:
+        env_vars["SEARCH_CRON"] = config.search_cron
+
+    write_env_file(env_vars)
+
+    settings.LLM_BASE_URL = env_vars.get("LLM_BASE_URL", "")
+    settings.LLM_API_KEY = env_vars.get("LLM_API_KEY", "")
+    settings.LLM_MODEL = env_vars.get("LLM_MODEL", "")
+    settings.SEARCH_BASE_URL = env_vars.get("SEARCH_BASE_URL", "")
+    settings.SEARCH_API_KEY = env_vars.get("SEARCH_API_KEY", "")
+    settings.SEARCH_CRON = env_vars.get("SEARCH_CRON", "0 */6 * * *")
+
+    return {"message": "ok"}
+
+
+@router.post("/avatar")
+async def upload_avatar(file: UploadFile = File(...)):
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_AVATAR_EXT:
+        raise HTTPException(status_code=400, detail="仅支持 PNG/JPG/GIF/WebP 图片")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片大小不能超过 5MB")
+
+    filename = f"avatar{ext}"
+    IMAGES_DIR.mkdir(exist_ok=True)
+    (IMAGES_DIR / filename).write_bytes(content)
+
+    url = f"/images/{filename}?v={int(time.time())}"
+
+    env_vars = read_env_file()
+    env_vars["AVATAR_URL"] = url
+    write_env_file(env_vars)
+
+    return {"avatar_url": url}

@@ -1,0 +1,121 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>定时资讯</title>
+    <link rel="icon" href="/images/sign.png" type="image/png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=22">
+</head>
+<body>
+    {% include "_header.html" %}
+
+    <main>
+        {% for cat in categories %}
+        <section class="ticker-section" data-cat="{{ cat }}" id="ticker-{{ cat }}" style="--cat: {{ cat_colors.get(cat, '#8a8690') }}">
+            <div class="ticker-label">
+                <span class="ticker-cat-name">{{ cat }}</span>
+                <span class="ticker-cat-en">
+                    {% if cat == '科技' %}TECHNOLOGY
+                    {% elif cat == '军事' %}MILITARY
+                    {% elif cat == '政治' %}POLITICS
+                    {% elif cat == '经济' %}ECONOMY
+                    {% endif %}
+                </span>
+            </div>
+            <div class="ticker-track-wrapper">
+                <div class="ticker-track" data-cat="{{ cat }}">
+                </div>
+            </div>
+        </section>
+        {% endfor %}
+    </main>
+
+    <footer class="site-footer">
+        <span>定时资讯 &copy; 2024 &mdash; AI 新闻聚合平台</span>
+    </footer>
+
+    <script>
+        const CATEGORIES = {{ categories | tojson }};
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        async function loadCategoryNews(cat) {
+            try {
+                const resp = await fetch(`/api/news?category=${encodeURIComponent(cat)}&page_size=20&today_only=true`);
+                const data = await resp.json();
+                return data.items || [];
+            } catch (e) {
+                console.error(`Failed to load ${cat}:`, e);
+                return [];
+            }
+        }
+
+        function createTickerItem(item) {
+            const el = document.createElement('div');
+            el.className = 'ticker-item';
+
+            const coverHtml = item.cover_url
+                ? `<div class="ticker-cover"><img src="${escapeHtml(item.cover_url)}" alt="" loading="lazy"></div>`
+                : `<div class="ticker-cover ticker-cover-placeholder"><span>CN</span></div>`;
+
+            const sourceHtml = item.source_url
+                ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener" class="ticker-source-link" onclick="event.stopPropagation()">${escapeHtml(item.source || '来源')}</a>`
+                : `<span class="ticker-source-text">${escapeHtml(item.source || '来源')}</span>`;
+
+            const readStatus = item.is_read
+                ? '<span class="ticker-read-status read">已读</span>'
+                : '<span class="ticker-read-status unread">未读</span>';
+
+            el.innerHTML = `
+                ${coverHtml}
+                <div class="ticker-body">
+                    <div class="ticker-item-title">${escapeHtml(item.title)}</div>
+                    <div class="ticker-item-meta">
+                        ${sourceHtml}
+                        <span class="ticker-time">${formatDate(item.collected_at)}</span>
+                        ${readStatus}
+                    </div>
+                </div>
+            `;
+            el.addEventListener('click', (e) => {
+                if (e.target.closest('a')) return;
+                window.location.href = `/news/${item.id}`;
+            });
+            return el;
+        }
+
+        async function initTicker(cat) {
+            const track = document.querySelector(`.ticker-track[data-cat="${cat}"]`);
+            if (!track) return;
+
+            const items = await loadCategoryNews(cat);
+            if (items.length === 0) {
+                track.innerHTML = '<div class="empty-state"><p>暂无新闻</p></div>';
+                return;
+            }
+
+            const allItems = [...items, ...items];
+            allItems.forEach(item => {
+                track.appendChild(createTickerItem(item));
+            });
+
+            track.style.animationDuration = `${Math.max(30, items.length * 10)}s`;
+        }
+
+        CATEGORIES.forEach(cat => initTicker(cat));
+    </script>
+</body>
+</html>
