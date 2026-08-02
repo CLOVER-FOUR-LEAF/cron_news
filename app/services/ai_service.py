@@ -1,4 +1,4 @@
-import json
+﻿import json
 from datetime import datetime, timedelta
 from typing import Any, Callable, Awaitable
 
@@ -173,7 +173,7 @@ async def run_search_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[
     env_vars = read_env_file()
 
     try:
-        interval_hours = max(1, int(env_vars.get("TASK_INTERVAL_HOURS", "6")))
+        interval_hours = max(1, int(env_vars.get("TASK_INTERVAL_HOURS", "8")))
     except (ValueError, TypeError):
         interval_hours = 6
 

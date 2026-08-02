@@ -36,6 +36,7 @@
                         <path d="M2 16c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                     </svg>
                 </button>
+                <span class="entry-badge" id="entryBadge" style="display:none">!</span>
                 <div class="profile-panel" id="profilePanel">
                     <div class="panel-greeting">
                         <div class="panel-avatar" id="panelAvatar"><span>访</span></div>
@@ -73,6 +74,13 @@
                                 </svg>
                             </span>
                             分类管理
+                            <span class="panel-item-badge badge-yellow" id="categoryBadge" style="display:none">
+                                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 1.8L14.5 13.5H1.5L8 1.8z" fill="currentColor"/>
+                                    <path d="M8 6.3v3.2" stroke="#151519" stroke-width="1.4" stroke-linecap="round"/>
+                                    <circle cx="8" cy="11.6" r="0.85" fill="#151519"/>
+                                </svg>
+                            </span>
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
                         <button type="button" class="panel-item agent-only" data-action="agent">
@@ -95,6 +103,13 @@
                                 </svg>
                             </span>
                             大模型配置
+                            <span class="panel-item-badge badge-red" id="llmBadge" style="display:none">
+                                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 1.8L14.5 13.5H1.5L8 1.8z" fill="currentColor"/>
+                                    <path d="M8 6.3v3.2" stroke="#151519" stroke-width="1.4" stroke-linecap="round"/>
+                                    <circle cx="8" cy="11.6" r="0.85" fill="#151519"/>
+                                </svg>
+                            </span>
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
                         <button type="button" class="panel-item agent-only" data-action="search">
@@ -105,6 +120,13 @@
                                 </svg>
                             </span>
                             搜索服务配置
+                            <span class="panel-item-badge badge-red" id="searchBadge" style="display:none">
+                                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 1.8L14.5 13.5H1.5L8 1.8z" fill="currentColor"/>
+                                    <path d="M8 6.3v3.2" stroke="#151519" stroke-width="1.4" stroke-linecap="round"/>
+                                    <circle cx="8" cy="11.6" r="0.85" fill="#151519"/>
+                                </svg>
+                            </span>
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
                         <button type="button" class="panel-item agent-only" data-action="task">
@@ -206,7 +228,10 @@
 <div id="categoryModal" class="modal">
     <div class="modal-content modal-wide">
         <div class="modal-header">
-            <h3>分类管理</h3>
+            <div class="modal-title-group">
+                <h3>分类管理</h3>
+                <span class="modal-title-hint" id="categoryTitleHint" style="display:none">无自定义分类时将搜索任意领域新闻</span>
+            </div>
             <button class="modal-close" data-close>&times;</button>
         </div>
         <div class="modal-body">
@@ -328,7 +353,10 @@
 <div id="llmModal" class="modal">
     <div class="modal-content modal-wide">
         <div class="modal-header">
-            <h3>大模型配置</h3>
+            <div class="modal-title-group">
+                <h3>大模型配置</h3>
+                <span class="modal-title-warn" id="llmTitleWarn" style="display:none">至少启用一项配置</span>
+            </div>
             <div class="modal-header-actions">
                 <button class="btn-primary btn-compact" id="addLLMBtn">
                     <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -409,7 +437,10 @@
 <div id="searchModal" class="modal">
     <div class="modal-content modal-wide">
         <div class="modal-header">
-            <h3>搜索服务配置</h3>
+            <div class="modal-title-group">
+                <h3>搜索服务配置</h3>
+                <span class="modal-title-warn" id="searchTitleWarn" style="display:none">至少启用一项配置</span>
+            </div>
             <div class="modal-header-actions">
                 <button class="btn-primary btn-compact" id="addSearchBtn">
                     <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -729,6 +760,7 @@
             state.searchConfig = data;
             renderGreeting();
             renderWorkmode();
+            renderWarnings();
             return data;
         } catch (e) {
             console.error('Failed to load config:', e);
@@ -770,6 +802,40 @@
 
         if (mode === '') {
             openModal('workmodeChooseModal');
+        }
+    }
+
+    /* ===== 配置缺失告警 ===== */
+    function computeWarnings() {
+        const w = { llm: false, search: false, category: false };
+        if (state.workMode !== 'autonomous') return w;
+        w.llm = !state.activeLLM;
+        w.search = !state.activeSearch;
+        w.category = state.categories.filter(c => !c.is_default).length === 0;
+        return w;
+    }
+
+    function renderWarnings() {
+        const w = computeWarnings();
+
+        $('llmBadge').style.display = w.llm ? '' : 'none';
+        $('searchBadge').style.display = w.search ? '' : 'none';
+        $('categoryBadge').style.display = w.category ? '' : 'none';
+
+        $('llmTitleWarn').style.display = w.llm ? '' : 'none';
+        $('searchTitleWarn').style.display = w.search ? '' : 'none';
+        $('categoryTitleHint').style.display = w.category ? '' : 'none';
+
+        const badge = $('entryBadge');
+        badge.classList.remove('badge-red', 'badge-yellow');
+        if (w.llm || w.search) {
+            badge.classList.add('badge-red');
+            badge.style.display = '';
+        } else if (w.category) {
+            badge.classList.add('badge-yellow');
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
         }
     }
 
@@ -901,6 +967,7 @@
             const data = await resp.json();
             state.categories = data.items || [];
             renderCategories();
+            renderWarnings();
         } catch (e) {
             console.error('Failed to load categories:', e);
         }
@@ -1296,9 +1363,11 @@
         try {
             await persistLLM();
             renderLLMList();
+            renderWarnings();
         } catch (e) {
-            showToast('操作失败', 'error');
+            alert('操作失败');
         }
+    }
     }
 
     $('confirmDeleteLLMBtn').addEventListener('click', async () => {
@@ -1494,9 +1563,11 @@
         try {
             await persistSearch();
             renderSearchList();
+            renderWarnings();
         } catch (e) {
-            showToast('操作失败', 'error');
+            alert('操作失败');
         }
+    }
     }
 
     $('confirmDeleteSearchBtn').addEventListener('click', async () => {
@@ -1602,7 +1673,7 @@
     });
 
     /* ===== 自动任务配置 ===== */
-    state.taskForm = { mode: 'preset', intervalHours: 6, startHour: 0, customCron: '', selectedCategories: [] };
+    state.taskForm = { mode: 'preset', intervalHours: 8, startHour: 0, customCron: '', selectedCategories: [] };
 
     function selectableCatNames() {
         return state.categories.filter(c => !c.is_default).map(c => c.name);
@@ -1613,7 +1684,7 @@
         const cats = selectableCatNames();
 
         state.taskForm.mode = data.task_mode === 'custom' ? 'custom' : 'preset';
-        state.taskForm.intervalHours = data.task_interval_hours || 6;
+        state.taskForm.intervalHours = data.task_interval_hours || 8;
         state.taskForm.startHour = data.task_start_hour || 0;
         state.taskForm.customCron = data.task_custom_cron || '';
 

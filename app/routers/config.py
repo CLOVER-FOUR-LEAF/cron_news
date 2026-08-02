@@ -1,4 +1,4 @@
-import json
+﻿import json
 import time
 from pathlib import Path
 
@@ -53,7 +53,7 @@ class ConfigResponse(BaseModel):
     has_llm_key: bool = False
     has_search_key: bool = False
     task_mode: str = "preset"
-    task_interval_hours: int = 6
+    task_interval_hours: int = 8
     task_start_hour: int = 0
     task_custom_cron: str = ""
     task_selected_categories: list = []
@@ -101,7 +101,7 @@ def derive_task_cron(mode: str, interval_hours: int, start_hour: int, custom_cro
 async def get_config():
     env_vars = read_env_file()
 
-    interval_hours = _parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 6)
+    interval_hours = _parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 8)
     selected_categories = _parse_json_list(env_vars.get("TASK_SELECTED_CATEGORIES", ""))
     selected_categories = [str(x) for x in selected_categories]
 
@@ -197,7 +197,7 @@ async def update_config(config: ConfigUpdate):
     if task_touched:
         env_vars["SEARCH_CRON"] = derive_task_cron(
             env_vars.get("TASK_MODE", "preset"),
-            _parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 6),
+            _parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 8),
             _parse_int(env_vars.get("TASK_START_HOUR", ""), 0),
             env_vars.get("TASK_CUSTOM_CRON", ""),
         )

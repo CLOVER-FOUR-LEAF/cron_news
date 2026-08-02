@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 from datetime import datetime, timedelta
 
 from app.config import settings
@@ -43,7 +43,7 @@ class Scheduler:
     def _read_task_settings(self) -> tuple[str, int, int, str]:
         env = read_env_file()
         mode = env.get("TASK_MODE", "preset")
-        interval = _parse_int(env.get("TASK_INTERVAL_HOURS", ""), 6)
+        interval = _parse_int(env.get("TASK_INTERVAL_HOURS", ""), 8)
         start = _parse_int(env.get("TASK_START_HOUR", ""), 0)
         cron = env.get("SEARCH_CRON", "")
         return mode, max(1, interval), start % 24, cron
