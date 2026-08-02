@@ -202,37 +202,57 @@
 </div>
 
 <div id="agentModal" class="modal">
-    <div class="modal-content modal-wide">
+    <div class="modal-content agent-modal">
         <div class="modal-header">
             <h3>Agent 管理</h3>
             <button class="modal-close" data-close>&times;</button>
         </div>
-        <div class="modal-body">
-            <div class="agent-section">
-                <div class="agent-section-title">系统提示词</div>
-
-                <div class="agent-sub-label">基本提示词</div>
-                <p class="agent-sub-desc">由采集配置自动生成，不可编辑</p>
-                <textarea id="agentBasePrompt" class="agent-textarea" readonly rows="9"></textarea>
-
-                <div class="agent-sub-label">扩展提示词</div>
-                <div class="segmented" style="margin-bottom:12px">
-                    <button type="button" class="segmented-btn" id="agentExtPresetBtn">预设</button>
-                    <button type="button" class="segmented-btn" id="agentExtCustomBtn">自定义</button>
+        <div class="agent-grid">
+            <div class="agent-col">
+                <div class="agent-col-head">
+                    <div class="agent-col-title">基本提示词</div>
+                    <span class="agent-col-badge">
+                        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+                            <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+                            <path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.3"/>
+                        </svg>
+                        自动生成 · 只读
+                    </span>
                 </div>
-                <textarea id="agentExtPrompt" class="agent-textarea" rows="10"></textarea>
+                <textarea id="agentBasePrompt" class="agent-textarea agent-textarea-fixed agent-readonly" readonly spellcheck="false"></textarea>
             </div>
 
-            <div class="agent-section">
-                <div class="agent-section-title">更多功能</div>
-                <div class="feature-row">
-                    <div class="feature-info">
-                        <div class="feature-name">智能推荐</div>
-                        <div class="feature-desc">由后台 Agent 定期分析新闻相关性，在新闻详情页跨分类推荐真正相关的内容，触发频率与新闻采集保持一致</div>
+            <div class="agent-col">
+                <div class="agent-col-head">
+                    <div class="agent-col-title">扩展提示词</div>
+                    <div class="segmented segmented-sm">
+                        <button type="button" class="segmented-btn" id="agentExtPresetBtn">预设</button>
+                        <button type="button" class="segmented-btn" id="agentExtCustomBtn">自定义</button>
                     </div>
-                    <button type="button" class="switch" id="recommendSwitch" role="switch" aria-checked="false">
-                        <span class="switch-knob"></span>
-                    </button>
+                </div>
+                <textarea id="agentExtPrompt" class="agent-textarea agent-textarea-fixed" spellcheck="false"></textarea>
+            </div>
+
+            <div class="agent-col">
+                <div class="agent-col-head">
+                    <div class="agent-col-title">更多功能</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-top">
+                        <div class="feature-name">智能推荐</div>
+                        <button type="button" class="switch" id="recommendSwitch" role="switch" aria-checked="false">
+                            <span class="switch-knob"></span>
+                        </button>
+                    </div>
+                    <div class="feature-desc">由后台 Agent 定期分析新闻相关性，在新闻详情页跨分类推荐真正相关的内容，触发频率与新闻采集保持一致。</div>
+                    <div class="feature-warn">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 2L1.5 13.5h13L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                            <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                            <circle cx="8" cy="11.4" r="0.8" fill="currentColor"/>
+                        </svg>
+                        启用后将额外调用大模型，会增加 Token 消耗量
+                    </div>
                 </div>
             </div>
         </div>
@@ -1366,11 +1386,11 @@
         if (isPreset) {
             ta.value = state.agentExtPreset;
             ta.readOnly = true;
-            ta.classList.add('textarea-readonly');
+            ta.classList.add('agent-readonly');
         } else {
             ta.value = ta.dataset.custom || state.agentExtPreset;
             ta.readOnly = false;
-            ta.classList.remove('textarea-readonly');
+            ta.classList.remove('agent-readonly');
         }
 
         const sw = $('recommendSwitch');
