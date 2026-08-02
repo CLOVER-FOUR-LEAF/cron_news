@@ -45,6 +45,14 @@
                         </div>
                     </div>
                     <div class="panel-menu">
+                        <div class="panel-workmode">
+                            <span class="panel-workmode-label">工作模式</span>
+                            <div class="workmode-seg" id="workmodeSeg">
+                                <button type="button" class="workmode-btn" data-mode="assist">辅助</button>
+                                <button type="button" class="workmode-btn" data-mode="autonomous">自主</button>
+                            </div>
+                            <div class="workmode-tip" id="workmodeTip"></div>
+                        </div>
                         <button type="button" class="panel-item" data-action="profile">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -67,7 +75,7 @@
                             分类管理
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
-                        <button type="button" class="panel-item" data-action="agent">
+                        <button type="button" class="panel-item agent-only" data-action="agent">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                     <rect x="3" y="4" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/>
@@ -79,7 +87,7 @@
                             Agent 管理
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
-                        <button type="button" class="panel-item" data-action="llm">
+                        <button type="button" class="panel-item agent-only" data-action="llm">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                     <rect x="4.5" y="4.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.2"/>
@@ -89,7 +97,7 @@
                             大模型配置
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
-                        <button type="button" class="panel-item" data-action="search">
+                        <button type="button" class="panel-item agent-only" data-action="search">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                     <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
@@ -99,7 +107,7 @@
                             搜索服务配置
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
-                        <button type="button" class="panel-item" data-action="task">
+                        <button type="button" class="panel-item agent-only" data-action="task">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                     <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
@@ -137,6 +145,60 @@
         <div class="modal-footer">
             <button class="btn-secondary" data-close>取消</button>
             <button class="btn-primary" id="saveProfileBtn">保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="workmodeChooseModal" class="modal modal-required">
+    <div class="modal-content modal-wide">
+        <div class="modal-header">
+            <h3>选择工作模式</h3>
+        </div>
+        <div class="modal-body">
+            <p class="workmode-choose-hint">欢迎使用定时资讯。请先选择项目的运行模式，之后可在个人中心随时切换。</p>
+            <div class="workmode-choose-grid">
+                <button type="button" class="workmode-card" data-mode="assist">
+                    <div class="workmode-card-icon" style="--mc:#4a8fd4">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                            <rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="workmode-card-name">辅助模式</div>
+                    <div class="workmode-card-desc">作为资讯展示平台，为服务器上的其他 Agent（如 OpenClaw、Hermes）提供新闻数据与展示接口，项目本身不主动调用模型。</div>
+                    <span class="workmode-card-tag" style="--mc:#4a8fd4">传统平台 · 对外提供接口</span>
+                </button>
+                <button type="button" class="workmode-card" data-mode="autonomous">
+                    <div class="workmode-card-icon" style="--mc:#c8a852">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                            <rect x="5" y="6" width="14" height="12" rx="3" stroke="currentColor" stroke-width="1.5"/>
+                            <circle cx="9.5" cy="12" r="1.3" fill="currentColor"/>
+                            <circle cx="14.5" cy="12" r="1.3" fill="currentColor"/>
+                            <path d="M12 6V3M8.5 3h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="workmode-card-name">自主模式</div>
+                    <div class="workmode-card-desc">项目内置 Agent 自主调用搜索与大模型 API，按设定频率自动采集、撰写新闻并计算智能推荐。</div>
+                    <span class="workmode-card-tag" style="--mc:#c8a852">自动采集 · 智能推荐</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="workmodeConfirmModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3>切换工作模式</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="workmodeConfirmText"></p>
+            <p class="text-dim">切换后立即生效。</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="confirmWorkmodeBtn">确认切换</button>
         </div>
     </div>
 </div>
@@ -565,6 +627,8 @@
         activeSearch: null,
         editingSearch: null,
         deletingSearch: null,
+        workMode: '',
+        pendingWorkMode: null,
         dragItem: null,
         dragOverItem: null
     };
@@ -577,12 +641,25 @@
         return div.innerHTML;
     }
 
-    function openModal(id) { $(id).classList.add('show'); }
-    function closeModal(id) { $(id).classList.remove('show'); }
+    function openModal(id) { $(id).classList.add('show'); syncBodyScroll(); }
+    function closeModal(id) { $(id).classList.remove('show'); syncBodyScroll(); }
+
+    function syncBodyScroll() {
+        const anyOpen = document.querySelector('.modal.show');
+        document.body.style.overflow = anyOpen ? 'hidden' : '';
+    }
 
     document.querySelectorAll('.modal').forEach(m => {
-        m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
-        m.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => m.classList.remove('show')));
+        m.addEventListener('click', e => {
+            if (e.target === m && !m.classList.contains('modal-required')) {
+                m.classList.remove('show');
+                syncBodyScroll();
+            }
+        });
+        m.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
+            m.classList.remove('show');
+            syncBodyScroll();
+        }));
     });
 
     document.querySelectorAll('[data-toggle]').forEach(b => {
@@ -648,8 +725,10 @@
             state.activeLLM = data.active_llm || null;
             state.searchConfigs = data.search_configs || [];
             state.activeSearch = data.active_search || null;
+            state.workMode = data.work_mode || '';
             state.searchConfig = data;
             renderGreeting();
+            renderWorkmode();
             return data;
         } catch (e) {
             console.error('Failed to load config:', e);
@@ -666,6 +745,91 @@
             av.innerHTML = `<span>${escapeHtml(state.nickname.charAt(0) || '访')}</span>`;
         }
     }
+
+    /* ===== 工作模式 ===== */
+    const WORKMODE_TIPS = {
+        assist: '辅助模式：作为资讯展示平台，为服务器上的其他 Agent（如 OpenClaw、Hermes）提供新闻数据与展示接口，项目本身不主动调用模型。',
+        autonomous: '自主模式：项目内置 Agent 自主调用搜索与大模型 API，按设定频率自动采集、撰写新闻并计算智能推荐。'
+    };
+
+    const WORKMODE_CONFIRM = {
+        'autonomous>assist': '切换到辅助模式？\n\n将关闭项目内置的 Agent（自动采集、智能推荐等），项目作为传统资讯平台运行，仅对外提供数据接口。',
+        'assist>autonomous': '切换到自主模式？\n\n将启动项目内置的 Agent，按已配置的搜索服务、大模型与自动任务设置，自主调用 API 进行新闻采集与整理。'
+    };
+
+    function renderWorkmode() {
+        const mode = state.workMode;
+
+        document.querySelectorAll('#workmodeSeg .workmode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        document.querySelectorAll('.panel-item.agent-only').forEach(item => {
+            item.style.display = mode === 'assist' ? 'none' : '';
+        });
+
+        if (mode === '') {
+            openModal('workmodeChooseModal');
+        }
+    }
+
+    function showWorkmodeTip(mode) {
+        const tip = $('workmodeTip');
+        tip.textContent = WORKMODE_TIPS[mode] || '';
+        tip.classList.add('show');
+    }
+
+    function hideWorkmodeTip() {
+        $('workmodeTip').classList.remove('show');
+    }
+
+    document.querySelectorAll('#workmodeSeg .workmode-btn').forEach(btn => {
+        const mode = btn.dataset.mode;
+        btn.addEventListener('mouseenter', () => showWorkmodeTip(mode));
+        btn.addEventListener('mouseleave', hideWorkmodeTip);
+        btn.addEventListener('click', () => {
+            if (state.workMode === mode) return;
+            state.pendingWorkMode = mode;
+            $('workmodeConfirmText').textContent = WORKMODE_CONFIRM[`${state.workMode}>${mode}`] || '确认切换工作模式？';
+            openModal('workmodeConfirmModal');
+        });
+    });
+
+    async function applyWorkMode(mode) {
+        try {
+            const resp = await fetch('/api/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ work_mode: mode })
+            });
+            if (resp.ok) {
+                state.workMode = mode;
+                renderWorkmode();
+                showToast(mode === 'assist' ? '已切换到辅助模式' : '已切换到自主模式', 'success');
+            } else {
+                showToast('切换失败', 'error');
+            }
+        } catch (e) {
+            showToast('切换失败', 'error');
+        }
+    }
+
+    document.querySelectorAll('#workmodeChooseModal .workmode-card').forEach(card => {
+        card.addEventListener('click', async () => {
+            const mode = card.dataset.mode;
+            closeModal('workmodeChooseModal');
+            await applyWorkMode(mode);
+        });
+    });
+
+    $('confirmWorkmodeBtn').addEventListener('click', async () => {
+        const mode = state.pendingWorkMode;
+        closeModal('workmodeConfirmModal');
+        if (mode) {
+            await applyWorkMode(mode);
+            state.pendingWorkMode = null;
+        }
+    });
 
     /* ===== 个人资料 ===== */
     function openProfileModal() {

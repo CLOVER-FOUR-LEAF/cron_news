@@ -123,19 +123,33 @@ class Scheduler:
         finally:
             self._running = False
 
+    def _work_mode(self) -> str:
+        return read_env_file().get("WORK_MODE", "")
+
     async def _loop(self):
         while True:
             try:
+                if self._work_mode() != "autonomous":
+                    self._next_run = None
+                    await asyncio.sleep(15)
+                    continue
+
                 target = self._next_run_datetime()
                 self._next_run = target.timestamp()
 
                 while datetime.now() < target:
+                    if self._work_mode() != "autonomous":
+                        break
                     remaining = (target - datetime.now()).total_seconds()
                     await asyncio.sleep(min(30, max(1, remaining)))
                     refreshed = self._next_run_datetime()
                     if refreshed != target:
                         target = refreshed
                         self._next_run = target.timestamp()
+
+                if self._work_mode() != "autonomous":
+                    self._next_run = None
+                    continue
 
                 if settings.SEARCH_BASE_URL and settings.SEARCH_API_KEY:
                     await self._run_search()

@@ -2588,6 +2588,26 @@ button.header-icon-btn {
     line-height: 1.8;
     transition: border-color var(--transition-fast);
     white-space: pre-wrap;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-accent) transparent;
+}
+
+.agent-textarea::-webkit-scrollbar {
+    width: 8px;
+}
+
+.agent-textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.agent-textarea::-webkit-scrollbar-thumb {
+    background: var(--border-accent);
+    border-radius: 4px;
+    border: 2px solid var(--bg-elevated);
+}
+
+.agent-textarea::-webkit-scrollbar-thumb:hover {
+    background: var(--text-dim);
 }
 
 .agent-textarea:focus {
@@ -2718,5 +2738,171 @@ button.header-icon-btn {
     .agent-textarea-fixed {
         flex: none;
         height: 210px;
+    }
+}
+
+/* ========== WORK MODE ========== */
+.panel-workmode {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 12px;
+    margin-bottom: 4px;
+}
+
+.panel-workmode-label {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+}
+
+.workmode-seg {
+    display: inline-flex;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.workmode-btn {
+    padding: 4px 16px;
+    border: none;
+    background: none;
+    border-radius: 5px;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.workmode-btn:hover {
+    color: var(--text-primary);
+}
+
+.workmode-btn[data-mode="assist"].active {
+    background: rgba(74, 143, 212, 0.18);
+    color: #6ba6e8;
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1px rgba(74, 143, 212, 0.45);
+}
+
+.workmode-btn[data-mode="autonomous"].active {
+    background: rgba(200, 168, 82, 0.18);
+    color: #d9bc72;
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1px rgba(200, 168, 82, 0.5);
+}
+
+.workmode-tip {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 8px;
+    right: 8px;
+    z-index: 10;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    font-size: 0.75rem;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-5px);
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.workmode-tip.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.workmode-choose-hint {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 18px;
+}
+
+.workmode-choose-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.workmode-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 20px 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--font-body);
+    transition: all var(--transition-fast);
+}
+
+.workmode-card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--mc) 55%, transparent);
+    background: color-mix(in srgb, var(--mc) 7%, transparent);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.workmode-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    color: var(--mc);
+    background: color-mix(in srgb, var(--mc) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--mc) 35%, transparent);
+}
+
+.workmode-card-name {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.workmode-card-desc {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.7;
+    flex: 1;
+}
+
+.workmode-card-tag {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--mc);
+    background: color-mix(in srgb, var(--mc) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--mc) 35%, transparent);
+    padding: 3px 10px;
+    border-radius: 12px;
+    letter-spacing: 0.04em;
+}
+
+#workmodeConfirmText {
+    white-space: pre-line;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-bottom: 8px;
+}
+
+@media (max-width: 560px) {
+    .workmode-choose-grid {
+        grid-template-columns: 1fr;
     }
 }
