@@ -75,6 +75,32 @@ async def get_news_by_id(db: AsyncSession, news_id: int) -> News | None:
     return result.scalar_one_or_none()
 
 
+async def get_related_news(db: AsyncSession, news_id: int, limit: int = 10, recommend_enabled: bool = False) -> list[News]:
+    news = await get_news_by_id(db, news_id)
+    if not news:
+        return []
+
+    if recommend_enabled:
+        ids = news.related_id_list
+        if ids:
+            result = await db.execute(
+                select(News).where(News.id.in_(ids), News.is_deleted == 0)
+            )
+            items = {n.id: n for n in result.scalars().all()}
+            ordered = [items[i] for i in ids if i in items]
+            if ordered:
+                return ordered[:limit]
+
+    query = (
+        select(News)
+        .where(News.is_deleted == 0, News.id != news_id, News.category_id == news.category_id)
+        .order_by(News.collected_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
 async def create_news(db: AsyncSession, news_in: NewsCreate) -> News:
     news = News(
         title=news_in.title,

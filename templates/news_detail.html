@@ -6,7 +6,7 @@
     <title>新闻详情 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=22">
+    <link rel="stylesheet" href="/static/css/style.css?v=23">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         .markdown-body {
@@ -189,18 +189,18 @@
                 `;
 
                 document.title = `${news.title} - 定时资讯`;
-                loadRelated(news.category_name, news.id);
+                loadRelated(news.id);
             } catch (e) {
                 container.innerHTML = '<div class="empty-state"><p>加载失败</p><a href="/">返回首页</a></div>';
             }
         }
 
-        async function loadRelated(category, excludeId) {
+        async function loadRelated(newsId) {
             const container = document.getElementById('relatedList');
             try {
-                const resp = await fetch(`/api/news?category=${encodeURIComponent(category)}&page_size=20`);
+                const resp = await fetch(`/api/news/${newsId}/related?limit=12`);
                 const data = await resp.json();
-                const items = data.items.filter(item => item.id !== excludeId);
+                const items = data.items;
 
                 if (items.length === 0) {
                     container.innerHTML = '<div class="empty-state"><p>暂无相关内容</p></div>';

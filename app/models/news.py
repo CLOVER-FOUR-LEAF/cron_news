@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 
 from sqlalchemy import String, Text, DateTime, SmallInteger, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,6 +23,7 @@ class News(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
     is_deleted: Mapped[int] = mapped_column(SmallInteger, default=0, comment="逻辑删除")
     is_read: Mapped[int] = mapped_column(SmallInteger, default=0, comment="已读状态")
+    related_ids: Mapped[str | None] = mapped_column(Text, nullable=True, comment="智能推荐相关新闻ID集合(JSON)")
 
     category = relationship("Category", backref="news_items", lazy="joined")
 
@@ -32,3 +34,13 @@ class News(Base):
     @property
     def category_color(self) -> str | None:
         return self.category.color if self.category else None
+
+    @property
+    def related_id_list(self) -> list[int]:
+        if not self.related_ids:
+            return []
+        try:
+            parsed = json.loads(self.related_ids)
+            return [int(x) for x in parsed] if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return []

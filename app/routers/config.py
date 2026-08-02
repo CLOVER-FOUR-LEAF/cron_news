@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.config import settings, BASE_DIR
 from app.env_store import read_env_file, write_env_file
+from app.services.prompts import build_base_prompt, DEFAULT_EXT_PROMPT
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -32,6 +33,9 @@ class ConfigUpdate(BaseModel):
     task_start_hour: int | None = None
     task_custom_cron: str | None = None
     task_selected_categories: list | None = None
+    agent_ext_mode: str | None = None
+    agent_ext_prompt: str | None = None
+    agent_recommend_enabled: bool | None = None
 
 
 class ConfigResponse(BaseModel):
@@ -52,6 +56,11 @@ class ConfigResponse(BaseModel):
     task_start_hour: int = 0
     task_custom_cron: str = ""
     task_selected_categories: list = []
+    agent_base_prompt: str = ""
+    agent_ext_preset: str = ""
+    agent_ext_mode: str = "preset"
+    agent_ext_prompt: str = ""
+    agent_recommend_enabled: bool = False
 
 
 def _parse_json_list(raw: str) -> list:
@@ -90,6 +99,10 @@ def derive_task_cron(mode: str, interval_hours: int, start_hour: int, custom_cro
 async def get_config():
     env_vars = read_env_file()
 
+    interval_hours = _parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 6)
+    selected_categories = _parse_json_list(env_vars.get("TASK_SELECTED_CATEGORIES", ""))
+    selected_categories = [str(x) for x in selected_categories]
+
     return ConfigResponse(
         llm_configs=_parse_json_list(env_vars.get("LLM_CONFIGS", "")),
         active_llm=env_vars.get("ACTIVE_LLM", ""),
@@ -104,10 +117,15 @@ async def get_config():
         has_llm_key=bool(env_vars.get("LLM_API_KEY", "")),
         has_search_key=bool(env_vars.get("SEARCH_API_KEY", "")),
         task_mode=env_vars.get("TASK_MODE", "preset"),
-        task_interval_hours=_parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 6),
+        task_interval_hours=interval_hours,
         task_start_hour=_parse_int(env_vars.get("TASK_START_HOUR", ""), 0),
         task_custom_cron=env_vars.get("TASK_CUSTOM_CRON", ""),
-        task_selected_categories=_parse_json_list(env_vars.get("TASK_SELECTED_CATEGORIES", "")),
+        task_selected_categories=selected_categories,
+        agent_base_prompt=build_base_prompt(interval_hours, selected_categories),
+        agent_ext_preset=DEFAULT_EXT_PROMPT,
+        agent_ext_mode=env_vars.get("AGENT_EXT_MODE", "preset"),
+        agent_ext_prompt=env_vars.get("AGENT_EXT_PROMPT", ""),
+        agent_recommend_enabled=env_vars.get("AGENT_RECOMMEND_ENABLED", "") == "true",
     )
 
 
@@ -163,6 +181,13 @@ async def update_config(config: ConfigUpdate):
         env_vars["TASK_CUSTOM_CRON"] = config.task_custom_cron
     if config.task_selected_categories is not None:
         env_vars["TASK_SELECTED_CATEGORIES"] = json.dumps(config.task_selected_categories, ensure_ascii=False)
+
+    if config.agent_ext_mode is not None:
+        env_vars["AGENT_EXT_MODE"] = config.agent_ext_mode
+    if config.agent_ext_prompt is not None:
+        env_vars["AGENT_EXT_PROMPT"] = config.agent_ext_prompt
+    if config.agent_recommend_enabled is not None:
+        env_vars["AGENT_RECOMMEND_ENABLED"] = "true" if config.agent_recommend_enabled else "false"
 
     if task_touched:
         env_vars["SEARCH_CRON"] = derive_task_cron(

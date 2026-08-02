@@ -5,6 +5,7 @@ from app.config import settings
 from app.database import async_session
 from app.env_store import read_env_file
 from app.services.ai_service import run_search_task
+from app.services.recommend_service import run_recommend_task
 
 
 def _parse_int(raw: str, default: int) -> int:
@@ -102,11 +103,16 @@ class Scheduler:
                     return t
         return now + timedelta(hours=step)
 
+    def _recommend_enabled(self) -> bool:
+        return read_env_file().get("AGENT_RECOMMEND_ENABLED", "") == "true"
+
     async def _run_search(self):
         try:
             self._running = True
             async with async_session() as session:
                 result = await run_search_task(session)
+                if self._recommend_enabled():
+                    await run_recommend_task(session)
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()
@@ -157,6 +163,8 @@ class Scheduler:
             self._running = True
             async with async_session() as session:
                 result = await run_search_task(session, emit=emit)
+                if self._recommend_enabled():
+                    await run_recommend_task(session, emit=emit)
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()

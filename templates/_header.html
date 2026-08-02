@@ -67,6 +67,18 @@
                             分类管理
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
+                        <button type="button" class="panel-item" data-action="agent">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <rect x="3" y="4" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/>
+                                    <circle cx="6.2" cy="8" r="1" fill="currentColor"/>
+                                    <circle cx="9.8" cy="8" r="1" fill="currentColor"/>
+                                    <path d="M8 4V2M5.5 2h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            Agent 管理
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
                         <button type="button" class="panel-item" data-action="llm">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -185,6 +197,48 @@
         <div class="modal-footer">
             <button class="btn-secondary" data-close>取消</button>
             <button class="btn-danger" id="confirmDeleteCategoryBtn">删除</button>
+        </div>
+    </div>
+</div>
+
+<div id="agentModal" class="modal">
+    <div class="modal-content modal-wide">
+        <div class="modal-header">
+            <h3>Agent 管理</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="agent-section">
+                <div class="agent-section-title">系统提示词</div>
+
+                <div class="agent-sub-label">基本提示词</div>
+                <p class="agent-sub-desc">由采集配置自动生成，不可编辑</p>
+                <textarea id="agentBasePrompt" class="agent-textarea" readonly rows="9"></textarea>
+
+                <div class="agent-sub-label">扩展提示词</div>
+                <div class="segmented" style="margin-bottom:12px">
+                    <button type="button" class="segmented-btn" id="agentExtPresetBtn">预设</button>
+                    <button type="button" class="segmented-btn" id="agentExtCustomBtn">自定义</button>
+                </div>
+                <textarea id="agentExtPrompt" class="agent-textarea" rows="10"></textarea>
+            </div>
+
+            <div class="agent-section">
+                <div class="agent-section-title">更多功能</div>
+                <div class="feature-row">
+                    <div class="feature-info">
+                        <div class="feature-name">智能推荐</div>
+                        <div class="feature-desc">由后台 Agent 定期分析新闻相关性，在新闻详情页跨分类推荐真正相关的内容，触发频率与新闻采集保持一致</div>
+                    </div>
+                    <button type="button" class="switch" id="recommendSwitch" role="switch" aria-checked="false">
+                        <span class="switch-knob"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="saveAgentBtn">保存</button>
         </div>
     </div>
 </div>
@@ -556,6 +610,7 @@
             const action = item.dataset.action;
             if (action === 'profile') openProfileModal();
             else if (action === 'category') { renderCategories(); openModal('categoryModal'); }
+            else if (action === 'agent') { refreshConfig().then(() => { loadAgentForm(); openModal('agentModal'); }); }
             else if (action === 'llm') { refreshConfig().then(() => { renderLLMList(); openModal('llmModal'); }); }
             else if (action === 'search') { refreshConfig().then(() => { renderSearchList(); openModal('searchModal'); }); }
             else if (action === 'task') { refreshConfig().then(() => { loadTaskForm(); openModal('taskModal'); }); }
@@ -1283,6 +1338,84 @@
         if (!resp.ok) throw new Error('persist failed');
         return resp.json();
     }
+
+    /* ===== Agent 管理 ===== */
+    state.agentExtMode = 'preset';
+    state.agentExtPreset = '';
+    state.agentRecommend = false;
+
+    function loadAgentForm() {
+        const data = state.searchConfig || {};
+        $('agentBasePrompt').value = data.agent_base_prompt || '';
+        state.agentExtPreset = data.agent_ext_preset || '';
+        state.agentExtMode = data.agent_ext_mode === 'custom' ? 'custom' : 'preset';
+        state.agentRecommend = !!data.agent_recommend_enabled;
+
+        const customSaved = data.agent_ext_prompt || '';
+        $('agentExtPrompt').dataset.custom = customSaved;
+
+        renderAgentForm();
+    }
+
+    function renderAgentForm() {
+        const isPreset = state.agentExtMode === 'preset';
+        $('agentExtPresetBtn').classList.toggle('active', isPreset);
+        $('agentExtCustomBtn').classList.toggle('active', !isPreset);
+
+        const ta = $('agentExtPrompt');
+        if (isPreset) {
+            ta.value = state.agentExtPreset;
+            ta.readOnly = true;
+            ta.classList.add('textarea-readonly');
+        } else {
+            ta.value = ta.dataset.custom || state.agentExtPreset;
+            ta.readOnly = false;
+            ta.classList.remove('textarea-readonly');
+        }
+
+        const sw = $('recommendSwitch');
+        sw.classList.toggle('on', state.agentRecommend);
+        sw.setAttribute('aria-checked', String(state.agentRecommend));
+    }
+
+    $('agentExtPresetBtn').addEventListener('click', () => {
+        state.agentExtMode = 'preset';
+        renderAgentForm();
+    });
+
+    $('agentExtCustomBtn').addEventListener('click', () => {
+        state.agentExtMode = 'custom';
+        renderAgentForm();
+    });
+
+    $('recommendSwitch').addEventListener('click', () => {
+        state.agentRecommend = !state.agentRecommend;
+        renderAgentForm();
+    });
+
+    $('saveAgentBtn').addEventListener('click', async () => {
+        const payload = {
+            agent_ext_mode: state.agentExtMode,
+            agent_ext_prompt: state.agentExtMode === 'custom' ? $('agentExtPrompt').value : '',
+            agent_recommend_enabled: state.agentRecommend
+        };
+        try {
+            const resp = await fetch('/api/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (resp.ok) {
+                showToast('Agent 配置已保存', 'success');
+                closeModal('agentModal');
+                await refreshConfig();
+            } else {
+                showToast('保存失败', 'error');
+            }
+        } catch (e) {
+            showToast('保存失败', 'error');
+        }
+    });
 
     /* ===== 自动任务配置 ===== */
     state.taskForm = { mode: 'preset', intervalHours: 6, startHour: 0, customCron: '', selectedCategories: [] };

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.news import NewsCreate, NewsResponse, NewsListResponse
 from app.crud import news as news_crud
+from app.env_store import read_env_file
 
 router = APIRouter(prefix="/api", tags=["news"])
 
@@ -33,6 +34,17 @@ async def get_news(
     if not news:
         raise HTTPException(status_code=404, detail="新闻不存在")
     return news
+
+
+@router.get("/news/{news_id}/related", response_model=NewsListResponse)
+async def get_related_news(
+    news_id: int,
+    limit: int = Query(10, ge=1, le=30, description="推荐数量"),
+    db: AsyncSession = Depends(get_db),
+):
+    recommend_enabled = read_env_file().get("AGENT_RECOMMEND_ENABLED", "") == "true"
+    items = await news_crud.get_related_news(db, news_id, limit, recommend_enabled)
+    return NewsListResponse(total=len(items), items=items)
 
 
 @router.post("/news/{news_id}/read")

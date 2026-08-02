@@ -1,6 +1,7 @@
 from datetime import datetime
+import json
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class NewsBase(BaseModel):
@@ -22,12 +23,24 @@ class NewsResponse(NewsBase):
     id: int
     category_name: str | None = Field(None, description="分类名称")
     category_color: str | None = Field(None, description="分类主题色")
+    related_ids: list[int] = Field(default_factory=list, description="智能推荐相关新闻ID")
     is_read: int = 0
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+    @field_validator("related_ids", mode="before")
+    @classmethod
+    def _parse_related_ids(cls, v):
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return [int(x) for x in parsed] if isinstance(parsed, list) else []
+            except (json.JSONDecodeError, ValueError, TypeError):
+                return []
+        return v or []
 
 
 class NewsListResponse(BaseModel):
