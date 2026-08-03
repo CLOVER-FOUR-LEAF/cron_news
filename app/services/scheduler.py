@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 from app.config import settings
-from app.database import async_session
+from app.database import get_session
 from app.env_store import read_env_file
 from app.services.ai_service import run_search_task
 from app.services.recommend_service import run_recommend_task
@@ -109,7 +109,7 @@ class Scheduler:
     async def _run_search(self):
         try:
             self._running = True
-            async with async_session() as session:
+            async with get_session() as session:
                 result = await run_search_task(session)
                 if self._recommend_enabled():
                     await run_recommend_task(session)
@@ -175,7 +175,7 @@ class Scheduler:
     async def run_with_emit(self, emit):
         try:
             self._running = True
-            async with async_session() as session:
+            async with get_session() as session:
                 result = await run_search_task(session, emit=emit)
                 if self._recommend_enabled():
                     await run_recommend_task(session, emit=emit)

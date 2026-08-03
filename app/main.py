@@ -6,10 +6,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
-from app.database import init_db, async_session
+from app.database import init_db, get_session
 from app.models import Category
 from app.crud.category import COLOR_POOL, DEFAULT_COLOR
-from app.routers import news, category, config, scheduler as scheduler_router
+from app.routers import news, category, config, db as db_router, scheduler as scheduler_router
+from app.services import db_service
 from app.services.scheduler import scheduler as scheduler_service
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,9 +28,25 @@ KNOWN_CAT_COLORS = {
 }
 
 
+async def choose_startup_database():
+    state = db_service.get_db_state()
+    if state["mode"] == "standalone" and state["complete"]:
+        try:
+            ok, msg = await db_service.test_connection(state["config"])
+            if not ok:
+                raise RuntimeError(msg)
+            from app.database import activate_engine
+
+            activate_engine(db_service.build_url(state["config"]))
+            print("[DB] 使用独立数据库")
+        except Exception as e:
+            print(f"[DB] 独立数据库连接失败，回退到系统数据库: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    await choose_startup_database()
     await init_db()
     await seed_categories()
     scheduler_service.start()
@@ -41,7 +58,7 @@ async def lifespan(app: FastAPI):
 async def seed_categories():
     import random
 
-    async with async_session() as session:
+    async with get_session() as session:
         from sqlalchemy import select
         result = await session.execute(select(Category))
         cats = result.scalars().all()
@@ -88,11 +105,12 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 app.include_router(news.router)
 app.include_router(category.router)
 app.include_router(config.router)
+app.include_router(db_router.router)
 app.include_router(scheduler_router.router)
 
 
 async def get_categories():
-    async with async_session() as session:
+    async with get_session() as session:
         from sqlalchemy import select
         result = await session.execute(
             select(Category)

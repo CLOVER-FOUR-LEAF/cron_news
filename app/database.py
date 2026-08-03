@@ -3,21 +3,35 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    connect_args={"check_same_thread": False},
-)
-
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+engine = None
+async_session = None
 
 
 class Base(DeclarativeBase):
     pass
 
 
+def _build_engine(url: str):
+    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
+    return create_async_engine(url, echo=settings.DEBUG, connect_args=connect_args)
+
+
+def activate_engine(url: str):
+    global engine, async_session
+    engine = _build_engine(url)
+    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    return engine
+
+
+def get_session():
+    return async_session()
+
+
+activate_engine(settings.DATABASE_URL)
+
+
 async def get_db():
-    async with async_session() as session:
+    async with get_session() as session:
         try:
             yield session
             await session.commit()

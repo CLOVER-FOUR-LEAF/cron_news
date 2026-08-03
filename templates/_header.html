@@ -54,6 +54,22 @@
                             </div>
                             <div class="workmode-tip" id="workmodeTip"></div>
                         </div>
+                        <div class="panel-workmode">
+                            <span class="panel-workmode-label">数据库选择
+                                <button type="button" class="db-gear" id="dbGearBtn" title="独立数据库配置">
+                                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                                        <path d="M6.7 1.6h2.6l.35 1.5c.5.17.96.44 1.36.78l1.46-.5 1.3 2.25-1.15 1c.05.27.08.55.08.83s-.03.56-.08.83l1.15 1-1.3 2.25-1.46-.5c-.4.34-.86.6-1.36.78l-.35 1.5H6.7l-.35-1.5a4.1 4.1 0 01-1.36-.78l-1.46.5-1.3-2.25 1.15-1a4.2 4.2 0 010-1.66l-1.15-1 1.3-2.25 1.46.5c.4-.34.86-.6 1.36-.78l.35-1.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+                                        <circle cx="8" cy="7.5" r="1.7" stroke="currentColor" stroke-width="1.1"/>
+                                    </svg>
+                                    <span class="db-gear-badge" id="dbGearBadge" style="display:none">!</span>
+                                </button>
+                            </span>
+                            <div class="workmode-seg" id="dbSeg">
+                                <button type="button" class="workmode-btn db-btn" data-db="system">系统</button>
+                                <button type="button" class="workmode-btn db-btn" data-db="standalone">独立</button>
+                            </div>
+                            <div class="workmode-tip" id="dbTip"></div>
+                        </div>
                         <button type="button" class="panel-item" data-action="profile">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -225,6 +241,105 @@
     </div>
 </div>
 
+<div id="dbConfigModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3>独立数据库配置</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>数据库类型</label>
+                <select id="dbTypeSelect" class="form-select">
+                    <option value="mysql">MySQL</option>
+                    <option value="mariadb">MariaDB</option>
+                    <option value="postgresql">PostgreSQL</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>主机名</label>
+                <input type="text" id="dbHostInput" placeholder="localhost">
+            </div>
+            <div class="form-group">
+                <label>端口</label>
+                <input type="number" id="dbPortInput" placeholder="3306">
+            </div>
+            <div class="form-group">
+                <label>数据库名称</label>
+                <input type="text" id="dbNameInput" placeholder="cron_news">
+            </div>
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="dbUserInput">
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <div class="input-with-toggle">
+                    <input type="password" id="dbPasswordInput">
+                    <button type="button" class="btn-toggle" data-toggle="dbPasswordInput">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.2"/>
+                            <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <p class="db-test-result" id="dbTestResult" style="display:none"></p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" id="dbTestBtn">测试连接</button>
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="dbSaveBtn" disabled>保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="dbSwitchModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3>切换数据库</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="dbSwitchText"></p>
+            <label class="check-row">
+                <input type="checkbox" id="dbKeepCheck" checked>
+                <span>保留当前系统数据</span>
+            </label>
+            <p class="text-dim" id="dbKeepHint"></p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-danger" id="confirmDbSwitchBtn">确认切换</button>
+        </div>
+    </div>
+</div>
+
+<div id="dbWarnModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3>迁移失败</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <p class="db-warn-text">数据库迁移过程中出现问题，相关操作已回滚，原数据库数据未受任何影响。</p>
+            <p class="text-dim" id="dbWarnDetail"></p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-primary" data-close>知道了</button>
+        </div>
+    </div>
+</div>
+
+<div id="migrateOverlay" class="migrate-overlay" style="display:none">
+    <div class="migrate-box">
+        <div class="migrate-spinner"></div>
+        <div class="migrate-title">数据库迁移中…</div>
+        <div class="migrate-warn">迁移过程可能触发各类确认或网络弹窗，请勿干预！<br>不要关闭或刷新页面，迁移完成前原数据库数据不会被删减。</div>
+        <div class="migrate-status" id="migrateStatus"></div>
+    </div>
+</div>
+
 <div id="categoryModal" class="modal">
     <div class="modal-content modal-wide">
         <div class="modal-header">
@@ -368,7 +483,7 @@
             </div>
         </div>
         <div class="modal-body">
-            <p class="modal-desc">模型调用三要素：Base URL · API Key · Model，同一时间仅可启用一个配置</p>
+            <p class="modal-desc">配置大模型服务商，同一时间仅可启用一个配置</p>
             <div id="llmConfigList" class="llm-config-list"></div>
         </div>
     </div>
@@ -757,9 +872,13 @@
             state.searchConfigs = data.search_configs || [];
             state.activeSearch = data.active_search || null;
             state.workMode = data.work_mode || '';
+            state.dbMode = data.db_mode || 'system';
+            state.dbConfig = data.db_config || {};
+            state.dbComplete = !!data.db_complete;
             state.searchConfig = data;
             renderGreeting();
             renderWorkmode();
+            renderDb();
             renderWarnings();
             return data;
         } catch (e) {
@@ -895,6 +1014,213 @@
             await applyWorkMode(mode);
             state.pendingWorkMode = null;
         }
+    });
+
+    /* ===== 数据库选择 ===== */
+    const DB_TYPE_PORTS = { mysql: 3306, mariadb: 3306, postgresql: 5432 };
+    let dbTestPassed = false;
+    let pendingDbMode = null;
+
+    function renderDb() {
+        document.querySelectorAll('#dbSeg .db-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.db === state.dbMode);
+        });
+        $('dbGearBadge').style.display = state.dbComplete ? 'none' : '';
+        document.querySelector('#dbSeg .db-btn[data-db="standalone"]')
+            .classList.toggle('disabled', !state.dbComplete);
+    }
+
+    function dbFormConfig() {
+        return {
+            db_type: $('dbTypeSelect').value,
+            host: $('dbHostInput').value.trim(),
+            port: parseInt($('dbPortInput').value, 10) || 0,
+            name: $('dbNameInput').value.trim(),
+            user: $('dbUserInput').value.trim(),
+            password: $('dbPasswordInput').value,
+        };
+    }
+
+    function dbFormComplete(cfg) {
+        return !!(cfg.host && cfg.port && cfg.name && cfg.user && cfg.password);
+    }
+
+    function updateDbSave() {
+        $('dbSaveBtn').disabled = !(dbTestPassed && dbFormComplete(dbFormConfig()));
+    }
+
+    function resetDbTest() {
+        dbTestPassed = false;
+        $('dbTestResult').style.display = 'none';
+        updateDbSave();
+    }
+
+    $('dbGearBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cfg = state.dbConfig || {};
+        $('dbTypeSelect').value = cfg.db_type || 'mysql';
+        $('dbHostInput').value = cfg.host || '';
+        $('dbPortInput').value = cfg.port || DB_TYPE_PORTS[$('dbTypeSelect').value];
+        $('dbNameInput').value = cfg.name || '';
+        $('dbUserInput').value = cfg.user || '';
+        $('dbPasswordInput').value = cfg.password || '';
+        resetDbTest();
+        hidePanel();
+        openModal('dbConfigModal');
+    });
+
+    $('dbTypeSelect').addEventListener('change', () => {
+        $('dbPortInput').value = DB_TYPE_PORTS[$('dbTypeSelect').value];
+        resetDbTest();
+    });
+    ['dbHostInput', 'dbPortInput', 'dbNameInput', 'dbUserInput', 'dbPasswordInput'].forEach(id => {
+        $(id).addEventListener('input', resetDbTest);
+    });
+
+    $('dbTestBtn').addEventListener('click', async () => {
+        const cfg = dbFormConfig();
+        if (!dbFormComplete(cfg)) { showToast('请完整填写所有配置项', 'error'); return; }
+        const btn = $('dbTestBtn');
+        btn.disabled = true;
+        btn.textContent = '测试中…';
+        const r = $('dbTestResult');
+        try {
+            const resp = await fetch('/api/db/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cfg)
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                dbTestPassed = true;
+                r.textContent = '连接测试通过，可以保存';
+                r.className = 'db-test-result ok';
+            } else {
+                dbTestPassed = false;
+                r.textContent = data.detail || '连接失败';
+                r.className = 'db-test-result fail';
+            }
+        } catch (err) {
+            dbTestPassed = false;
+            r.textContent = '连接失败：网络错误';
+            r.className = 'db-test-result fail';
+        }
+        r.style.display = '';
+        btn.disabled = false;
+        btn.textContent = '测试连接';
+        updateDbSave();
+    });
+
+    $('dbSaveBtn').addEventListener('click', async () => {
+        const cfg = dbFormConfig();
+        try {
+            const resp = await fetch('/api/db/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cfg)
+            });
+            if (resp.ok) {
+                closeModal('dbConfigModal');
+                showToast('独立数据库配置已保存', 'success');
+                await refreshConfig();
+            } else {
+                showToast('保存失败', 'error');
+            }
+        } catch (e) {
+            showToast('保存失败', 'error');
+        }
+    });
+
+    function showDbTip(text) {
+        const t = $('dbTip');
+        t.textContent = text;
+        t.classList.add('show');
+    }
+    function hideDbTip() {
+        $('dbTip').classList.remove('show');
+    }
+
+    document.querySelectorAll('#dbSeg .db-btn').forEach(btn => {
+        const mode = btn.dataset.db;
+        btn.addEventListener('mouseenter', () => {
+            if (mode === 'standalone' && !state.dbComplete) {
+                showDbTip('无完整独立数据库配置，请先点击齿轮完成配置并通过连接测试');
+            } else if (mode === 'system') {
+                showDbTip('系统数据库：内置 SQLite，零配置开箱即用');
+            } else {
+                showDbTip('独立数据库：使用自建的 MySQL / MariaDB / PostgreSQL');
+            }
+        });
+        btn.addEventListener('mouseleave', hideDbTip);
+        btn.addEventListener('click', () => {
+            if (state.dbMode === mode) return;
+            if (mode === 'standalone' && !state.dbComplete) {
+                showDbTip('无完整独立数据库配置，请先点击齿轮完成配置并通过连接测试');
+                setTimeout(hideDbTip, 2500);
+                return;
+            }
+            pendingDbMode = mode;
+            if (mode === 'standalone') {
+                $('dbSwitchText').textContent = '将系统数据库（SQLite）切换到独立数据库？确认后会把当前全部数据迁移到你配置的独立数据库。';
+                $('dbKeepHint').textContent = '勾选则保留源 SQLite 文件；不勾选则迁移完成后删除 SQLite 数据库文件。';
+            } else {
+                $('dbSwitchText').textContent = '从独立数据库切换回系统数据库（SQLite）？确认后会把独立数据库中的全部数据迁移回 SQLite。';
+                $('dbKeepHint').textContent = '勾选则保留独立数据库中的数据；不勾选则迁移完成后清空独立数据库的表。';
+            }
+            $('dbKeepCheck').checked = true;
+            hidePanel();
+            openModal('dbSwitchModal');
+        });
+    });
+
+    $('confirmDbSwitchBtn').addEventListener('click', async () => {
+        const mode = pendingDbMode;
+        const keep = $('dbKeepCheck').checked;
+        closeModal('dbSwitchModal');
+        if (!mode) return;
+        $('migrateOverlay').style.display = 'flex';
+        $('migrateStatus').textContent = '正在启动迁移…';
+
+        const fail = (detail) => {
+            $('migrateOverlay').style.display = 'none';
+            $('dbWarnDetail').textContent = detail || '';
+            openModal('dbWarnModal');
+            pendingDbMode = null;
+        };
+
+        try {
+            const resp = await fetch('/api/db/switch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode, keep_data: keep })
+            });
+            if (!resp.ok) {
+                const data = await resp.json();
+                fail(data.detail);
+                return;
+            }
+        } catch (e) {
+            fail(String(e));
+            return;
+        }
+
+        const timer = setInterval(async () => {
+            try {
+                const st = await (await fetch('/api/db/status')).json();
+                if (st.state === 'migrating') {
+                    $('migrateStatus').textContent = st.message;
+                    return;
+                }
+                clearInterval(timer);
+                $('migrateOverlay').style.display = 'none';
+                if (st.state === 'done') {
+                    showToast(`迁移完成（${st.detail}），页面即将刷新`, 'success');
+                    setTimeout(() => location.reload(), 1200);
+                } else {
+                    fail(st.detail);
+                }
+            } catch (e) { /* 下一次轮询重试 */ }
+        }, 800);
     });
 
     /* ===== 个人资料 ===== */

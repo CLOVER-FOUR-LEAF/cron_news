@@ -63,6 +63,9 @@ class ConfigResponse(BaseModel):
     agent_ext_prompt: str = ""
     agent_recommend_enabled: bool = False
     work_mode: str = ""
+    db_mode: str = "system"
+    db_config: dict = {}
+    db_complete: bool = False
 
 
 def _parse_json_list(raw: str) -> list:
@@ -99,7 +102,10 @@ def derive_task_cron(mode: str, interval_hours: int, start_hour: int, custom_cro
 
 @router.get("", response_model=ConfigResponse)
 async def get_config():
+    from app.services import db_service
+
     env_vars = read_env_file()
+    db_state = db_service.get_db_state()
 
     interval_hours = _parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 8)
     selected_categories = _parse_json_list(env_vars.get("TASK_SELECTED_CATEGORIES", ""))
@@ -129,6 +135,9 @@ async def get_config():
         agent_ext_prompt=env_vars.get("AGENT_EXT_PROMPT", ""),
         agent_recommend_enabled=env_vars.get("AGENT_RECOMMEND_ENABLED", "") == "true",
         work_mode=env_vars.get("WORK_MODE", ""),
+        db_mode=db_state["mode"],
+        db_config=db_state["config"],
+        db_complete=db_state["complete"],
     )
 
 
