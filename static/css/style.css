@@ -3048,6 +3048,17 @@ button.header-icon-btn {
     cursor: not-allowed;
 }
 
+#dbPortInput::-webkit-outer-spin-button,
+#dbPortInput::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+#dbPortInput {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
 .check-row {
     display: flex;
     align-items: center;
