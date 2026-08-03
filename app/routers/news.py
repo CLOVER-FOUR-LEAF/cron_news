@@ -71,3 +71,9 @@ async def create_news(
 async def get_stats(db: AsyncSession = Depends(get_db)):
     stats = await news_crud.get_news_stats(db)
     return stats
+
+
+@router.get("/stats/recommend")
+async def get_recommendations(db: AsyncSession = Depends(get_db)):
+    mode = read_env_file().get("WORK_MODE", "")
+    return await news_crud.get_recommended_news(db, mode)

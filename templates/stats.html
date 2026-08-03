@@ -143,6 +143,13 @@
             padding-bottom: 12px;
             border-bottom: 1px solid var(--border-subtle);
         }
+        .section-hint {
+            font-family: var(--font-body);
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: var(--text-dim);
+            margin-left: 12px;
+        }
         .charts-row { display: flex; gap: 24px; }
         @media (max-width: 800px) { .charts-row { flex-direction: column; } }
         .chart-card {
@@ -220,20 +227,16 @@
         @media (max-width: 1000px) { .dash-row { grid-template-columns: 1fr; } }
         .line-chart-wrapper { height: 260px; }
 
-        .heat-flex { display: flex; gap: 16px; align-items: stretch; }
-        @media (max-width: 620px) { .heat-flex { flex-direction: column; } }
-        .heat-main { flex: 1; min-width: 0; overflow-x: auto; display: flex; flex-direction: column; }
+        .heat-main { width: 100%; min-width: 0; overflow-x: auto; display: flex; flex-direction: column; }
         .heat-months {
-            display: grid;
-            grid-auto-flow: column;
-            grid-auto-columns: 13px;
-            gap: 3px;
+            position: relative;
             margin-left: 26px;
             height: 16px;
             font-size: 0.62rem;
             color: var(--text-dim);
+            overflow: hidden;
         }
-        .heat-months span { white-space: nowrap; }
+        .heat-months span { position: absolute; white-space: nowrap; }
         .heat-body { display: flex; gap: 6px; margin-top: 4px; }
         .heat-weekdays {
             display: grid;
@@ -264,8 +267,8 @@
             color: var(--text-dim);
         }
         .heat-legend .heat-cell { cursor: default; }
-        .heat-stats { display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; width: 128px; }
-        @media (max-width: 620px) { .heat-stats { width: 100%; flex-direction: row; } .heat-stats .heat-stat { flex: 1; } }
+        .heat-stats { display: flex; flex-direction: row; gap: 12px; margin-top: 16px; }
+        @media (max-width: 620px) { .heat-stats { flex-direction: column; } }
         .heat-stat {
             background: var(--bg-elevated);
             border: 1px solid var(--border-subtle);
@@ -346,17 +349,15 @@
                         <div class="chart-card-head">
                             <h3>阅读热力图</h3>
                         </div>
-                        <div class="heat-flex">
-                            <div class="heat-main">
-                                <div class="heat-months" id="heatMonths"></div>
-                                <div class="heat-body">
-                                    <div class="heat-weekdays" id="heatWeekdays"></div>
-                                    <div class="heat-grid" id="heatGrid"></div>
-                                </div>
-                                <div class="heat-legend" id="heatLegend"></div>
+                        <div class="heat-main" id="heatMain">
+                            <div class="heat-months" id="heatMonths"></div>
+                            <div class="heat-body">
+                                <div class="heat-weekdays" id="heatWeekdays"></div>
+                                <div class="heat-grid" id="heatGrid"></div>
                             </div>
-                            <div class="heat-stats" id="heatStats"></div>
+                            <div class="heat-legend" id="heatLegend"></div>
                         </div>
+                        <div class="heat-stats" id="heatStats"></div>
                     </div>
                 </div>
             </div>
@@ -388,6 +389,11 @@
             </div>
 
             <div class="stats-section">
+                <div class="stats-section-title">推荐阅读<span class="section-hint" id="recommendHint"></span></div>
+                <div class="recent-list" id="recommendList"></div>
+            </div>
+
+            <div class="stats-section">
                 <div class="stats-section-title">最近阅读</div>
                 <div class="recent-list" id="recentList"></div>
             </div>
@@ -395,7 +401,7 @@
     </main>
 
     <footer class="site-footer">
-        <span>定时资讯 &copy; 2024 &mdash; AI 新闻聚合平台</span>
+        <span>定时资讯 &copy; 2026 &mdash; AI 新闻聚合平台</span>
     </footer>
 
     <script>
@@ -467,6 +473,7 @@
                 renderCategoryPieChart(STATS.category_stats);
                 renderDailyBarChart();
                 renderRecentReads(STATS.recent_reads);
+                loadRecommend();
             } catch (e) {
                 console.error('Failed to load stats:', e);
             }
@@ -617,7 +624,7 @@
                         borderColor: '#c8a852',
                         backgroundColor: gradient,
                         fill: true,
-                        tension: 0.35,
+                        tension: 0,
                         borderWidth: 2,
                         pointRadius: lineRange === 7 ? 3 : 2,
                         pointBackgroundColor: '#c8a852',
@@ -682,7 +689,9 @@
         function renderHeatmap(byDay, totalReads) {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            const WEEKS = 26;
+            const mainEl = document.getElementById('heatMain');
+            const avail = (mainEl ? mainEl.clientWidth : 490) - 26;
+            const WEEKS = Math.max(20, Math.min(52, Math.floor(avail / 13)));
 
             const start = new Date(today);
             start.setDate(start.getDate() - ((WEEKS - 1) * 7 + (start.getDay() + 6) % 7));
@@ -713,7 +722,7 @@
                     label = `${week[0].getMonth() + 1}月`;
                     lastMonth = week[0].getMonth();
                 }
-                monthHtml += `<span style="grid-column:${wi + 1}">${label}</span>`;
+                monthHtml += `<span style="left:${wi * 13}px">${label}</span>`;
             });
             monthsEl.innerHTML = monthHtml;
 
@@ -902,6 +911,34 @@
                 btn.classList.add('active');
                 onChange(parseInt(btn.dataset.days, 10));
             });
+        }
+
+        async function loadRecommend() {
+            const container = document.getElementById('recommendList');
+            try {
+                const resp = await fetch('/api/stats/recommend');
+                const data = await resp.json();
+                document.getElementById('recommendHint').textContent = data.hint || '';
+                if (!data.items || data.items.length === 0) {
+                    container.innerHTML = '<div class="expand-empty">暂无推荐内容</div>';
+                    return;
+                }
+                container.innerHTML = data.items.map(item => {
+                    const color = item.category_color || CAT_COLORS[item.category_name] || '#888';
+                    return `
+                        <a href="/news/${item.id}" class="recent-item">
+                            <span class="item-cat" style="color:${color};border:1px solid ${color}30;background:${color}10">${escapeHtml(item.category_name || '默认')}</span>
+                            <span class="item-title">${escapeHtml(item.title)}</span>
+                            <span class="item-source">${escapeHtml(item.source || '未知来源')}</span>
+                            <span class="item-time">${formatTime(item.collected_at)}</span>
+                            <span class="item-status unread">未读</span>
+                        </a>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error('Failed to load recommendations:', e);
+                container.innerHTML = '<div class="expand-empty">加载失败</div>';
+            }
         }
 
         function renderRecentReads(reads) {

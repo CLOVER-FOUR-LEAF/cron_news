@@ -1,5 +1,6 @@
 from datetime import datetime, date, timedelta
 import os
+import random
 import shutil
 from pathlib import Path
 
@@ -233,3 +234,154 @@ async def get_news_stats(db: AsyncSession) -> dict:
         "read_by_day": read_by_day,
         "recent_reads": recent_reads,
     }
+
+
+def _recommend_item(n: News) -> dict:
+    return {
+        "id": n.id,
+        "title": n.title,
+        "category_name": n.category_name,
+        "category_color": n.category_color or "#8a8690",
+        "source": n.source,
+        "collected_at": n.collected_at.isoformat() if n.collected_at else None,
+        "read_at": n.read_at.isoformat() if n.read_at else None,
+        "is_read": n.is_read,
+    }
+
+
+async def _preferred_categories(db: AsyncSession) -> list[str]:
+    result = await db.execute(
+        select(Category.name, func.count(News.id))
+        .join(Category, News.category_id == Category.id)
+        .where(News.is_deleted == 0, News.is_read == 1)
+        .group_by(Category.name)
+        .order_by(func.count(News.id).desc())
+    )
+    return [row[0] for row in result.all()]
+
+
+async def _unread_by_categories(db: AsyncSession, cats: list[str], per: int) -> list[News]:
+    items = []
+    for cat in cats:
+        result = await db.execute(
+            select(News)
+            .join(Category, News.category_id == Category.id)
+            .where(News.is_deleted == 0, News.is_read == 0, Category.name == cat)
+            .order_by(News.collected_at.desc())
+            .limit(per)
+        )
+        items.extend(result.scalars().all())
+    return items
+
+
+async def get_recommended_news(db: AsyncSession, mode: str, limit: int = 10) -> dict:
+    if mode == "autonomous":
+        items, hint = await _recommend_autonomous(db, limit)
+    else:
+        items, hint = await _recommend_assist(db, limit)
+    return {
+        "mode": mode,
+        "hint": hint,
+        "items": [_recommend_item(n) for n in items],
+    }
+
+
+async def _recommend_assist(db: AsyncSession, limit: int) -> tuple[list[News], str]:
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    result = await db.execute(
+        select(Category.name, func.count(News.id))
+        .join(Category, News.category_id == Category.id)
+        .where(News.is_deleted == 0, News.is_read == 1, News.read_at >= today_start)
+        .group_by(Category.name)
+        .order_by(func.count(News.id).desc())
+    )
+    cats = [row[0] for row in result.all()]
+
+    if len(cats) < 2:
+        result = await db.execute(
+            select(Category.name, func.count(News.id))
+            .join(Category, News.category_id == Category.id)
+            .where(News.is_deleted == 0, News.is_read == 0)
+            .group_by(Category.name)
+        )
+        others = [row[0] for row in result.all() if row[0] not in cats and row[1] > 0]
+        random.shuffle(others)
+        cats = (cats + others)[:2]
+
+    items = await _unread_by_categories(db, cats[:2], limit // 2)
+
+    if len(items) < limit:
+        have = {n.id for n in items}
+        result = await db.execute(
+            select(News)
+            .where(News.is_deleted == 0, News.is_read == 0)
+            .order_by(News.collected_at.desc())
+            .limit(limit)
+        )
+        for n in result.scalars().all():
+            if n.id not in have:
+                items.append(n)
+
+    return items[:limit], "基于你今日阅读最多的分类挑选未读内容"
+
+
+async def _recommend_autonomous(db: AsyncSession, limit: int) -> tuple[list[News], str]:
+    result = await db.execute(
+        select(News)
+        .where(News.is_deleted == 0, News.is_read == 1, News.read_at.isnot(None))
+        .order_by(News.read_at.desc())
+        .limit(20)
+    )
+    read_news = result.scalars().all()
+
+    score: dict[int, int] = {}
+    for n in read_news:
+        for rid in n.related_id_list:
+            score[rid] = score.get(rid, 0) + 1
+
+    items: list[News] = []
+    if score:
+        result = await db.execute(
+            select(News).where(
+                News.id.in_(list(score.keys())), News.is_deleted == 0, News.is_read == 0
+            )
+        )
+        by_id = {n.id: n for n in result.scalars().all()}
+        items = [by_id[i] for i in sorted(score, key=lambda i: -score[i]) if i in by_id]
+
+    if len(items) < limit:
+        pref = await _preferred_categories(db)
+        have = {n.id for n in items}
+        pools = []
+        for cat in pref[:3]:
+            result = await db.execute(
+                select(News)
+                .join(Category, News.category_id == Category.id)
+                .where(News.is_deleted == 0, News.is_read == 0, Category.name == cat)
+                .order_by(News.collected_at.desc())
+                .limit(limit)
+            )
+            pools.append(list(result.scalars().all()))
+        idx = 0
+        while len(items) < limit and any(pools):
+            pool = pools[idx % len(pools)]
+            if pool:
+                n = pool.pop(0)
+                if n.id not in have:
+                    items.append(n)
+                    have.add(n.id)
+            idx += 1
+
+    if len(items) < limit:
+        have = {n.id for n in items}
+        result = await db.execute(
+            select(News)
+            .where(News.is_deleted == 0, News.is_read == 0)
+            .order_by(News.collected_at.desc())
+            .limit(limit)
+        )
+        for n in result.scalars().all():
+            if n.id not in have:
+                items.append(n)
+
+    return items[:limit], "AI 基于你的阅读偏好与智能关联分析推荐"
