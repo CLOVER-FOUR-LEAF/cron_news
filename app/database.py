@@ -33,6 +33,7 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_ensure_category_color_column)
         await conn.run_sync(_ensure_news_related_ids_column)
+        await conn.run_sync(_ensure_news_read_at_column)
 
 
 def _ensure_category_color_column(sync_conn):
@@ -53,3 +54,13 @@ def _ensure_news_related_ids_column(sync_conn):
         cols = [c["name"] for c in inspector.get_columns("news")]
         if "related_ids" not in cols:
             sync_conn.execute(text("ALTER TABLE news ADD COLUMN related_ids TEXT"))
+
+
+def _ensure_news_read_at_column(sync_conn):
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(sync_conn)
+    if "news" in inspector.get_table_names():
+        cols = [c["name"] for c in inspector.get_columns("news")]
+        if "read_at" not in cols:
+            sync_conn.execute(text("ALTER TABLE news ADD COLUMN read_at DATETIME"))

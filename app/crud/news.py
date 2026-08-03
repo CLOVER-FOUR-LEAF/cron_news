@@ -134,6 +134,8 @@ async def mark_news_as_read(db: AsyncSession, news_id: int) -> bool:
     if not news:
         return False
     news.is_read = 1
+    if news.read_at is None:
+        news.read_at = datetime.now()
     await db.flush()
     return True
 
@@ -164,28 +166,46 @@ async def get_news_stats(db: AsyncSession) -> dict:
     result = await db.execute(category_query)
     category_stats = {row[0]: row[1] for row in result.all()}
 
+    range_start = datetime.combine(date.today() - timedelta(days=29), datetime.min.time())
+    daily_query = (
+        select(func.date(News.collected_at), Category.name, func.count(News.id))
+        .outerjoin(Category, News.category_id == Category.id)
+        .where(News.is_deleted == 0, News.collected_at >= range_start)
+        .group_by(func.date(News.collected_at), Category.name)
+    )
+    result = await db.execute(daily_query)
+    daily_map = {}
+    for day_str, cat_name, count in result.all():
+        if not day_str:
+            continue
+        name = cat_name or "默认"
+        entry = daily_map.setdefault(day_str, {})
+        entry[name] = entry.get(name, 0) + count
+
     daily_stats = []
-    for i in range(7, 0, -1):
+    for i in range(29, -1, -1):
         day = date.today() - timedelta(days=i)
-        day_start = datetime.combine(day, datetime.min.time())
-        day_end = datetime.combine(day + timedelta(days=1), datetime.min.time())
-        day_query = select(func.count()).where(
-            News.is_deleted == 0,
-            News.collected_at >= day_start,
-            News.collected_at < day_end,
-        )
-        result = await db.execute(day_query)
-        count = result.scalar()
+        day_str = day.isoformat()
+        by_category = daily_map.get(day_str, {})
         daily_stats.append({
-            "date": day.strftime("%m-%d"),
-            "count": count,
+            "date": day_str,
+            "count": sum(by_category.values()),
+            "by_category": by_category,
         })
+
+    read_query = (
+        select(func.date(News.read_at), func.count(News.id))
+        .where(News.is_deleted == 0, News.read_at.isnot(None))
+        .group_by(func.date(News.read_at))
+    )
+    result = await db.execute(read_query)
+    read_by_day = {row[0]: row[1] for row in result.all() if row[0]}
 
     recent_query = (
         select(News, Category.name, Category.color)
         .outerjoin(Category, News.category_id == Category.id)
         .where(News.is_deleted == 0, News.is_read == 1)
-        .order_by(News.collected_at.desc())
+        .order_by(News.read_at.desc())
         .limit(10)
     )
     result = await db.execute(recent_query)
@@ -197,6 +217,7 @@ async def get_news_stats(db: AsyncSession) -> dict:
             "category_color": row[2] or "#8a8690",
             "source": row.News.source,
             "collected_at": row.News.collected_at.isoformat() if row.News.collected_at else None,
+            "read_at": row.News.read_at.isoformat() if row.News.read_at else None,
             "is_read": row.News.is_read,
         }
         for row in result.all()
@@ -209,5 +230,6 @@ async def get_news_stats(db: AsyncSession) -> dict:
         "today_count": today_count,
         "category_stats": category_stats,
         "daily_stats": daily_stats,
+        "read_by_day": read_by_day,
         "recent_reads": recent_reads,
     }

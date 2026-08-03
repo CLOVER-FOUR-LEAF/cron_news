@@ -151,25 +151,141 @@
             border: 1px solid var(--border-subtle);
             border-radius: 12px;
             padding: 24px;
+            position: relative;
+            min-width: 0;
         }
         .chart-card h3 {
             font-family: var(--font-display);
             font-size: 1rem;
             font-weight: 700;
             color: var(--text-primary);
-            margin-bottom: 20px;
-            text-align: center;
         }
+        .chart-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .chart-card-head .segmented-btn { padding: 4px 14px; font-size: 0.75rem; }
         .pie-chart-wrapper { display: flex; align-items: center; gap: 24px; height: 280px; }
         @media (max-width: 600px) { .pie-chart-wrapper { flex-direction: column; height: auto; } }
         .pie-chart-canvas { flex: 1; max-width: 220px; }
-        .pie-legend { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+        .pie-legend { flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 280px; }
         .pie-legend-item { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; }
+        .pie-legend-item.zero { opacity: 0.4; }
         .pie-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .pie-legend-name { color: var(--text-secondary); min-width: 36px; }
         .pie-legend-count { color: var(--text-primary); font-weight: 600; min-width: 30px; text-align: right; }
         .pie-legend-percent { color: var(--text-dim); font-size: 0.75rem; }
         .bar-chart-wrapper { height: 280px; }
+
+        .chart-tip {
+            position: absolute;
+            pointer-events: none;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-accent);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            opacity: 0;
+            transition: opacity 0.15s;
+            white-space: nowrap;
+            z-index: 10;
+        }
+
+        .dash-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
+        @media (max-width: 900px) { .dash-kpis { grid-template-columns: 1fr; } }
+        .dash-kpi {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 20px 24px;
+            transition: all var(--transition-fast);
+        }
+        .dash-kpi:hover { border-color: var(--border-accent); }
+        .dash-kpi .kpi-value {
+            font-family: var(--font-display);
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.1;
+            font-variant-numeric: tabular-nums;
+        }
+        .dash-kpi .kpi-label { font-size: 0.78rem; color: var(--text-dim); margin-top: 8px; letter-spacing: 0.03em; }
+        .dash-kpi.gold .kpi-value { color: var(--accent-gold); }
+
+        .dash-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        @media (max-width: 1000px) { .dash-row { grid-template-columns: 1fr; } }
+        .line-chart-wrapper { height: 260px; }
+
+        .heat-flex { display: flex; gap: 16px; align-items: stretch; }
+        @media (max-width: 620px) { .heat-flex { flex-direction: column; } }
+        .heat-main { flex: 1; min-width: 0; overflow-x: auto; display: flex; flex-direction: column; }
+        .heat-months {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: 13px;
+            gap: 3px;
+            margin-left: 26px;
+            height: 16px;
+            font-size: 0.62rem;
+            color: var(--text-dim);
+        }
+        .heat-months span { white-space: nowrap; }
+        .heat-body { display: flex; gap: 6px; margin-top: 4px; }
+        .heat-weekdays {
+            display: grid;
+            grid-template-rows: repeat(7, 10px);
+            gap: 3px;
+            width: 20px;
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            flex-shrink: 0;
+        }
+        .heat-weekdays span { display: flex; align-items: center; }
+        .heat-grid {
+            display: grid;
+            grid-template-rows: repeat(7, 10px);
+            grid-auto-flow: column;
+            grid-auto-columns: 10px;
+            gap: 3px;
+        }
+        .heat-cell { width: 10px; height: 10px; border-radius: 3px; background: rgba(255, 255, 255, 0.05); }
+        .heat-cell.future { background: transparent; }
+        .heat-legend {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            justify-content: flex-end;
+            margin-top: 12px;
+            font-size: 0.65rem;
+            color: var(--text-dim);
+        }
+        .heat-legend .heat-cell { cursor: default; }
+        .heat-stats { display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; width: 128px; }
+        @media (max-width: 620px) { .heat-stats { width: 100%; flex-direction: row; } .heat-stats .heat-stat { flex: 1; } }
+        .heat-stat {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 14px 16px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .heat-stat .hs-value {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            font-variant-numeric: tabular-nums;
+        }
+        .heat-stat.gold .hs-value { color: var(--accent-gold); }
+        .heat-stat .hs-label { font-size: 0.7rem; color: var(--text-dim); margin-top: 4px; }
 
         .recent-list { display: flex; flex-direction: column; gap: 12px; }
         .recent-item {
@@ -213,18 +329,60 @@
             </div>
 
             <div class="stats-section">
+                <div class="stats-section-title">仪表盘</div>
+                <div class="dash-kpis" id="dashKpis"></div>
+                <div class="dash-row">
+                    <div class="chart-card">
+                        <div class="chart-card-head">
+                            <h3>阅读趋势</h3>
+                            <div class="segmented" id="lineRangeSeg">
+                                <button class="segmented-btn active" data-days="7">近 7 天</button>
+                                <button class="segmented-btn" data-days="30">近 30 天</button>
+                            </div>
+                        </div>
+                        <div class="line-chart-wrapper"><canvas id="readLineChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-card-head">
+                            <h3>阅读热力图</h3>
+                        </div>
+                        <div class="heat-flex">
+                            <div class="heat-main">
+                                <div class="heat-months" id="heatMonths"></div>
+                                <div class="heat-body">
+                                    <div class="heat-weekdays" id="heatWeekdays"></div>
+                                    <div class="heat-grid" id="heatGrid"></div>
+                                </div>
+                                <div class="heat-legend" id="heatLegend"></div>
+                            </div>
+                            <div class="heat-stats" id="heatStats"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-section">
                 <div class="stats-section-title">数据分析</div>
                 <div class="charts-row">
                     <div class="chart-card">
-                        <h3>各分类新闻数量</h3>
+                        <div class="chart-card-head">
+                            <h3>各分类新闻数量</h3>
+                        </div>
                         <div class="pie-chart-wrapper">
                             <div class="pie-chart-canvas"><canvas id="categoryPieChart"></canvas></div>
                             <div class="pie-legend" id="pieLegend"></div>
                         </div>
                     </div>
                     <div class="chart-card">
-                        <h3>过去7天新闻趋势</h3>
+                        <div class="chart-card-head">
+                            <h3>新闻收录趋势</h3>
+                            <div class="segmented" id="barRangeSeg">
+                                <button class="segmented-btn active" data-days="7">近 7 天</button>
+                                <button class="segmented-btn" data-days="30">近 30 天</button>
+                            </div>
+                        </div>
                         <div class="bar-chart-wrapper"><canvas id="dailyBarChart"></canvas></div>
+                        <div class="chart-tip" id="barTip"></div>
                     </div>
                 </div>
             </div>
@@ -243,8 +401,12 @@
     <script>
         const CATEGORIES = {{ categories | tojson }};
         const CAT_COLORS = {{ cat_colors | tojson }};
+        const DEFAULT_COLOR = '#8a8690';
 
-        let pieChart = null, barChart = null;
+        let pieChart = null, barChart = null, lineChart = null;
+        let STATS = null;
+        let barRange = 7, lineRange = 7;
+        let barView = [];
         let activeCard = null;
         let expandType = '';
         let expandPage = 1;
@@ -264,14 +426,47 @@
             return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
         }
 
+        const pad2 = n => String(n).padStart(2, '0');
+        const isoOf = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+
+        function tickLabel(iso, range) {
+            const d = new Date(iso + 'T00:00:00');
+            if (range === 30) {
+                return d.getDate() === 1 ? `${d.getMonth()+1}月` : pad2(d.getDate());
+            }
+            return `${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+        }
+
+        function fullLabel(iso) {
+            const d = new Date(iso + 'T00:00:00');
+            return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+        }
+
+        function lastNDays(n) {
+            const out = [];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            for (let i = n - 1; i >= 0; i--) {
+                const d = new Date(today);
+                d.setDate(d.getDate() - i);
+                out.push(isoOf(d));
+            }
+            return out;
+        }
+
+        function catColor(name) {
+            return CAT_COLORS[name] || DEFAULT_COLOR;
+        }
+
         async function loadStats() {
             try {
                 const resp = await fetch('/api/stats');
-                const data = await resp.json();
-                renderStats(data);
-                renderCategoryPieChart(data.category_stats);
-                renderDailyBarChart(data.daily_stats);
-                renderRecentReads(data.recent_reads);
+                STATS = await resp.json();
+                renderStats(STATS);
+                renderDash(STATS);
+                renderCategoryPieChart(STATS.category_stats);
+                renderDailyBarChart();
+                renderRecentReads(STATS.recent_reads);
             } catch (e) {
                 console.error('Failed to load stats:', e);
             }
@@ -374,6 +569,196 @@
             loadExpandPage();
         }
 
+        function readSeries(days) {
+            const byDay = (STATS && STATS.read_by_day) || {};
+            return lastNDays(days).map(iso => ({ date: iso, count: byDay[iso] || 0 }));
+        }
+
+        function renderDash(data) {
+            const byDay = data.read_by_day || {};
+            const days7 = lastNDays(7), days30 = lastNDays(30);
+            const sum = list => list.reduce((s, iso) => s + (byDay[iso] || 0), 0);
+            const today = days7[days7.length - 1];
+
+            document.getElementById('dashKpis').innerHTML = `
+                <div class="dash-kpi gold">
+                    <div class="kpi-value">${byDay[today] || 0}</div>
+                    <div class="kpi-label">当天阅读数 · ${today.slice(5).replace('-', '/')}</div>
+                </div>
+                <div class="dash-kpi">
+                    <div class="kpi-value">${sum(days7)}</div>
+                    <div class="kpi-label">近7天阅读数</div>
+                </div>
+                <div class="dash-kpi">
+                    <div class="kpi-value">${sum(days30)}</div>
+                    <div class="kpi-label">近30天阅读数</div>
+                </div>
+            `;
+
+            renderLineChart();
+            renderHeatmap(byDay, data.read_count || 0);
+        }
+
+        function renderLineChart() {
+            const ctx = document.getElementById('readLineChart').getContext('2d');
+            if (lineChart) lineChart.destroy();
+
+            const series = readSeries(30).slice(30 - lineRange);
+            const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+            gradient.addColorStop(0, 'rgba(200, 168, 82, 0.28)');
+            gradient.addColorStop(1, 'rgba(200, 168, 82, 0)');
+
+            lineChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: series.map(d => d.date),
+                    datasets: [{
+                        data: series.map(d => d.count),
+                        borderColor: '#c8a852',
+                        backgroundColor: gradient,
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 2,
+                        pointRadius: lineRange === 7 ? 3 : 2,
+                        pointBackgroundColor: '#c8a852',
+                        pointBorderColor: 'rgba(11,11,15,0.8)',
+                        pointHoverRadius: 5,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(24,24,30,0.95)',
+                            borderColor: 'rgba(200,168,82,0.4)',
+                            borderWidth: 1,
+                            titleColor: '#e8e4dc',
+                            bodyColor: '#c8a852',
+                            displayColors: false,
+                            callbacks: {
+                                title: items => fullLabel(items[0].label),
+                                label: c => `阅读 ${c.raw} 条`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: '#8a8690',
+                                font: { size: lineRange === 30 ? 9 : 11 },
+                                autoSkip: false,
+                                maxRotation: 0,
+                                callback: function (value, index) {
+                                    return tickLabel(this.getLabelForValue(value), lineRange);
+                                }
+                            },
+                            grid: { color: 'rgba(42,42,50,0.5)' }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: '#8a8690', precision: 0, font: { size: 11 } },
+                            grid: { color: 'rgba(42,42,50,0.5)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        const HEAT_LEVELS = [
+            { min: 7, color: 'rgba(200, 168, 82, 0.95)' },
+            { min: 4, color: 'rgba(200, 168, 82, 0.65)' },
+            { min: 2, color: 'rgba(200, 168, 82, 0.4)' },
+            { min: 1, color: 'rgba(200, 168, 82, 0.2)' },
+        ];
+        const HEAT_EMPTY = 'rgba(255, 255, 255, 0.05)';
+
+        function heatColor(count) {
+            for (const lv of HEAT_LEVELS) if (count >= lv.min) return lv.color;
+            return count > 0 ? HEAT_LEVELS[HEAT_LEVELS.length - 1].color : HEAT_EMPTY;
+        }
+
+        function renderHeatmap(byDay, totalReads) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const WEEKS = 26;
+
+            const start = new Date(today);
+            start.setDate(start.getDate() - ((WEEKS - 1) * 7 + (start.getDay() + 6) % 7));
+
+            const weeks = [];
+            const cursor = new Date(start);
+            while (cursor <= today) {
+                const week = [];
+                for (let i = 0; i < 7; i++) {
+                    week.push(new Date(cursor));
+                    cursor.setDate(cursor.getDate() + 1);
+                }
+                weeks.push(week);
+            }
+
+            const monthsEl = document.getElementById('heatMonths');
+            let monthHtml = '', lastMonth = -1;
+            weeks.forEach((week, wi) => {
+                let label = '';
+                for (const d of week) {
+                    if (d.getDate() === 1 && d.getMonth() !== lastMonth) {
+                        label = `${d.getMonth() + 1}月`;
+                        lastMonth = d.getMonth();
+                        break;
+                    }
+                }
+                if (wi === 0 && label === '') {
+                    label = `${week[0].getMonth() + 1}月`;
+                    lastMonth = week[0].getMonth();
+                }
+                monthHtml += `<span style="grid-column:${wi + 1}">${label}</span>`;
+            });
+            monthsEl.innerHTML = monthHtml;
+
+            document.getElementById('heatWeekdays').innerHTML =
+                ['一', '二', '三', '四', '五', '六', '日'].map(w => `<span>${w}</span>`).join('');
+
+            let gridHtml = '';
+            weeks.forEach(week => {
+                week.forEach(d => {
+                    if (d > today) {
+                        gridHtml += '<span class="heat-cell future"></span>';
+                        return;
+                    }
+                    const iso = isoOf(d);
+                    const count = byDay[iso] || 0;
+                    gridHtml += `<span class="heat-cell" style="background:${heatColor(count)}" title="${iso} · ${count > 0 ? `阅读 ${count} 条` : '无阅读'}"></span>`;
+                });
+            });
+            document.getElementById('heatGrid').innerHTML = gridHtml;
+
+            document.getElementById('heatLegend').innerHTML =
+                `少 <span class="heat-cell" style="background:${HEAT_EMPTY}"></span>` +
+                [1, 2, 4, 7].map(n => `<span class="heat-cell" style="background:${heatColor(n)}"></span>`).join('') +
+                ' 多';
+
+            const counts = Object.values(byDay);
+            const maxDay = counts.length ? Math.max(...counts) : 0;
+            const activeDays = counts.filter(c => c > 0).length;
+
+            document.getElementById('heatStats').innerHTML = `
+                <div class="heat-stat gold">
+                    <div class="hs-value">${totalReads}</div>
+                    <div class="hs-label">累计阅读数</div>
+                </div>
+                <div class="heat-stat">
+                    <div class="hs-value">${maxDay}</div>
+                    <div class="hs-label">单日阅读数最多</div>
+                </div>
+                <div class="heat-stat">
+                    <div class="hs-value">${activeDays}</div>
+                    <div class="hs-label">活跃天数</div>
+                </div>
+            `;
+        }
+
         function renderCategoryPieChart(categoryStats) {
             const ctx = document.getElementById('categoryPieChart').getContext('2d');
             if (pieChart) pieChart.destroy();
@@ -382,7 +767,7 @@
             let total = 0;
             CATEGORIES.forEach(cat => {
                 const count = categoryStats[cat] || 0;
-                if (count > 0) { labels.push(cat); values.push(count); colors.push(CAT_COLORS[cat]); total += count; }
+                if (count > 0) { labels.push(cat); values.push(count); colors.push(catColor(cat)); total += count; }
             });
 
             pieChart = new Chart(ctx, {
@@ -397,30 +782,125 @@
                 }
             });
 
-            document.getElementById('pieLegend').innerHTML = labels.map((cat, i) => `
-                <div class="pie-legend-item">
-                    <span class="pie-legend-dot" style="background:${colors[i]}"></span>
-                    <span class="pie-legend-name">${cat}</span>
-                    <span class="pie-legend-count">${values[i]}篇</span>
-                    <span class="pie-legend-percent">${Math.round(values[i]/total*100)}%</span>
-                </div>
-            `).join('');
+            document.getElementById('pieLegend').innerHTML = CATEGORIES.map(cat => {
+                const count = categoryStats[cat] || 0;
+                const percent = total > 0 ? Math.round(count / total * 100) : 0;
+                return `
+                    <div class="pie-legend-item ${count === 0 ? 'zero' : ''}">
+                        <span class="pie-legend-dot" style="background:${catColor(cat)}"></span>
+                        <span class="pie-legend-name">${escapeHtml(cat)}</span>
+                        <span class="pie-legend-count">${count}篇</span>
+                        <span class="pie-legend-percent">${percent}%</span>
+                    </div>
+                `;
+            }).join('');
         }
 
-        function renderDailyBarChart(dailyStats) {
+        function renderDailyBarChart() {
             const ctx = document.getElementById('dailyBarChart').getContext('2d');
             if (barChart) barChart.destroy();
+
+            barView = (STATS.daily_stats || []).slice(30 - barRange);
+
+            const catTotals = {};
+            barView.forEach(d => Object.entries(d.by_category).forEach(([cat, n]) => {
+                catTotals[cat] = (catTotals[cat] || 0) + n;
+            }));
+            const cats = CATEGORIES.filter(c => catTotals[c]);
+            Object.keys(catTotals).forEach(c => { if (!cats.includes(c)) cats.push(c); });
+
+            const datasets = cats.map(cat => ({
+                label: cat,
+                data: barView.map(d => d.by_category[cat] || 0),
+                backgroundColor: catColor(cat),
+                stack: 'news',
+                borderWidth: 0,
+                borderRadius: barRange === 7 ? 3 : 1,
+                maxBarThickness: barRange === 7 ? 34 : 12,
+            }));
+
             barChart = new Chart(ctx, {
                 type: 'bar',
-                data: { labels: dailyStats.map(d => d.date), datasets: [{ data: dailyStats.map(d => d.count), backgroundColor: 'rgba(200,168,82,0.6)', borderColor: '#c8a852', borderWidth: 1, borderRadius: 4 }] },
+                data: { labels: barView.map(d => d.date), datasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(24,24,30,0.95)',
+                            borderColor: 'rgba(200,168,82,0.4)',
+                            borderWidth: 1,
+                            titleColor: '#e8e4dc',
+                            bodyColor: '#e8e4dc',
+                            footerColor: '#c8a852',
+                            displayColors: true,
+                            boxWidth: 8,
+                            boxHeight: 8,
+                            usePointStyle: true,
+                            callbacks: {
+                                title: items => fullLabel(items[0].label),
+                                label: c => ` ${c.dataset.label}：${c.raw} 篇`,
+                                footer: items => `当日新增共 ${barView[items[0].dataIndex].count} 篇`
+                            }
+                        }
+                    },
                     scales: {
-                        x: { ticks: { color: '#8a8690', font: { size: 11 } }, grid: { color: 'rgba(42,42,50,0.5)' } },
-                        y: { beginAtZero: true, ticks: { color: '#8a8690', stepSize: 1, font: { size: 11 } }, grid: { color: 'rgba(42,42,50,0.5)' } }
+                        x: {
+                            stacked: true,
+                            ticks: {
+                                color: '#8a8690',
+                                font: { size: barRange === 30 ? 9 : 11 },
+                                autoSkip: false,
+                                maxRotation: 0,
+                                callback: function (value, index) {
+                                    return tickLabel(this.getLabelForValue(value), barRange);
+                                }
+                            },
+                            grid: { display: false }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: { color: '#8a8690', precision: 0, font: { size: 11 } },
+                            grid: { color: 'rgba(42,42,50,0.5)' }
+                        }
                     }
                 }
+            });
+        }
+
+        function attachBarAxisTip() {
+            const canvas = document.getElementById('dailyBarChart');
+            const tip = document.getElementById('barTip');
+            canvas.addEventListener('mousemove', (e) => {
+                if (!barChart || !barChart.chartArea) { tip.style.opacity = 0; return; }
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left, y = e.clientY - rect.top;
+                const area = barChart.chartArea;
+                if (y > area.bottom && y <= area.bottom + 26 && x >= area.left - 4 && x <= area.right + 4) {
+                    const idx = Math.round(barChart.scales.x.getValueForPixel(x));
+                    if (idx >= 0 && idx < barView.length) {
+                        const d = barView[idx];
+                        tip.textContent = `${fullLabel(d.date)} 新增共 ${d.count} 篇`;
+                        tip.style.left = Math.min(x + 14, canvas.offsetWidth - 140) + 'px';
+                        tip.style.top = (canvas.offsetTop + y - 30) + 'px';
+                        tip.style.opacity = 1;
+                        return;
+                    }
+                }
+                tip.style.opacity = 0;
+            });
+            canvas.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
+        }
+
+        function bindRangeSeg(segId, onChange) {
+            const seg = document.getElementById(segId);
+            seg.addEventListener('click', (e) => {
+                const btn = e.target.closest('.segmented-btn');
+                if (!btn || btn.classList.contains('active')) return;
+                seg.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                onChange(parseInt(btn.dataset.days, 10));
             });
         }
 
@@ -434,13 +914,16 @@
                         <span class="item-cat" style="color:${color};border:1px solid ${color}30;background:${color}10">${escapeHtml(item.category_name || '默认')}</span>
                         <span class="item-title">${escapeHtml(item.title)}</span>
                         <span class="item-source">${escapeHtml(item.source || '未知来源')}</span>
-                        <span class="item-time">${formatTime(item.collected_at)}</span>
+                        <span class="item-time">${formatTime(item.read_at || item.collected_at)}</span>
                         <span class="item-status ${item.is_read?'read':'unread'}">${item.is_read?'已读':'未读'}</span>
                     </a>
                 `;
             }).join('');
         }
 
+        bindRangeSeg('lineRangeSeg', days => { lineRange = days; renderLineChart(); });
+        bindRangeSeg('barRangeSeg', days => { barRange = days; renderDailyBarChart(); });
+        attachBarAxisTip();
         loadStats();
     </script>
 </body>
