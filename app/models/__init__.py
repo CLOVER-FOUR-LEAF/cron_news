@@ -1,5 +1,6 @@
 from app.models.news import News
 from app.models.category import Category
-from app.models.brief import Brief
+from app.models.brief import Brief, BriefNote
+from app.models.agent_log import AgentRun
 
-__all__ = ["News", "Category", "Brief"]
+__all__ = ["News", "Category", "Brief", "BriefNote", "AgentRun"]

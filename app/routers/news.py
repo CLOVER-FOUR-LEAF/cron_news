@@ -1,5 +1,7 @@
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -97,14 +99,56 @@ async def my_counts(db: AsyncSession = Depends(get_db)):
     return await news_crud.get_my_counts(db)
 
 
+class BriefNoteModel(BaseModel):
+    category: str
+    date: str
+    content: str = ""
+
+
+@router.get("/brief/note", response_model=None)
+async def get_brief_note(
+    category: str = Query(...),
+    date: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models import BriefNote
+
+    result = await db.execute(
+        select(BriefNote).where(BriefNote.category_name == category, BriefNote.brief_date == date)
+    )
+    note = result.scalars().first()
+    return {"content": note.content if note else ""}
+
+
+@router.put("/brief/note")
+async def save_brief_note(body: BriefNoteModel, db: AsyncSession = Depends(get_db)):
+    from app.models import BriefNote
+
+    result = await db.execute(
+        select(BriefNote).where(BriefNote.category_name == body.category, BriefNote.brief_date == body.date)
+    )
+    note = result.scalars().first()
+    if note:
+        note.content = body.content
+    else:
+        note = BriefNote(category_name=body.category, brief_date=body.date, content=body.content)
+        db.add(note)
+    await db.flush()
+    return {"ok": True}
+
+
 @router.get("/brief/{category}")
 async def get_brief(
     category: str,
+    date: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     from app.services import brief_service
 
-    brief = await brief_service.get_latest_brief(db, category)
+    if date:
+        brief = await brief_service.get_brief_by_date(db, category, date)
+    else:
+        brief = await brief_service.get_latest_brief(db, category)
     if not brief:
         raise HTTPException(status_code=404, detail="暂无该分类的简报")
     return {"category": brief.category_name, "date": brief.brief_date, "content": brief.content}

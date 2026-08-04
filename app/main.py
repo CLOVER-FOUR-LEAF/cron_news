@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import init_db, get_session
 from app.models import Category
 from app.crud.category import COLOR_POOL, DEFAULT_COLOR
-from app.routers import news, category, config, db as db_router, scheduler as scheduler_router
+from app.routers import news, category, config, db as db_router, agent as agent_router, scheduler as scheduler_router
 from app.services import db_service
 from app.services.scheduler import scheduler as scheduler_service
 
@@ -106,6 +106,7 @@ app.include_router(news.router)
 app.include_router(category.router)
 app.include_router(config.router)
 app.include_router(db_router.router)
+app.include_router(agent_router.router)
 app.include_router(scheduler_router.router)
 
 
@@ -151,6 +152,12 @@ async def news_detail(request: Request, news_id: int):
 async def stats_page(request: Request):
     categories, cat_colors = await get_categories()
     return templates.TemplateResponse(request, "stats.html", {"categories": categories, "cat_colors": cat_colors, "active_page": "stats"})
+
+
+@app.get("/brief")
+async def brief_page(request: Request):
+    categories, cat_colors = await get_categories()
+    return templates.TemplateResponse(request, "brief.html", {"categories": categories, "cat_colors": cat_colors, "active_page": "brief"})
 
 
 MY_PAGE_KINDS = {"recommend": "推荐阅读", "favorites": "新闻收藏", "later": "稍后再读"}

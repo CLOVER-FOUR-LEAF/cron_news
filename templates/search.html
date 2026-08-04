@@ -6,7 +6,7 @@
     <title>搜索结果 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=28">
+    <link rel="stylesheet" href="/static/css/style.css?v=29">
     <style>
         .search-results-container {
             padding: 40px 24px 60px;
@@ -107,8 +107,13 @@
                 ? '<span class="card-read-status read">已读</span>'
                 : '<span class="card-read-status unread">未读</span>';
 
+            const laterBtn = `
+                <button type="button" class="card-later-btn ${item.is_later ? 'active' : ''}" data-id="${item.id}" title="稍后再读">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                </button>`;
+
             el.innerHTML = `
-                <div class="card-cover">${coverHtml}</div>
+                <div class="card-cover">${coverHtml}${laterBtn}</div>
                 <div class="card-body">
                     <span class="card-category" data-cat="${escapeHtml(item.category_name || '')}">${escapeHtml(item.category_name || '默认')}</span>
                     <h3 class="card-title">${escapeHtml(item.title)}</h3>
@@ -122,9 +127,21 @@
             `;
             el.addEventListener('click', (e) => {
                 if (e.target.closest('a')) return;
+                const lb = e.target.closest('.card-later-btn');
+                if (lb) { toggleCardLater(lb); return; }
                 window.location.href = `/news/${item.id}`;
             });
             return el;
+        }
+
+        async function toggleCardLater(btn) {
+            try {
+                const resp = await fetch(`/api/news/${btn.dataset.id}/later`, { method: 'POST' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    btn.classList.toggle('active', !!data.is_later);
+                }
+            } catch (e) { /* ignore */ }
         }
 
         async function searchNews() {

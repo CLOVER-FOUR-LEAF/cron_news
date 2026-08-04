@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>每日简报 - 定时资讯</title>
+    <link rel="icon" href="/images/sign.png" type="image/png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=29">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    {% include "_header.html" %}
+
+    <main>
+        <div class="brief-page">
+            <aside class="brief-side">
+                <div class="brief-side-title">每日简报</div>
+                <div class="brief-field">
+                    <label>分类</label>
+                    <div class="cat-dropdown" id="catDropdown">
+                        <button type="button" class="cat-dropdown-btn" id="catDropdownBtn">
+                            <span class="brief-dot" id="catDot"></span>
+                            <span id="catLabel" class="cat-label">选择分类</span>
+                            <span class="cat-arrow">
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </span>
+                        </button>
+                        <div class="cat-dropdown-list" id="catDropdownList"></div>
+                    </div>
+                </div>
+                <div class="brief-field">
+                    <label>日期</label>
+                    <input type="date" id="briefDateInput" class="brief-date-input">
+                </div>
+                <p class="brief-side-hint">简报由自主模式 Agent 在每次采集完成后按分类自动生成。</p>
+            </aside>
+
+            <div class="brief-main" id="briefMain">
+                <div class="loading">加载中...</div>
+            </div>
+
+            <aside class="brief-note">
+                <div class="note-head">
+                    <span>便签</span>
+                    <button type="button" class="btn-primary btn-compact" id="noteSaveBtn">保存</button>
+                </div>
+                <textarea id="noteArea" class="note-area" spellcheck="false" placeholder="记录你对这期简报的想法，输入时自动保存…"></textarea>
+            </aside>
+        </div>
+    </main>
+
+    <script>
+        const CATEGORIES = {{ categories | tojson }};
+        const CAT_COLORS = {{ cat_colors | tojson }};
+
+        const $ = id => document.getElementById(id);
+
+        function showToast(message, type = 'info') {
+            const container = $('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('leaving');
+                toast.addEventListener('animationend', () => toast.remove());
+            }, 3200);
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        let currentCat = params.get('cat') && CATEGORIES.includes(params.get('cat')) ? params.get('cat') : (CATEGORIES[0] || '');
+        let currentDate = params.get('date') || new Date().toISOString().slice(0, 10);
+        let noteDirty = false;
+        let noteTimer = null;
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        /* ===== 分类下拉 ===== */
+        const dropdown = $('catDropdown');
+        const list = $('catDropdownList');
+
+        function renderCatBtn() {
+            $('catLabel').textContent = currentCat;
+            $('catDot').style.background = CAT_COLORS[currentCat] || '#8a8690';
+        }
+
+        list.innerHTML = CATEGORIES.map(cat => `
+            <button type="button" class="cat-dropdown-item" data-cat="${escapeHtml(cat)}" style="--cat: ${CAT_COLORS[cat] || '#8a8690'}">
+                <span class="brief-dot"></span>${escapeHtml(cat)}
+            </button>
+        `).join('');
+
+        $('catDropdownBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            list.classList.toggle('show');
+            dropdown.classList.toggle('open');
+        });
+        document.addEventListener('click', () => {
+            list.classList.remove('show');
+            dropdown.classList.remove('open');
+        });
+        list.querySelectorAll('.cat-dropdown-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentCat = btn.dataset.cat;
+                renderCatBtn();
+                list.classList.remove('show');
+                dropdown.classList.remove('open');
+                loadBrief();
+            });
+        });
+
+        $('briefDateInput').value = currentDate;
+        $('briefDateInput').addEventListener('change', () => {
+            currentDate = $('briefDateInput').value || currentDate;
+            loadBrief();
+        });
+
+        /* ===== 简报主体 ===== */
+        async function loadBrief() {
+            const main = $('briefMain');
+            main.innerHTML = '<div class="loading">加载中...</div>';
+            loadNote();
+            try {
+                const resp = await fetch(`/api/brief/${encodeURIComponent(currentCat)}?date=${currentDate}`);
+                if (!resp.ok) {
+                    main.innerHTML = `
+                        <div class="empty-state">
+                            <p>${escapeHtml(currentCat)} · ${currentDate} 暂无简报</p>
+                            <p class="text-dim">在设置 · Agent 管理中启用「AI 每日简报」后，自主模式将在采集完成后自动生成。</p>
+                        </div>`;
+                    return;
+                }
+                const data = await resp.json();
+                marked.setOptions({ breaks: true, gfm: true });
+                main.innerHTML = `
+                    <div class="brief-main-head">
+                        <span class="brief-main-cat" style="--cat: ${CAT_COLORS[currentCat] || '#8a8690'}">${escapeHtml(currentCat)}</span>
+                        <span class="brief-main-date">${escapeHtml(data.date)}</span>
+                    </div>
+                    <div class="markdown-body">${marked.parse(data.content)}</div>
+                `;
+            } catch (e) {
+                main.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+            }
+        }
+
+        /* ===== 便签 ===== */
+        async function loadNote() {
+            try {
+                const resp = await fetch(`/api/brief/note?category=${encodeURIComponent(currentCat)}&date=${currentDate}`);
+                const data = await resp.json();
+                $('noteArea').value = data.content || '';
+                noteDirty = false;
+            } catch (e) {
+                $('noteArea').value = '';
+            }
+        }
+
+        async function saveNote(showToastFlag) {
+            if (!noteDirty && !showToastFlag) return;
+            try {
+                const resp = await fetch('/api/brief/note', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category: currentCat, date: currentDate, content: $('noteArea').value })
+                });
+                if (resp.ok) {
+                    noteDirty = false;
+                    if (showToastFlag) showToast('便签已保存', 'success');
+                }
+            } catch (e) {
+                if (showToastFlag) showToast('保存失败', 'error');
+            }
+        }
+
+        $('noteArea').addEventListener('input', () => {
+            noteDirty = true;
+            clearTimeout(noteTimer);
+            noteTimer = setTimeout(() => saveNote(false), 800);
+        });
+        $('noteSaveBtn').addEventListener('click', () => saveNote(true));
+
+        renderCatBtn();
+        loadBrief();
+    </script>
+</body>
+</html>

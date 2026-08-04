@@ -1,9 +1,13 @@
 ﻿import asyncio
+import json
 from datetime import datetime, timedelta
+
+from sqlalchemy import select
 
 from app.config import settings
 from app.database import get_session
 from app.env_store import read_env_file
+from app.models import AgentRun
 from app.services.ai_service import run_search_task
 from app.services.recommend_service import run_recommend_task
 from app.services.brief_service import run_brief_task
@@ -110,24 +114,52 @@ class Scheduler:
     def _brief_enabled(self) -> bool:
         return read_env_file().get("AGENT_BRIEF_ENABLED", "") == "true"
 
+    def _make_collector(self, lines: list):
+        async def collect(event_type: str, text: str, **extra):
+            lines.append({"t": event_type, "x": text, "ts": datetime.now().strftime("%H:%M:%S")})
+        return collect
+
+    async def _save_run(self, lines: list, status: str):
+        if not lines:
+            return
+        try:
+            async with get_session() as session:
+                session.add(AgentRun(
+                    started_at=datetime.now(),
+                    status=status,
+                    content=json.dumps(lines, ensure_ascii=False),
+                ))
+                await session.flush()
+                result = await session.execute(select(AgentRun).order_by(AgentRun.id.desc()).offset(10))
+                for old in result.scalars().all():
+                    await session.delete(old)
+                await session.commit()
+        except Exception as e:
+            print(f"[Scheduler] 保存运行日志失败: {e}")
+
     async def _run_search(self):
+        lines: list = []
+        status = "finished"
         try:
             self._running = True
             async with get_session() as session:
-                result = await run_search_task(session)
+                result = await run_search_task(session, emit=self._make_collector(lines))
                 if self._recommend_enabled():
-                    await run_recommend_task(session)
+                    await run_recommend_task(session, emit=self._make_collector(lines))
                 if self._brief_enabled():
-                    await run_brief_task(session)
+                    await run_brief_task(session, emit=self._make_collector(lines))
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()
                 print(f"[Scheduler] 搜索完成: 新增 {result['total_new']} 条新闻")
         except Exception as e:
+            status = "failed"
+            lines.append({"t": "error", "x": f"任务异常: {e}", "ts": datetime.now().strftime("%H:%M:%S")})
             self._last_result = {"error": str(e)}
             print(f"[Scheduler] 搜索失败: {e}")
         finally:
             self._running = False
+            await self._save_run(lines, status)
 
     def _work_mode(self) -> str:
         return read_env_file().get("WORK_MODE", "")
@@ -179,24 +211,34 @@ class Scheduler:
             print("[Scheduler] 已停止")
 
     async def run_with_emit(self, emit):
+        lines: list = []
+        collector = self._make_collector(lines)
+
+        async def both(event_type: str, text: str, **extra):
+            await collector(event_type, text, **extra)
+            await emit(event_type, text, **extra)
+
+        status = "finished"
         try:
             self._running = True
             async with get_session() as session:
-                result = await run_search_task(session, emit=emit)
+                result = await run_search_task(session, emit=both)
                 if self._recommend_enabled():
-                    await run_recommend_task(session, emit=emit)
+                    await run_recommend_task(session, emit=both)
                 if self._brief_enabled():
-                    await run_brief_task(session, emit=emit)
+                    await run_brief_task(session, emit=both)
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()
                 return result
         except Exception as e:
+            status = "failed"
             self._last_result = {"error": str(e)}
             await emit("error", f"任务异常: {e}")
             return None
         finally:
             self._running = False
+            await self._save_run(lines, status)
 
     async def trigger_now(self):
         await self._run_search()

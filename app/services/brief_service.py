@@ -100,6 +100,16 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
     return {"generated": generated}
 
 
+async def get_brief_by_date(db: AsyncSession, category_name: str, brief_date: str) -> Brief | None:
+    result = await db.execute(
+        select(Brief)
+        .where(Brief.category_name == category_name, Brief.brief_date == brief_date)
+        .order_by(Brief.created_at.desc())
+        .limit(1)
+    )
+    return result.scalars().first()
+
+
 async def get_latest_brief(db: AsyncSession, category_name: str) -> Brief | None:
     result = await db.execute(
         select(Brief)

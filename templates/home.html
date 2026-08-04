@@ -6,7 +6,7 @@
     <title>定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=28">
+    <link rel="stylesheet" href="/static/css/style.css?v=29">
 </head>
 <body>
     {% include "_header.html" %}
@@ -79,8 +79,14 @@
                 ? '<span class="ticker-read-status read">已读</span>'
                 : '<span class="ticker-read-status unread">未读</span>';
 
+            const laterBtn = `
+                <button type="button" class="card-later-btn ticker-later-btn ${item.is_later ? 'active' : ''}" data-id="${item.id}" title="稍后再读">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                </button>`;
+
             el.innerHTML = `
                 ${coverHtml}
+                ${laterBtn}
                 <div class="ticker-body">
                     <div class="ticker-item-title">${escapeHtml(item.title)}</div>
                     <div class="ticker-item-meta">
@@ -92,9 +98,21 @@
             `;
             el.addEventListener('click', (e) => {
                 if (e.target.closest('a')) return;
+                const lb = e.target.closest('.card-later-btn');
+                if (lb) { toggleCardLater(lb); return; }
                 window.location.href = `/news/${item.id}`;
             });
             return el;
+        }
+
+        async function toggleCardLater(btn) {
+            try {
+                const resp = await fetch(`/api/news/${btn.dataset.id}/later`, { method: 'POST' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    btn.classList.toggle('active', !!data.is_later);
+                }
+            } catch (e) { /* ignore */ }
         }
 
         async function initTicker(cat) {

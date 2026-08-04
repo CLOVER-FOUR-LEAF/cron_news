@@ -137,6 +137,9 @@ async def mark_news_as_read(db: AsyncSession, news_id: int) -> bool:
     news.is_read = 1
     if news.read_at is None:
         news.read_at = datetime.now()
+    if news.is_later:
+        news.is_later = 0
+        news.later_at = None
     await db.flush()
     return True
 

@@ -6,7 +6,7 @@
     <title>新闻详情 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=28">
+    <link rel="stylesheet" href="/static/css/style.css?v=29">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         .markdown-body {
@@ -181,17 +181,13 @@
                         <span>收录于 ${formatDate(news.collected_at)}</span>
                         <span class="detail-read-time">约 ${readTime} 分钟阅读</span>
                     </div>
-                    <h1 class="detail-title">${escapeHtml(news.title)}</h1>
+                    <h1 class="detail-title">${escapeHtml(news.title)}<button type="button" class="title-later-btn ${news.is_later ? 'active' : ''}" id="laterBtn" title="稍后再读"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button></h1>
                     <div class="markdown-body">${mdContent}</div>
                     <div class="detail-actions">
                         ${sourceLink}
                         <button type="button" class="detail-flag-btn ${news.is_fav ? 'active' : ''}" id="favBtn">
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2.2l1.5 3.2 3.5.4-2.6 2.4.7 3.5L8 10l-3.1 1.7.7-3.5L3 5.8l3.5-.4L8 2.2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
                             <span class="flag-label">${news.is_fav ? '已收藏' : '收藏'}</span>
-                        </button>
-                        <button type="button" class="detail-flag-btn ${news.is_later ? 'active' : ''}" id="laterBtn">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-                            <span class="flag-label">${news.is_later ? '已稍后' : '稍后再读'}</span>
                         </button>
                     </div>
                 `;
@@ -261,7 +257,8 @@
                 const value = flag === 'fav' ? data.is_fav : data.is_later;
                 const btn = document.getElementById(flag === 'fav' ? 'favBtn' : 'laterBtn');
                 btn.classList.toggle('active', !!value);
-                btn.querySelector('.flag-label').textContent = value ? (flag === 'fav' ? '已收藏' : '已稍后') : (flag === 'fav' ? '收藏' : '稍后再读');
+                const label = btn.querySelector('.flag-label');
+                if (label) label.textContent = value ? (flag === 'fav' ? '已收藏' : '已稍后') : (flag === 'fav' ? '收藏' : '稍后再读');
             } catch (e) { /* ignore */ }
         }
 
