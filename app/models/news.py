@@ -24,6 +24,10 @@ class News(Base):
     is_deleted: Mapped[int] = mapped_column(SmallInteger, default=0, comment="逻辑删除")
     is_read: Mapped[int] = mapped_column(SmallInteger, default=0, comment="已读状态")
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="阅读时间")
+    is_fav: Mapped[int] = mapped_column(SmallInteger, default=0, comment="收藏状态")
+    fav_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="收藏时间")
+    is_later: Mapped[int] = mapped_column(SmallInteger, default=0, comment="稍后再读状态")
+    later_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="稍后再读标记时间")
     related_ids: Mapped[str | None] = mapped_column(Text, nullable=True, comment="智能推荐相关新闻ID集合(JSON)")
 
     category = relationship("Category", backref="news_items", lazy="joined")

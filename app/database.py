@@ -48,6 +48,7 @@ async def init_db():
         await conn.run_sync(_ensure_category_color_column)
         await conn.run_sync(_ensure_news_related_ids_column)
         await conn.run_sync(_ensure_news_read_at_column)
+        await conn.run_sync(_ensure_news_user_action_columns)
 
 
 def _ensure_category_color_column(sync_conn):
@@ -78,3 +79,21 @@ def _ensure_news_read_at_column(sync_conn):
         cols = [c["name"] for c in inspector.get_columns("news")]
         if "read_at" not in cols:
             sync_conn.execute(text("ALTER TABLE news ADD COLUMN read_at DATETIME"))
+
+
+def _ensure_news_user_action_columns(sync_conn):
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(sync_conn)
+    if "news" not in inspector.get_table_names():
+        return
+    cols = [c["name"] for c in inspector.get_columns("news")]
+    additions = [
+        ("is_fav", "ALTER TABLE news ADD COLUMN is_fav SMALLINT DEFAULT 0"),
+        ("fav_at", "ALTER TABLE news ADD COLUMN fav_at DATETIME"),
+        ("is_later", "ALTER TABLE news ADD COLUMN is_later SMALLINT DEFAULT 0"),
+        ("later_at", "ALTER TABLE news ADD COLUMN later_at DATETIME"),
+    ]
+    for col, ddl in additions:
+        if col not in cols:
+            sync_conn.execute(text(ddl))

@@ -153,6 +153,21 @@ async def stats_page(request: Request):
     return templates.TemplateResponse(request, "stats.html", {"categories": categories, "cat_colors": cat_colors, "active_page": "stats"})
 
 
+MY_PAGE_KINDS = {"recommend": "推荐阅读", "favorites": "新闻收藏", "later": "稍后再读"}
+
+
+@app.get("/my/{kind}")
+async def my_page(request: Request, kind: str):
+    if kind not in MY_PAGE_KINDS:
+        categories, cat_colors = await get_categories()
+        return templates.TemplateResponse(request, "404.html", status_code=404, context={"categories": categories, "cat_colors": cat_colors})
+    categories, cat_colors = await get_categories()
+    return templates.TemplateResponse(
+        request, "my.html",
+        {"categories": categories, "cat_colors": cat_colors, "active_page": "my", "kind": kind, "kind_title": MY_PAGE_KINDS[kind]},
+    )
+
+
 @app.get("/search")
 async def search_page(request: Request):
     categories, cat_colors = await get_categories()

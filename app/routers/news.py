@@ -58,6 +58,58 @@ async def mark_as_read(
     return {"message": "ok"}
 
 
+@router.post("/news/{news_id}/fav")
+async def toggle_fav(
+    news_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    value = await news_crud.toggle_news_flag(db, news_id, "fav")
+    if value is None:
+        raise HTTPException(status_code=404, detail="新闻不存在")
+    return {"is_fav": value}
+
+
+@router.post("/news/{news_id}/later")
+async def toggle_later(
+    news_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    value = await news_crud.toggle_news_flag(db, news_id, "later")
+    if value is None:
+        raise HTTPException(status_code=404, detail="新闻不存在")
+    return {"is_later": value}
+
+
+@router.get("/my/favorites", response_model=NewsListResponse)
+async def my_favorites(db: AsyncSession = Depends(get_db)):
+    items = await news_crud.get_my_list(db, "favorites")
+    return NewsListResponse(total=len(items), items=items)
+
+
+@router.get("/my/later", response_model=NewsListResponse)
+async def my_later(db: AsyncSession = Depends(get_db)):
+    items = await news_crud.get_my_list(db, "later")
+    return NewsListResponse(total=len(items), items=items)
+
+
+@router.get("/my/counts")
+async def my_counts(db: AsyncSession = Depends(get_db)):
+    return await news_crud.get_my_counts(db)
+
+
+@router.get("/brief/{category}")
+async def get_brief(
+    category: str,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services import brief_service
+
+    brief = await brief_service.get_latest_brief(db, category)
+    if not brief:
+        raise HTTPException(status_code=404, detail="暂无该分类的简报")
+    return {"category": brief.category_name, "date": brief.brief_date, "content": brief.content}
+
+
 @router.post("/news", response_model=NewsResponse, status_code=201)
 async def create_news(
     news_in: NewsCreate,

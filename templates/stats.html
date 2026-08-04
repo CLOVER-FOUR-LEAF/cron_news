@@ -6,7 +6,7 @@
     <title>阅读统计 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=27">
+    <link rel="stylesheet" href="/static/css/style.css?v=28">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         .stats-container {
@@ -389,11 +389,6 @@
             </div>
 
             <div class="stats-section">
-                <div class="stats-section-title">推荐阅读<span class="section-hint" id="recommendHint"></span></div>
-                <div class="recent-list" id="recommendList"></div>
-            </div>
-
-            <div class="stats-section">
                 <div class="stats-section-title">最近阅读</div>
                 <div class="recent-list" id="recentList"></div>
             </div>
@@ -473,7 +468,6 @@
                 renderCategoryPieChart(STATS.category_stats);
                 renderDailyBarChart();
                 renderRecentReads(STATS.recent_reads);
-                loadRecommend();
             } catch (e) {
                 console.error('Failed to load stats:', e);
             }
@@ -911,34 +905,6 @@
                 btn.classList.add('active');
                 onChange(parseInt(btn.dataset.days, 10));
             });
-        }
-
-        async function loadRecommend() {
-            const container = document.getElementById('recommendList');
-            try {
-                const resp = await fetch('/api/stats/recommend');
-                const data = await resp.json();
-                document.getElementById('recommendHint').textContent = data.hint || '';
-                if (!data.items || data.items.length === 0) {
-                    container.innerHTML = '<div class="expand-empty">暂无推荐内容</div>';
-                    return;
-                }
-                container.innerHTML = data.items.map(item => {
-                    const color = item.category_color || CAT_COLORS[item.category_name] || '#888';
-                    return `
-                        <a href="/news/${item.id}" class="recent-item">
-                            <span class="item-cat" style="color:${color};border:1px solid ${color}30;background:${color}10">${escapeHtml(item.category_name || '默认')}</span>
-                            <span class="item-title">${escapeHtml(item.title)}</span>
-                            <span class="item-source">${escapeHtml(item.source || '未知来源')}</span>
-                            <span class="item-time">${formatTime(item.collected_at)}</span>
-                            <span class="item-status unread">未读</span>
-                        </a>
-                    `;
-                }).join('');
-            } catch (e) {
-                console.error('Failed to load recommendations:', e);
-                container.innerHTML = '<div class="expand-empty">加载失败</div>';
-            }
         }
 
         function renderRecentReads(reads) {

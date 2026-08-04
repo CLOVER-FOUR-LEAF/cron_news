@@ -22,6 +22,22 @@
                 <input type="text" id="searchInput" class="search-input" placeholder="搜索新闻..." />
                 <button id="searchBtn" class="search-btn">搜索</button>
             </div>
+            <div class="brief-wrap" id="briefWrap">
+                <button type="button" class="header-icon-btn" id="briefBtn" title="每日简报">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <path d="M4 2.5h8.5l3 3V15a1.5 1.5 0 01-1.5 1.5H4A1.5 1.5 0 012.5 15V4A1.5 1.5 0 014 2.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                        <path d="M5.5 7h7M5.5 10h7M5.5 13h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <div class="brief-pop" id="briefPop">
+                    <div class="brief-pop-title">每日简报 · 选择分类</div>
+                    {% for cat in categories %}
+                    <button type="button" class="brief-pop-item" data-cat="{{ cat }}" style="--cat: {{ cat_colors.get(cat, '#8a8690') }}">
+                        <span class="brief-dot"></span>{{ cat }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
             <a href="/stats" class="header-icon-btn {{ 'active' if active_page == 'stats' else '' }}" title="阅读统计">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                     <rect x="2" y="10" width="3" height="6" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
@@ -36,13 +52,72 @@
                         <path d="M2 16c0-3.5 3.1-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                     </svg>
                 </button>
-                <span class="entry-badge" id="entryBadge" style="display:none">!</span>
                 <div class="profile-panel" id="profilePanel">
                     <div class="panel-greeting">
                         <div class="panel-avatar" id="panelAvatar"><span>访</span></div>
                         <div class="panel-greeting-text">
                             <div class="panel-hello">你好，<span id="panelNickname">访客</span></div>
-                            <div class="panel-sub">管理你的资讯偏好</div>
+                            <div class="panel-sub">你的阅读空间</div>
+                        </div>
+                    </div>
+                    <div class="panel-menu">
+                        <button type="button" class="panel-item" data-action="profile">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="5.5" r="3" stroke="currentColor" stroke-width="1.2"/>
+                                    <path d="M2.5 14c0-2.8 2.5-4.5 5.5-4.5s5.5 1.7 5.5 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            个人资料
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
+                        <button type="button" class="panel-item" data-action="my-recommend">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 1.8l1.8 3.9 4.2.5-3.1 2.9.8 4.2L8 11.2l-3.7 2.1.8-4.2L2 6.2l4.2-.5L8 1.8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            推荐阅读
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
+                        <button type="button" class="panel-item" data-action="my-favorites">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 2.2l1.5 3.2 3.5.4-2.6 2.4.7 3.5L8 10l-3.1 1.7.7-3.5L3 5.8l3.5-.4L8 2.2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                                    <path d="M2.5 13.5h11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            新闻收藏
+                            <span class="panel-item-count" id="favCount">0</span>
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
+                        <button type="button" class="panel-item" data-action="my-later">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
+                                    <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            稍后再读
+                            <span class="panel-item-count" id="laterCount">0</span>
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="profile-wrap" id="settingsWrap">
+                <button type="button" class="header-icon-btn profile-trigger" id="settingsBtn" title="设置">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <path d="M7.6 2h2.8l.4 1.7c.6.2 1.1.5 1.5.9l1.7-.5 1.4 2.4-1.3 1.2c.1.3.1.6.1.9s0 .6-.1.9l1.3 1.2-1.4 2.4-1.7-.5c-.4.4-.9.7-1.5.9L9.4 16H7.6l-.4-1.7a4.6 4.6 0 01-1.5-.9l-1.7.5-1.4-2.4 1.3-1.2a5 5 0 010-1.8L2.6 7.3l1.4-2.4 1.7.5c.4-.4.9-.7 1.5-.9L7.6 2z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+                        <circle cx="9" cy="9" r="1.9" stroke="currentColor" stroke-width="1.1"/>
+                    </svg>
+                </button>
+                <span class="entry-badge" id="entryBadge" style="display:none">!</span>
+                <div class="profile-panel" id="settingsPanel">
+                    <div class="panel-greeting panel-greeting-plain">
+                        <div class="panel-greeting-text">
+                            <div class="panel-hello">设置</div>
+                            <div class="panel-sub">管理项目与 Agent 配置</div>
                         </div>
                     </div>
                     <div class="panel-menu">
@@ -70,16 +145,6 @@
                             </div>
                             <div class="workmode-tip" id="dbTip"></div>
                         </div>
-                        <button type="button" class="panel-item" data-action="profile">
-                            <span class="panel-item-icon">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                    <circle cx="8" cy="5.5" r="3" stroke="currentColor" stroke-width="1.2"/>
-                                    <path d="M2.5 14c0-2.8 2.5-4.5 5.5-4.5s5.5 1.7 5.5 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-                                </svg>
-                            </span>
-                            个人资料
-                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                        </button>
                         <button type="button" class="panel-item" data-action="category">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -193,7 +258,7 @@
             <h3>选择工作模式</h3>
         </div>
         <div class="modal-body">
-            <p class="workmode-choose-hint">欢迎使用定时资讯。请先选择项目的运行模式，之后可在个人中心随时切换。</p>
+            <p class="workmode-choose-hint">欢迎使用定时资讯。请先选择项目的运行模式，之后可在设置中随时切换。</p>
             <div class="workmode-choose-grid">
                 <button type="button" class="workmode-card" data-mode="assist">
                     <div class="workmode-card-icon" style="--mc:#4a8fd4">
@@ -456,11 +521,45 @@
                         启用后将额外调用大模型，会增加 Token 消耗量
                     </div>
                 </div>
+                <div class="feature-card">
+                    <div class="feature-top">
+                        <div class="feature-name">AI 每日简报</div>
+                        <button type="button" class="switch" id="briefSwitch" role="switch" aria-checked="false">
+                            <span class="switch-knob"></span>
+                        </button>
+                    </div>
+                    <div class="feature-desc">每次采集完成后，由 Agent 按分类总结当日新闻生成每日简报，可在顶栏简报图标中按分类查看。</div>
+                    <div class="feature-warn">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 2L1.5 13.5h13L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                            <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                            <circle cx="8" cy="11.4" r="0.8" fill="currentColor"/>
+                        </svg>
+                        启用后将额外调用大模型，会增加 Token 消耗量
+                    </div>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
             <button class="btn-secondary" data-close>取消</button>
             <button class="btn-primary" id="saveAgentBtn">保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="briefModal" class="modal">
+    <div class="modal-content modal-brief">
+        <div class="modal-header">
+            <div class="modal-title-group">
+                <h3 id="briefModalTitle">每日简报</h3>
+                <span class="modal-title-hint" id="briefModalDate"></span>
+            </div>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="markdown-body brief-body" id="briefBody">
+                <div class="loading">加载中...</div>
+            </div>
         </div>
     </div>
 </div>
@@ -843,15 +942,99 @@
         if (profilePanel.classList.contains('show')) hidePanel();
         else showPanel();
     });
+
+    /* ===== 设置悬浮面板 ===== */
+    const settingsWrap = $('settingsWrap');
+    const settingsPanel = $('settingsPanel');
+    const settingsBtn = $('settingsBtn');
+    let settingsHideTimer = null;
+
+    function showSettings() {
+        clearTimeout(settingsHideTimer);
+        settingsPanel.classList.add('show');
+        settingsWrap.classList.add('open');
+    }
+    function hideSettings() {
+        clearTimeout(settingsHideTimer);
+        settingsPanel.classList.remove('show');
+        settingsWrap.classList.remove('open');
+    }
+    function scheduleHideSettings() {
+        settingsHideTimer = setTimeout(hideSettings, 200);
+    }
+
+    settingsWrap.addEventListener('mouseenter', showSettings);
+    settingsWrap.addEventListener('mouseleave', scheduleHideSettings);
+    settingsBtn.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (settingsPanel.classList.contains('show')) hideSettings();
+        else showSettings();
+    });
+
     document.addEventListener('click', e => {
         if (!profileWrap.contains(e.target)) hidePanel();
+        if (!settingsWrap.contains(e.target)) hideSettings();
     });
+
+    /* ===== 每日简报入口 ===== */
+    const briefWrap = $('briefWrap');
+    const briefPop = $('briefPop');
+    let briefHideTimer = null;
+
+    briefWrap.addEventListener('mouseenter', () => {
+        clearTimeout(briefHideTimer);
+        briefPop.classList.add('show');
+    });
+    briefWrap.addEventListener('mouseleave', () => {
+        briefHideTimer = setTimeout(() => briefPop.classList.remove('show'), 200);
+    });
+    document.querySelectorAll('.brief-pop-item').forEach(btn => {
+        btn.addEventListener('click', () => openBrief(btn.dataset.cat));
+    });
+
+    function ensureMarked() {
+        return new Promise((resolve, reject) => {
+            if (window.marked) { resolve(); return; }
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+            s.onload = resolve;
+            s.onerror = reject;
+            document.head.appendChild(s);
+        });
+    }
+
+    async function openBrief(cat) {
+        briefPop.classList.remove('show');
+        $('briefModalTitle').textContent = `${cat} · 每日简报`;
+        $('briefModalDate').textContent = '';
+        $('briefBody').innerHTML = '<div class="loading">加载中...</div>';
+        openModal('briefModal');
+        try {
+            const resp = await fetch(`/api/brief/${encodeURIComponent(cat)}`);
+            if (!resp.ok) {
+                $('briefBody').innerHTML = '<div class="empty-state"><p>暂无该分类的简报</p><p class="text-dim">在设置 · Agent 管理中启用「AI 每日简报」后，自主模式将在每次采集完成后自动生成各分类简报。</p></div>';
+                return;
+            }
+            const data = await resp.json();
+            $('briefModalDate').textContent = data.date;
+            await ensureMarked();
+            marked.setOptions({ breaks: true, gfm: true });
+            $('briefBody').innerHTML = marked.parse(data.content);
+        } catch (e) {
+            $('briefBody').innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+        }
+    }
 
     document.querySelectorAll('.panel-item').forEach(item => {
         item.addEventListener('click', () => {
             hidePanel();
+            hideSettings();
             const action = item.dataset.action;
             if (action === 'profile') openProfileModal();
+            else if (action === 'my-recommend') window.location.href = '/my/recommend';
+            else if (action === 'my-favorites') window.location.href = '/my/favorites';
+            else if (action === 'my-later') window.location.href = '/my/later';
             else if (action === 'category') { renderCategories(); openModal('categoryModal'); }
             else if (action === 'agent') { refreshConfig().then(() => { loadAgentForm(); openModal('agentModal'); }); }
             else if (action === 'llm') { refreshConfig().then(() => { renderLLMList(); openModal('llmModal'); }); }
@@ -880,6 +1063,10 @@
             renderWorkmode();
             renderDb();
             renderWarnings();
+            fetch('/api/my/counts').then(r => r.json()).then(c => {
+                $('favCount').textContent = c.fav_count || 0;
+                $('laterCount').textContent = c.later_count || 0;
+            }).catch(() => {});
             return data;
         } catch (e) {
             console.error('Failed to load config:', e);
@@ -1922,6 +2109,7 @@
     state.agentExtMode = 'preset';
     state.agentExtPreset = '';
     state.agentRecommend = false;
+    state.agentBrief = false;
 
     function loadAgentForm() {
         const data = state.searchConfig || {};
@@ -1929,6 +2117,7 @@
         state.agentExtPreset = data.agent_ext_preset || '';
         state.agentExtMode = data.agent_ext_mode === 'custom' ? 'custom' : 'preset';
         state.agentRecommend = !!data.agent_recommend_enabled;
+        state.agentBrief = !!data.agent_brief_enabled;
 
         const customSaved = data.agent_ext_prompt || '';
         $('agentExtPrompt').dataset.custom = customSaved;
@@ -1955,6 +2144,10 @@
         const sw = $('recommendSwitch');
         sw.classList.toggle('on', state.agentRecommend);
         sw.setAttribute('aria-checked', String(state.agentRecommend));
+
+        const bw = $('briefSwitch');
+        bw.classList.toggle('on', state.agentBrief);
+        bw.setAttribute('aria-checked', String(state.agentBrief));
     }
 
     $('agentExtPresetBtn').addEventListener('click', () => {
@@ -1972,11 +2165,17 @@
         renderAgentForm();
     });
 
+    $('briefSwitch').addEventListener('click', () => {
+        state.agentBrief = !state.agentBrief;
+        renderAgentForm();
+    });
+
     $('saveAgentBtn').addEventListener('click', async () => {
         const payload = {
             agent_ext_mode: state.agentExtMode,
             agent_ext_prompt: state.agentExtMode === 'custom' ? $('agentExtPrompt').value : '',
-            agent_recommend_enabled: state.agentRecommend
+            agent_recommend_enabled: state.agentRecommend,
+            agent_brief_enabled: state.agentBrief
         };
         try {
             const resp = await fetch('/api/config', {

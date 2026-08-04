@@ -36,6 +36,7 @@ class ConfigUpdate(BaseModel):
     agent_ext_mode: str | None = None
     agent_ext_prompt: str | None = None
     agent_recommend_enabled: bool | None = None
+    agent_brief_enabled: bool | None = None
     work_mode: str | None = None
 
 
@@ -62,6 +63,7 @@ class ConfigResponse(BaseModel):
     agent_ext_mode: str = "preset"
     agent_ext_prompt: str = ""
     agent_recommend_enabled: bool = False
+    agent_brief_enabled: bool = False
     work_mode: str = ""
     db_mode: str = "system"
     db_config: dict = {}
@@ -134,6 +136,7 @@ async def get_config():
         agent_ext_mode=env_vars.get("AGENT_EXT_MODE", "preset"),
         agent_ext_prompt=env_vars.get("AGENT_EXT_PROMPT", ""),
         agent_recommend_enabled=env_vars.get("AGENT_RECOMMEND_ENABLED", "") == "true",
+        agent_brief_enabled=env_vars.get("AGENT_BRIEF_ENABLED", "") == "true",
         work_mode=env_vars.get("WORK_MODE", ""),
         db_mode=db_state["mode"],
         db_config=db_state["config"],
@@ -200,6 +203,8 @@ async def update_config(config: ConfigUpdate):
         env_vars["AGENT_EXT_PROMPT"] = config.agent_ext_prompt
     if config.agent_recommend_enabled is not None:
         env_vars["AGENT_RECOMMEND_ENABLED"] = "true" if config.agent_recommend_enabled else "false"
+    if config.agent_brief_enabled is not None:
+        env_vars["AGENT_BRIEF_ENABLED"] = "true" if config.agent_brief_enabled else "false"
     if config.work_mode is not None:
         env_vars["WORK_MODE"] = config.work_mode
 

@@ -123,13 +123,19 @@ TABLE_ORDER = ["categories", "news"]
 
 
 async def _copy_all(source_engine, target_engine) -> dict[str, int]:
-    from app.database import _ensure_category_color_column, _ensure_news_related_ids_column, _ensure_news_read_at_column
+    from app.database import (
+        _ensure_category_color_column,
+        _ensure_news_related_ids_column,
+        _ensure_news_read_at_column,
+        _ensure_news_user_action_columns,
+    )
 
     async with target_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_ensure_category_color_column)
         await conn.run_sync(_ensure_news_related_ids_column)
         await conn.run_sync(_ensure_news_read_at_column)
+        await conn.run_sync(_ensure_news_user_action_columns)
 
     counts = {}
     for table_name in TABLE_ORDER:

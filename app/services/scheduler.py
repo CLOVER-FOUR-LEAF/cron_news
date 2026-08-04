@@ -6,6 +6,7 @@ from app.database import get_session
 from app.env_store import read_env_file
 from app.services.ai_service import run_search_task
 from app.services.recommend_service import run_recommend_task
+from app.services.brief_service import run_brief_task
 
 
 def _parse_int(raw: str, default: int) -> int:
@@ -106,6 +107,9 @@ class Scheduler:
     def _recommend_enabled(self) -> bool:
         return read_env_file().get("AGENT_RECOMMEND_ENABLED", "") == "true"
 
+    def _brief_enabled(self) -> bool:
+        return read_env_file().get("AGENT_BRIEF_ENABLED", "") == "true"
+
     async def _run_search(self):
         try:
             self._running = True
@@ -113,6 +117,8 @@ class Scheduler:
                 result = await run_search_task(session)
                 if self._recommend_enabled():
                     await run_recommend_task(session)
+                if self._brief_enabled():
+                    await run_brief_task(session)
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()
@@ -179,6 +185,8 @@ class Scheduler:
                 result = await run_search_task(session, emit=emit)
                 if self._recommend_enabled():
                     await run_recommend_task(session, emit=emit)
+                if self._brief_enabled():
+                    await run_brief_task(session, emit=emit)
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()

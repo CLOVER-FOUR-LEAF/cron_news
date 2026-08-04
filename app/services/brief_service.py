@@ -1,0 +1,110 @@
+from datetime import datetime, date
+from typing import Any, Callable, Awaitable
+
+import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.models import News, Category, Brief
+
+EmitFn = Callable[..., Awaitable[None]]
+
+
+def _llm_ready() -> bool:
+    return bool(settings.LLM_BASE_URL and settings.LLM_API_KEY and settings.LLM_MODEL)
+
+
+async def _ask_llm(prompt: str) -> str:
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post(
+            f"{settings.LLM_BASE_URL}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": settings.LLM_MODEL,
+                "messages": [
+                    {"role": "system", "content": "你是一位资深新闻编辑，擅长提炼要点、撰写简洁有力的每日简报。"},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.5,
+                "max_tokens": 1200,
+            },
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+
+
+async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[str, Any]:
+    async def _emit(event_type: str, text: str, **extra: Any):
+        if emit:
+            await emit(event_type, text, **extra)
+
+    if not _llm_ready():
+        await _emit("error", "大语言模型未配置，无法生成每日简报")
+        return {"generated": 0}
+
+    await _emit("thinking", "每日简报 Agent 启动，分析今日各分类新闻…")
+
+    today = date.today()
+    today_start = datetime.combine(today, datetime.min.time())
+
+    result = await db.execute(select(Category).order_by(Category.sort_order.desc(), Category.id))
+    categories = result.scalars().all()
+
+    generated = 0
+    for cat in categories:
+        result = await db.execute(
+            select(News)
+            .where(News.is_deleted == 0, News.category_id == cat.id, News.collected_at >= today_start)
+            .order_by(News.collected_at.desc())
+            .limit(30)
+        )
+        items = result.scalars().all()
+        if not items:
+            continue
+
+        news_lines = "\n".join(
+            f"- {n.title}：{(n.summary or '').strip()[:80]}" for n in items
+        )
+        prompt = f"""今天是 {today.isoformat()}。以下是「{cat.name}」分类今日收录的 {len(items)} 条新闻：
+{news_lines}
+
+请撰写该分类的每日简报，要求：
+1. 使用 Markdown 格式，以二级标题「{cat.name} · 每日简报」开头；
+2. 先给出一段总体概述（2-3 句）；
+3. 挑选最重要的若干条逐条点评（加粗标题 + 1-2 句点评）；
+4. 结尾给出一句展望或提示；
+5. 全文控制在 400-800 字，语言精炼、客观。"""
+
+        await _emit("tool", f'llm.brief("{cat.name}") {len(items)} 条新闻')
+        try:
+            content = await _ask_llm(prompt)
+        except Exception as e:
+            await _emit("error", f"[{cat.name}] 简报生成失败: {e}")
+            continue
+
+        existing = await db.execute(
+            select(Brief).where(Brief.category_name == cat.name, Brief.brief_date == today.isoformat())
+        )
+        for old in existing.scalars().all():
+            await db.delete(old)
+        db.add(Brief(category_name=cat.name, brief_date=today.isoformat(), content=content))
+        generated += 1
+        await _emit("save", f"✓ [{cat.name}] 简报已生成")
+
+    await db.flush()
+    await _emit("success", f"每日简报完成，生成 {generated} 个分类", generated=generated)
+    return {"generated": generated}
+
+
+async def get_latest_brief(db: AsyncSession, category_name: str) -> Brief | None:
+    result = await db.execute(
+        select(Brief)
+        .where(Brief.category_name == category_name)
+        .order_by(Brief.brief_date.desc(), Brief.created_at.desc())
+        .limit(1)
+    )
+    return result.scalars().first()

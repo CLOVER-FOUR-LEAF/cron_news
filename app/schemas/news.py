@@ -25,6 +25,10 @@ class NewsResponse(NewsBase):
     category_color: str | None = Field(None, description="分类主题色")
     related_ids: list[int] = Field(default_factory=list, description="智能推荐相关新闻ID")
     is_read: int = 0
+    is_fav: int = 0
+    fav_at: datetime | None = None
+    is_later: int = 0
+    later_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ kind_title }} - 定时资讯</title>
+    <link rel="icon" href="/images/sign.png" type="image/png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=28">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    {% include "_header.html" %}
+
+    <main>
+        <div class="detail-layout">
+            <div class="detail-main" id="articleMain">
+                <div class="loading">加载中...</div>
+            </div>
+            <aside class="detail-sidebar">
+                <div class="sidebar-title">{{ kind_title }}<span class="sidebar-count" id="sideCount"></span></div>
+                <div class="related-list" id="sideList">
+                    <div class="loading">加载中...</div>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <span>定时资讯 &copy; 2026 &mdash; AI 新闻聚合平台</span>
+    </footer>
+
+    <script>
+        const KIND = {{ kind | tojson }};
+        const KIND_TITLES = { recommend: '推荐阅读', favorites: '新闻收藏', later: '稍后再读' };
+        let currentNews = null;
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        function renderMarkdown(md) {
+            if (!md) return '<p>暂无正文内容</p>';
+            marked.setOptions({ breaks: true, gfm: true });
+            return marked.parse(md);
+        }
+
+        function listEndpoint() {
+            if (KIND === 'favorites') return '/api/my/favorites';
+            if (KIND === 'later') return '/api/my/later';
+            return '/api/stats/recommend';
+        }
+
+        function itemTime(item) {
+            if (KIND === 'favorites') return item.fav_at;
+            if (KIND === 'later') return item.later_at;
+            return item.collected_at;
+        }
+
+        async function loadList() {
+            const container = document.getElementById('sideList');
+            try {
+                const resp = await fetch(listEndpoint());
+                const data = await resp.json();
+                const items = data.items || [];
+                document.getElementById('sideCount').textContent = items.length ? ` ${items.length}` : '';
+
+                if (items.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>暂无内容</p></div>';
+                    document.getElementById('articleMain').innerHTML = `
+                        <div class="empty-state">
+                            <p>「${KIND_TITLES[KIND]}」还是空的</p>
+                            <p class="text-dim">${KIND === 'favorites' ? '在新闻详情页点击「收藏」，喜欢的文章会汇总到这里。' : KIND === 'later' ? '在新闻详情页点击「稍后再读」，没空看的文章先存到这里。' : '开启自主模式或浏览新闻后，系统会在这里为你挑选推荐内容。'}</p>
+                            <a href="/">去首页看看</a>
+                        </div>`;
+                    return;
+                }
+
+                container.innerHTML = '';
+                items.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'related-card';
+                    el.dataset.id = item.id;
+                    const readStatus = item.is_read
+                        ? '<span class="related-read-status read">已读</span>'
+                        : '<span class="related-read-status unread">未读</span>';
+                    el.innerHTML = `
+                        <div class="related-title">${escapeHtml(item.title)}</div>
+                        <div class="related-meta">
+                            <span class="related-source">${escapeHtml(item.category_name || '默认')}</span>
+                            <span>${formatDate(itemTime(item))}</span>
+                            ${readStatus}
+                        </div>
+                    `;
+                    el.addEventListener('click', () => loadArticle(item.id));
+                    container.appendChild(el);
+                });
+
+                loadArticle(items[0].id);
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+            }
+        }
+
+        async function loadArticle(id) {
+            const container = document.getElementById('articleMain');
+            document.querySelectorAll('#sideList .related-card').forEach(c => {
+                c.classList.toggle('active', String(c.dataset.id) === String(id));
+            });
+            try {
+                const resp = await fetch(`/api/news/${id}`);
+                if (!resp.ok) {
+                    container.innerHTML = '<div class="empty-state"><p>新闻不存在</p><a href="/">返回首页</a></div>';
+                    return;
+                }
+                const news = await resp.json();
+                currentNews = news;
+
+                fetch(`/api/news/${id}/read`, { method: 'POST' });
+
+                const sourceLink = news.source_url
+                    ? `<a href="${escapeHtml(news.source_url)}" target="_blank" rel="noopener" class="detail-source-link">查看原文 &rarr;</a>`
+                    : '';
+
+                container.innerHTML = `
+                    <div class="detail-meta">
+                        <span class="detail-category" style="--cat: ${escapeHtml(news.category_color || '#8a8690')}">${escapeHtml(news.category_name || '默认')}</span>
+                        <span>${escapeHtml(news.source || '未知来源')}</span>
+                        <span>收录于 ${formatDate(news.collected_at)}</span>
+                    </div>
+                    <h1 class="detail-title">${escapeHtml(news.title)}</h1>
+                    <div class="markdown-body">${renderMarkdown(news.content)}</div>
+                    <div class="detail-actions">
+                        ${sourceLink}
+                        <button type="button" class="detail-flag-btn ${news.is_fav ? 'active' : ''}" id="favBtn">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2.2l1.5 3.2 3.5.4-2.6 2.4.7 3.5L8 10l-3.1 1.7.7-3.5L3 5.8l3.5-.4L8 2.2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+                            <span class="flag-label">${news.is_fav ? '已收藏' : '收藏'}</span>
+                        </button>
+                        <button type="button" class="detail-flag-btn ${news.is_later ? 'active' : ''}" id="laterBtn">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                            <span class="flag-label">${news.is_later ? '已稍后' : '稍后再读'}</span>
+                        </button>
+                    </div>
+                `;
+
+                document.title = `${news.title} - 定时资讯`;
+                bindFlagButtons();
+            } catch (e) {
+                container.innerHTML = '<div class="empty-state"><p>加载失败</p><a href="/">返回首页</a></div>';
+            }
+        }
+
+        async function toggleFlag(flag) {
+            if (!currentNews) return;
+            try {
+                const resp = await fetch(`/api/news/${currentNews.id}/${flag}`, { method: 'POST' });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const value = flag === 'fav' ? data.is_fav : data.is_later;
+                currentNews[flag === 'fav' ? 'is_fav' : 'is_later'] = value;
+                const btn = document.getElementById(flag === 'fav' ? 'favBtn' : 'laterBtn');
+                btn.classList.toggle('active', !!value);
+                btn.querySelector('.flag-label').textContent = value ? (flag === 'fav' ? '已收藏' : '已稍后') : (flag === 'fav' ? '收藏' : '稍后再读');
+            } catch (e) { /* ignore */ }
+        }
+
+        function bindFlagButtons() {
+            document.getElementById('favBtn').addEventListener('click', () => toggleFlag('fav'));
+            document.getElementById('laterBtn').addEventListener('click', () => toggleFlag('later'));
+        }
+
+        loadList();
+    </script>
+</body>
+</html>

@@ -385,3 +385,40 @@ async def _recommend_autonomous(db: AsyncSession, limit: int) -> tuple[list[News
                 items.append(n)
 
     return items[:limit], "AI 基于你的阅读偏好与智能关联分析推荐"
+
+
+async def toggle_news_flag(db: AsyncSession, news_id: int, flag: str) -> int | None:
+    news = await get_news_by_id(db, news_id)
+    if not news:
+        return None
+    now = datetime.now()
+    if flag == "fav":
+        news.is_fav = 0 if news.is_fav else 1
+        news.fav_at = now if news.is_fav else None
+        value = news.is_fav
+    else:
+        news.is_later = 0 if news.is_later else 1
+        news.later_at = now if news.is_later else None
+        value = news.is_later
+    await db.flush()
+    return value
+
+
+async def get_my_list(db: AsyncSession, kind: str) -> list[News]:
+    query = select(News).where(News.is_deleted == 0)
+    if kind == "favorites":
+        query = query.where(News.is_fav == 1).order_by(News.fav_at.desc())
+    elif kind == "later":
+        query = query.where(News.is_later == 1).order_by(News.later_at.desc())
+    else:
+        return []
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_my_counts(db: AsyncSession) -> dict:
+    result = await db.execute(select(func.count()).where(News.is_deleted == 0, News.is_fav == 1))
+    fav_count = result.scalar()
+    result = await db.execute(select(func.count()).where(News.is_deleted == 0, News.is_later == 1))
+    later_count = result.scalar()
+    return {"fav_count": fav_count, "later_count": later_count}
