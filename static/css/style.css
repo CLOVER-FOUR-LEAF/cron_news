@@ -3153,69 +3153,11 @@ button.header-icon-btn {
 }
 
 /* ========== BRIEF ENTRY ========== */
-.brief-wrap {
-    position: relative;
-}
-
-.brief-pop {
-    position: absolute;
-    top: calc(100% + 10px);
-    right: -6px;
-    width: 168px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-accent);
-    border-radius: var(--radius-md);
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
-    padding: 8px;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-5px);
-    transition: all 0.2s ease;
-    z-index: 60;
-    max-height: 380px;
-    overflow-y: auto;
-}
-
-.brief-pop.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.brief-pop-title {
-    font-size: 0.7rem;
-    color: var(--text-dim);
-    padding: 4px 8px 8px;
-    letter-spacing: 0.05em;
-}
-
-.brief-pop-item {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    width: 100%;
-    padding: 7px 8px;
-    border: none;
-    background: none;
-    border-radius: 6px;
-    color: var(--text-secondary);
-    font-size: 0.84rem;
-    font-family: var(--font-body);
-    cursor: pointer;
-    text-align: left;
-    transition: all var(--transition-fast);
-}
-
-.brief-pop-item:hover {
-    background: color-mix(in srgb, var(--cat) 12%, transparent);
-    color: var(--cat);
-}
-
 .brief-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--cat);
+    background: var(--cat, #8a8690);
     flex-shrink: 0;
 }
 
@@ -3414,13 +3356,140 @@ button.header-icon-btn {
     display: flex;
     flex-direction: column;
     gap: 18px;
+    min-width: 0;
 }
 
 .brief-side-title {
     font-family: var(--font-display);
-    font-size: 1.4rem;
+    font-size: 2.1rem;
     font-weight: 700;
     color: var(--text-primary);
+    letter-spacing: 0.03em;
+}
+
+.brief-selected-label {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    letter-spacing: 0.04em;
+}
+
+.brief-selected-label strong {
+    color: var(--accent-gold);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.calendar {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 12px;
+    user-select: none;
+}
+
+.cal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.cal-month {
+    font-family: var(--font-display);
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.05em;
+}
+
+.cal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--border-subtle);
+    background: none;
+    border-radius: 6px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.cal-nav:hover {
+    color: var(--accent-gold);
+    border-color: var(--border-accent);
+}
+
+.cal-weekdays,
+.cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+}
+
+.cal-weekdays {
+    margin-bottom: 5px;
+}
+
+.cal-weekdays span {
+    text-align: center;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+}
+
+.cal-day {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-variant-numeric: tabular-nums;
+}
+
+.cal-day:hover {
+    background: rgba(200, 168, 82, 0.12);
+    color: var(--accent-gold);
+}
+
+.cal-day.other {
+    color: var(--text-dim);
+    opacity: 0.35;
+}
+
+.cal-day.today {
+    box-shadow: inset 0 0 0 1px rgba(200, 168, 82, 0.5);
+}
+
+.cal-day.selected {
+    background: var(--accent-gold);
+    color: #151519;
+    font-weight: 700;
+}
+
+.cal-day.has-brief::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent-gold);
+}
+
+.cal-day.selected.has-brief::after {
+    background: #151519;
 }
 
 .brief-field label {

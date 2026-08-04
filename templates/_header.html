@@ -22,22 +22,12 @@
                 <input type="text" id="searchInput" class="search-input" placeholder="搜索新闻..." />
                 <button id="searchBtn" class="search-btn">搜索</button>
             </div>
-            <div class="brief-wrap" id="briefWrap">
-                <button type="button" class="header-icon-btn" id="briefBtn" title="每日简报">
-                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                        <path d="M4 2.5h8.5l3 3V15a1.5 1.5 0 01-1.5 1.5H4A1.5 1.5 0 012.5 15V4A1.5 1.5 0 014 2.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-                        <path d="M5.5 7h7M5.5 10h7M5.5 13h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-                    </svg>
-                </button>
-                <div class="brief-pop" id="briefPop">
-                    <div class="brief-pop-title">每日简报 · 选择分类</div>
-                    {% for cat in categories %}
-                    <button type="button" class="brief-pop-item" data-cat="{{ cat }}" style="--cat: {{ cat_colors.get(cat, '#8a8690') }}">
-                        <span class="brief-dot"></span>{{ cat }}
-                    </button>
-                    {% endfor %}
-                </div>
-            </div>
+            <button type="button" class="header-icon-btn" id="briefBtn" title="每日简报">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <path d="M4 2.5h8.5l3 3V15a1.5 1.5 0 01-1.5 1.5H4A1.5 1.5 0 012.5 15V4A1.5 1.5 0 014 2.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                    <path d="M5.5 7h7M5.5 10h7M5.5 13h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+            </button>
             <a href="/stats" class="header-icon-btn {{ 'active' if active_page == 'stats' else '' }}" title="阅读统计">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                     <rect x="2" y="10" width="3" height="6" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
@@ -986,24 +976,8 @@
     });
 
     /* ===== 每日简报入口 ===== */
-    const briefWrap = $('briefWrap');
-    const briefPop = $('briefPop');
-    let briefHideTimer = null;
-
-    briefWrap.addEventListener('mouseenter', () => {
-        clearTimeout(briefHideTimer);
-        briefPop.classList.add('show');
-    });
-    briefWrap.addEventListener('mouseleave', () => {
-        briefHideTimer = setTimeout(() => briefPop.classList.remove('show'), 200);
-    });
     $('briefBtn').addEventListener('click', () => {
         window.location.href = '/brief';
-    });
-    document.querySelectorAll('.brief-pop-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-            window.location.href = `/brief?cat=${encodeURIComponent(btn.dataset.cat)}`;
-        });
     });
 
     document.querySelectorAll('.panel-item').forEach(item => {

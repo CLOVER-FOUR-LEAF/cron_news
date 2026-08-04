@@ -100,6 +100,15 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
     return {"generated": generated}
 
 
+async def get_brief_dates(db: AsyncSession, category_name: str) -> list[str]:
+    result = await db.execute(
+        select(Brief.brief_date)
+        .where(Brief.category_name == category_name)
+        .order_by(Brief.brief_date.desc())
+    )
+    return [row[0] for row in result.all()]
+
+
 async def get_brief_by_date(db: AsyncSession, category_name: str, brief_date: str) -> Brief | None:
     result = await db.execute(
         select(Brief)

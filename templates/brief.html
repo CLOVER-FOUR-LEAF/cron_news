@@ -6,7 +6,7 @@
     <title>每日简报 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=29">
+    <link rel="stylesheet" href="/static/css/style.css?v=30">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -30,10 +30,24 @@
                     </div>
                 </div>
                 <div class="brief-field">
-                    <label>日期</label>
-                    <input type="date" id="briefDateInput" class="brief-date-input">
+                    <div class="brief-selected-label">当前选择：<strong id="selectedDateLabel"></strong></div>
+                    <div class="calendar">
+                        <div class="cal-head">
+                            <button type="button" class="cal-nav" id="calPrev" title="上个月">
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <span class="cal-month" id="calMonth"></span>
+                            <button type="button" class="cal-nav" id="calNext" title="下个月">
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                        </div>
+                        <div class="cal-weekdays">
+                            <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+                        </div>
+                        <div class="cal-grid" id="calGrid"></div>
+                    </div>
                 </div>
-                <p class="brief-side-hint">简报由自主模式 Agent 在每次采集完成后按分类自动生成。</p>
+                <p class="brief-side-hint">简报由自主模式 Agent 在每次采集完成后按分类自动生成，圆点标记表示当日有简报。</p>
             </aside>
 
             <div class="brief-main" id="briefMain">
@@ -41,10 +55,6 @@
             </div>
 
             <aside class="brief-note">
-                <div class="note-head">
-                    <span>便签</span>
-                    <button type="button" class="btn-primary btn-compact" id="noteSaveBtn">保存</button>
-                </div>
                 <textarea id="noteArea" class="note-area" spellcheck="false" placeholder="记录你对这期简报的想法，输入时自动保存…"></textarea>
             </aside>
         </div>
@@ -55,31 +65,26 @@
         const CAT_COLORS = {{ cat_colors | tojson }};
 
         const $ = id => document.getElementById(id);
-
-        function showToast(message, type = 'info') {
-            const container = $('toastContainer');
-            if (!container) return;
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
-            container.appendChild(toast);
-            setTimeout(() => {
-                toast.classList.add('leaving');
-                toast.addEventListener('animationend', () => toast.remove());
-            }, 3200);
-        }
-
-        const params = new URLSearchParams(window.location.search);
-        let currentCat = params.get('cat') && CATEGORIES.includes(params.get('cat')) ? params.get('cat') : (CATEGORIES[0] || '');
-        let currentDate = params.get('date') || new Date().toISOString().slice(0, 10);
-        let noteDirty = false;
-        let noteTimer = null;
+        const pad2 = n => String(n).padStart(2, '0');
 
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text || '';
             return div.innerHTML;
         }
+
+        function localTodayIso() {
+            const d = new Date();
+            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        let currentCat = params.get('cat') && CATEGORIES.includes(params.get('cat')) ? params.get('cat') : (CATEGORIES[0] || '');
+        let currentDate = /^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '') ? params.get('date') : localTodayIso();
+        let briefDates = new Set();
+        let viewYear, viewMonth;
+        let noteDirty = false;
+        let noteTimer = null;
 
         /* ===== 分类下拉 ===== */
         const dropdown = $('catDropdown');
@@ -111,15 +116,75 @@
                 renderCatBtn();
                 list.classList.remove('show');
                 dropdown.classList.remove('open');
-                loadBrief();
+                refreshBriefDates().then(() => {
+                    renderCalendar();
+                    loadBrief();
+                });
             });
         });
 
-        $('briefDateInput').value = currentDate;
-        $('briefDateInput').addEventListener('change', () => {
-            currentDate = $('briefDateInput').value || currentDate;
-            loadBrief();
+        /* ===== 日历 ===== */
+        function setCalViewFrom(iso) {
+            const d = new Date(iso + 'T00:00:00');
+            viewYear = d.getFullYear();
+            viewMonth = d.getMonth();
+        }
+
+        function renderCalendar() {
+            $('calMonth').textContent = `${viewYear} 年 ${viewMonth + 1} 月`;
+            const lead = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
+            const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+            const prevDays = new Date(viewYear, viewMonth, 0).getDate();
+            const todayIso = localTodayIso();
+
+            let html = '';
+            for (let i = lead - 1; i >= 0; i--) {
+                html += `<span class="cal-day other">${prevDays - i}</span>`;
+            }
+            for (let d = 1; d <= daysInMonth; d++) {
+                const iso = `${viewYear}-${pad2(viewMonth + 1)}-${pad2(d)}`;
+                const cls = ['cal-day'];
+                if (iso === currentDate) cls.push('selected');
+                if (iso === todayIso) cls.push('today');
+                if (briefDates.has(iso)) cls.push('has-brief');
+                html += `<button type="button" class="${cls.join(' ')}" data-date="${iso}">${d}</button>`;
+            }
+            const trail = (7 - (lead + daysInMonth) % 7) % 7;
+            for (let i = 1; i <= trail; i++) {
+                html += `<span class="cal-day other">${i}</span>`;
+            }
+            $('calGrid').innerHTML = html;
+
+            $('calGrid').querySelectorAll('.cal-day[data-date]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentDate = btn.dataset.date;
+                    $('selectedDateLabel').textContent = currentDate;
+                    renderCalendar();
+                    loadBrief();
+                });
+            });
+        }
+
+        $('calPrev').addEventListener('click', () => {
+            viewMonth -= 1;
+            if (viewMonth < 0) { viewMonth = 11; viewYear -= 1; }
+            renderCalendar();
         });
+        $('calNext').addEventListener('click', () => {
+            viewMonth += 1;
+            if (viewMonth > 11) { viewMonth = 0; viewYear += 1; }
+            renderCalendar();
+        });
+
+        async function refreshBriefDates() {
+            try {
+                const resp = await fetch(`/api/brief/dates/${encodeURIComponent(currentCat)}`);
+                const data = await resp.json();
+                briefDates = new Set(data.dates || []);
+            } catch (e) {
+                briefDates = new Set();
+            }
+        }
 
         /* ===== 简报主体 ===== */
         async function loadBrief() {
@@ -150,7 +215,7 @@
             }
         }
 
-        /* ===== 便签 ===== */
+        /* ===== 便签（自动保存） ===== */
         async function loadNote() {
             try {
                 const resp = await fetch(`/api/brief/note?category=${encodeURIComponent(currentCat)}&date=${currentDate}`);
@@ -162,32 +227,42 @@
             }
         }
 
-        async function saveNote(showToastFlag) {
-            if (!noteDirty && !showToastFlag) return;
+        async function saveNote() {
+            if (!noteDirty) return;
             try {
                 const resp = await fetch('/api/brief/note', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ category: currentCat, date: currentDate, content: $('noteArea').value })
                 });
-                if (resp.ok) {
-                    noteDirty = false;
-                    if (showToastFlag) showToast('便签已保存', 'success');
-                }
-            } catch (e) {
-                if (showToastFlag) showToast('保存失败', 'error');
-            }
+                if (resp.ok) noteDirty = false;
+            } catch (e) { /* 下次输入时重试 */ }
         }
 
         $('noteArea').addEventListener('input', () => {
             noteDirty = true;
             clearTimeout(noteTimer);
-            noteTimer = setTimeout(() => saveNote(false), 800);
+            noteTimer = setTimeout(saveNote, 800);
         });
-        $('noteSaveBtn').addEventListener('click', () => saveNote(true));
+        window.addEventListener('beforeunload', () => {
+            if (noteDirty) {
+                fetch('/api/brief/note', {
+                    method: 'PUT',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category: currentCat, date: currentDate, content: $('noteArea').value })
+                });
+            }
+        });
 
+        /* ===== 初始化 ===== */
+        $('selectedDateLabel').textContent = currentDate;
+        setCalViewFrom(currentDate);
         renderCatBtn();
-        loadBrief();
+        refreshBriefDates().then(() => {
+            renderCalendar();
+            loadBrief();
+        });
     </script>
 </body>
 </html>

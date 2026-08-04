@@ -137,6 +137,16 @@ async def save_brief_note(body: BriefNoteModel, db: AsyncSession = Depends(get_d
     return {"ok": True}
 
 
+@router.get("/brief/dates/{category}")
+async def get_brief_dates(
+    category: str,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services import brief_service
+
+    return {"dates": await brief_service.get_brief_dates(db, category)}
+
+
 @router.get("/brief/{category}")
 async def get_brief(
     category: str,
