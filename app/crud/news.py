@@ -1,10 +1,11 @@
 from datetime import datetime, date, timedelta
 import os
 import random
+import re
 import shutil
 from pathlib import Path
 
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import News
@@ -27,8 +28,20 @@ async def get_news_list(
 ) -> tuple[list[News], int]:
     query = select(News).where(News.is_deleted == 0)
 
+    relevance = None
     if keyword:
-        query = query.where(News.title.contains(keyword))
+        terms = [t for t in re.split(r"[\s,，;；、]+", keyword) if t.strip()]
+        if terms:
+            conditions = [
+                or_(
+                    News.title.contains(t),
+                    News.summary.contains(t),
+                    News.content.contains(t),
+                )
+                for t in terms
+            ]
+            query = query.where(and_(*conditions))
+            relevance = sum(case((News.title.contains(t), 1), else_=0) for t in terms)
 
     if category:
         query = query.join(Category).where(Category.name == category)
@@ -62,7 +75,10 @@ async def get_news_list(
         else_=2,
     )
 
-    query = query.order_by(priority, News.collected_at.desc())
+    if relevance is not None:
+        query = query.order_by(relevance.desc(), News.collected_at.desc())
+    else:
+        query = query.order_by(priority, News.collected_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     items = result.scalars().all()

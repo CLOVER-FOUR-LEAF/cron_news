@@ -6,7 +6,7 @@
     <title>每日简报 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=30">
+    <link rel="stylesheet" href="/static/css/style.css?v=31">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -47,6 +47,10 @@
                         <div class="cal-grid" id="calGrid"></div>
                     </div>
                 </div>
+                <div class="brief-export">
+                    <button type="button" class="btn-secondary" id="exportMdBtn">导出 Markdown</button>
+                    <button type="button" class="btn-secondary" id="exportWordBtn">导出 Word</button>
+                </div>
                 <p class="brief-side-hint">简报由自主模式 Agent 在每次采集完成后按分类自动生成，圆点标记表示当日有简报。</p>
             </aside>
 
@@ -85,6 +89,19 @@
         let viewYear, viewMonth;
         let noteDirty = false;
         let noteTimer = null;
+        let currentBrief = null;
+
+        function downloadFile(filename, content, mime) {
+            const blob = new Blob([content], { type: mime });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }
 
         /* ===== 分类下拉 ===== */
         const dropdown = $('catDropdown');
@@ -202,6 +219,7 @@
                     return;
                 }
                 const data = await resp.json();
+                currentBrief = data;
                 marked.setOptions({ breaks: true, gfm: true });
                 main.innerHTML = `
                     <div class="brief-main-head">
@@ -211,9 +229,36 @@
                     <div class="markdown-body">${marked.parse(data.content)}</div>
                 `;
             } catch (e) {
+                currentBrief = null;
                 main.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
             }
         }
+
+        /* ===== 导出 ===== */
+        $('exportMdBtn').addEventListener('click', () => {
+            if (!currentBrief) { showToast('当前没有可导出的简报', 'error'); return; }
+            const fname = `简报_${currentCat}_${currentBrief.date}.md`;
+            downloadFile(fname, currentBrief.content, 'text/markdown;charset=utf-8');
+            showToast('Markdown 已导出', 'success');
+        });
+
+        $('exportWordBtn').addEventListener('click', () => {
+            if (!currentBrief) { showToast('当前没有可导出的简报', 'error'); return; }
+            marked.setOptions({ breaks: true, gfm: true });
+            const html = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+<head><meta charset="utf-8"><title>${escapeHtml(currentCat)} 每日简报</title>
+<style>body{font-family:SimSun,'Songti SC',serif;font-size:14px;line-height:1.9;color:#222;max-width:720px;margin:40px auto;padding:0 24px} h1,h2,h3{font-family:'Microsoft YaHei';} blockquote{border-left:3px solid #c8a852;margin:12px 0;padding:4px 14px;color:#666;background:#faf8f2}</style>
+</head>
+<body>
+<h1>${escapeHtml(currentCat)} · 每日简报</h1>
+<p style="color:#888">${escapeHtml(currentBrief.date)}</p>
+<div>${marked.parse(currentBrief.content)}</div>
+</body></html>`;
+            const fname = `简报_${currentCat}_${currentBrief.date}.doc`;
+            downloadFile(fname, html, 'application/msword;charset=utf-8');
+            showToast('Word 文档已导出', 'success');
+        });
 
         /* ===== 便签（自动保存） ===== */
         async function loadNote() {

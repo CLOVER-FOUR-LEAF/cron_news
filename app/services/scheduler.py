@@ -114,9 +114,14 @@ class Scheduler:
     def _brief_enabled(self) -> bool:
         return read_env_file().get("AGENT_BRIEF_ENABLED", "") == "true"
 
-    def _make_collector(self, lines: list):
+    def _make_collector(self, lines: list, agent: str = "定时资讯"):
         async def collect(event_type: str, text: str, **extra):
-            lines.append({"t": event_type, "x": text, "ts": datetime.now().strftime("%H:%M:%S")})
+            lines.append({
+                "t": event_type,
+                "x": text,
+                "ts": datetime.now().strftime("%H:%M:%S"),
+                "agent": agent,
+            })
         return collect
 
     async def _save_run(self, lines: list, status: str):
@@ -143,18 +148,18 @@ class Scheduler:
         try:
             self._running = True
             async with get_session() as session:
-                result = await run_search_task(session, emit=self._make_collector(lines))
+                result = await run_search_task(session, emit=self._make_collector(lines, "定时资讯"))
                 if self._recommend_enabled():
-                    await run_recommend_task(session, emit=self._make_collector(lines))
+                    await run_recommend_task(session, emit=self._make_collector(lines, "智能推荐"))
                 if self._brief_enabled():
-                    await run_brief_task(session, emit=self._make_collector(lines))
+                    await run_brief_task(session, emit=self._make_collector(lines, "每日简报"))
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()
                 print(f"[Scheduler] 搜索完成: 新增 {result['total_new']} 条新闻")
         except Exception as e:
             status = "failed"
-            lines.append({"t": "error", "x": f"任务异常: {e}", "ts": datetime.now().strftime("%H:%M:%S")})
+            lines.append({"t": "error", "x": f"任务异常: {e}", "ts": datetime.now().strftime("%H:%M:%S"), "agent": "定时资讯"})
             self._last_result = {"error": str(e)}
             print(f"[Scheduler] 搜索失败: {e}")
         finally:
@@ -212,21 +217,25 @@ class Scheduler:
 
     async def run_with_emit(self, emit):
         lines: list = []
-        collector = self._make_collector(lines)
 
-        async def both(event_type: str, text: str, **extra):
-            await collector(event_type, text, **extra)
-            await emit(event_type, text, **extra)
+        def make_both(agent: str):
+            collector = self._make_collector(lines, agent)
+
+            async def both(event_type: str, text: str, **extra):
+                await collector(event_type, text, **extra)
+                await emit(event_type, text, **extra)
+
+            return both
 
         status = "finished"
         try:
             self._running = True
             async with get_session() as session:
-                result = await run_search_task(session, emit=both)
+                result = await run_search_task(session, emit=make_both("定时资讯"))
                 if self._recommend_enabled():
-                    await run_recommend_task(session, emit=both)
+                    await run_recommend_task(session, emit=make_both("智能推荐"))
                 if self._brief_enabled():
-                    await run_brief_task(session, emit=both)
+                    await run_brief_task(session, emit=make_both("每日简报"))
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()

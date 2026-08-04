@@ -1,4 +1,4 @@
-﻿<div class="toast-container" id="toastContainer"></div>
+<div class="toast-container" id="toastContainer"></div>
 
 <header class="site-header">
     <div class="header-inner">
@@ -61,7 +61,7 @@
                             个人资料
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
-                        <button type="button" class="panel-item" data-action="my-recommend">
+                        <button type="button" class="panel-item agent-only" data-action="my-recommend">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                     <path d="M8 1.8l1.8 3.9 4.2.5-3.1 2.9.8 4.2L8 11.2l-3.7 2.1.8-4.2L2 6.2l4.2-.5L8 1.8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
@@ -553,7 +553,10 @@
                 <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
             </div>
             <span class="terminal-title">agent@cron-news ~ 运行日志</span>
-            <select id="agentLogSelect" class="log-select"></select>
+            <div class="log-filters">
+                <select id="agentLogDateSel" class="log-select" title="按执行日期筛选"></select>
+                <select id="agentLogAgentSel" class="log-select" title="按 Agent 筛选"></select>
+            </div>
         </div>
         <div class="terminal-body" id="agentLogBody"></div>
         <div class="modal-footer">
@@ -2150,17 +2153,61 @@
     });
 
     /* ===== 运行日志 ===== */
-    async function loadAgentLog(id) {
+    const AGENT_OPTIONS = ['定时资讯', '智能推荐', '每日简报'];
+    let agentLogRuns = [];
+
+    async function loadAgentLogs() {
+        const resp = await fetch('/api/agent/runs');
+        const data = await resp.json();
+        const runs = data.items || [];
+        agentLogRuns = [];
+        for (const r of runs) {
+            try {
+                const d = await (await fetch(`/api/agent/runs/${r.id}`)).json();
+                agentLogRuns.push({
+                    id: r.id,
+                    started_at: r.started_at || '',
+                    date: (r.started_at || '').slice(0, 10),
+                    status: r.status,
+                    lines: d.lines || [],
+                });
+            } catch (e) { /* ignore */ }
+        }
+        agentLogRuns.sort((a, b) => a.started_at.localeCompare(b.started_at));
+
+        const dateSel = $('agentLogDateSel');
+        const dates = [...new Set(agentLogRuns.map(r => r.date).filter(Boolean))];
+        dateSel.innerHTML = '<option value="">全部日期</option>' +
+            dates.map(dt => `<option value="${dt}">${dt}</option>`).join('');
+        dateSel.value = '';
+
+        const agentSel = $('agentLogAgentSel');
+        agentSel.innerHTML = '<option value="">全部 Agent</option>' +
+            AGENT_OPTIONS.map(a => `<option value="${a}">${a}</option>`).join('');
+        agentSel.value = '';
+    }
+
+    function renderAgentLogs() {
         const body = $('agentLogBody');
         body.innerHTML = '';
-        try {
-            const resp = await fetch(`/api/agent/runs/${id}`);
-            const data = await resp.json();
-            if (!data.lines || data.lines.length === 0) {
-                body.innerHTML = '<div class="term-line"><span class="term-text">该次运行没有日志记录</span></div>';
-                return;
-            }
-            data.lines.forEach(line => {
+        const dateVal = $('agentLogDateSel').value;
+        const agentVal = $('agentLogAgentSel').value;
+        let any = false;
+
+        for (const run of agentLogRuns) {
+            if (dateVal && run.date !== dateVal) continue;
+            const lines = agentVal
+                ? run.lines.filter(l => (l.agent || '定时资讯') === agentVal)
+                : run.lines;
+            if (!lines.length) continue;
+            any = true;
+
+            const header = document.createElement('div');
+            header.className = 'term-line term-sep';
+            header.innerHTML = `<span class="term-text">── 运行 #${run.id} · ${run.started_at.replace('T', ' ').slice(0, 19)} · ${run.status === 'finished' ? '已完成' : '异常'} ──</span>`;
+            body.appendChild(header);
+
+            lines.forEach(line => {
                 const tag = TERM_TAGS[line.t] || TERM_TAGS.info;
                 const el = document.createElement('div');
                 el.className = 'term-line';
@@ -2171,37 +2218,29 @@
                 `;
                 body.appendChild(el);
             });
-            body.scrollTop = body.scrollHeight;
-        } catch (e) {
-            body.innerHTML = '<div class="term-line"><span class="term-text">加载失败</span></div>';
         }
+
+        if (!any) {
+            body.innerHTML = '<div class="term-line"><span class="term-text">没有符合条件的运行日志</span></div>';
+        }
+        body.scrollTop = body.scrollHeight;
     }
 
     $('openAgentLogBtn').addEventListener('click', async () => {
         closeModal('agentModal');
         openModal('agentLogModal');
         const body = $('agentLogBody');
-        const sel = $('agentLogSelect');
         body.innerHTML = '<div class="term-line"><span class="term-text">加载中...</span></div>';
         try {
-            const resp = await fetch('/api/agent/runs');
-            const data = await resp.json();
-            if (!data.items || data.items.length === 0) {
-                sel.innerHTML = '';
-                body.innerHTML = '<div class="term-line"><span class="term-text">暂无运行日志，Agent 完成一次运行后将在此记录过程。</span></div>';
-                return;
-            }
-            sel.innerHTML = data.items.map(r => {
-                const t = (r.started_at || '').replace('T', ' ').slice(0, 19);
-                const st = r.status === 'finished' ? '已完成' : '异常';
-                return `<option value="${r.id}">${t} · ${st}</option>`;
-            }).join('');
-            sel.onchange = () => loadAgentLog(parseInt(sel.value, 10));
-            loadAgentLog(data.items[0].id);
+            await loadAgentLogs();
+            renderAgentLogs();
         } catch (e) {
             body.innerHTML = '<div class="term-line"><span class="term-text">加载失败</span></div>';
         }
     });
+
+    $('agentLogDateSel').addEventListener('change', renderAgentLogs);
+    $('agentLogAgentSel').addEventListener('change', renderAgentLogs);
 
     /* ===== 自动任务配置 ===== */
     state.taskForm = { mode: 'preset', intervalHours: 8, startHour: 0, customCron: '', selectedCategories: [] };

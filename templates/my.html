@@ -6,7 +6,7 @@
     <title>{{ kind_title }} - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=29">
+    <link rel="stylesheet" href="/static/css/style.css?v=31">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -66,14 +66,40 @@
             return item.collected_at;
         }
 
+        async function fetchList() {
+            const resp = await fetch(listEndpoint());
+            const data = await resp.json();
+            return data.items || [];
+        }
+
+        function renderSidebar(items, highlightId) {
+            const container = document.getElementById('sideList');
+            document.getElementById('sideCount').textContent = items.length ? ` ${items.length}` : '';
+            container.innerHTML = '';
+            items.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'related-card' + (String(item.id) === String(highlightId) ? ' active' : '');
+                el.dataset.id = item.id;
+                const readStatus = item.is_read
+                    ? '<span class="related-read-status read">已读</span>'
+                    : '<span class="related-read-status unread">未读</span>';
+                el.innerHTML = `
+                    <div class="related-title">${escapeHtml(item.title)}</div>
+                    <div class="related-meta">
+                        <span class="related-source">${escapeHtml(item.category_name || '默认')}</span>
+                        <span>${formatDate(itemTime(item))}</span>
+                        ${readStatus}
+                    </div>
+                `;
+                el.addEventListener('click', () => loadArticle(item.id));
+                container.appendChild(el);
+            });
+        }
+
         async function loadList() {
             const container = document.getElementById('sideList');
             try {
-                const resp = await fetch(listEndpoint());
-                const data = await resp.json();
-                const items = data.items || [];
-                document.getElementById('sideCount').textContent = items.length ? ` ${items.length}` : '';
-
+                const items = await fetchList();
                 if (items.length === 0) {
                     container.innerHTML = '<div class="empty-state"><p>暂无内容</p></div>';
                     document.getElementById('articleMain').innerHTML = `
@@ -84,31 +110,24 @@
                         </div>`;
                     return;
                 }
-
-                container.innerHTML = '';
-                items.forEach(item => {
-                    const el = document.createElement('div');
-                    el.className = 'related-card';
-                    el.dataset.id = item.id;
-                    const readStatus = item.is_read
-                        ? '<span class="related-read-status read">已读</span>'
-                        : '<span class="related-read-status unread">未读</span>';
-                    el.innerHTML = `
-                        <div class="related-title">${escapeHtml(item.title)}</div>
-                        <div class="related-meta">
-                            <span class="related-source">${escapeHtml(item.category_name || '默认')}</span>
-                            <span>${formatDate(itemTime(item))}</span>
-                            ${readStatus}
-                        </div>
-                    `;
-                    el.addEventListener('click', () => loadArticle(item.id));
-                    container.appendChild(el);
-                });
-
+                renderSidebar(items, items[0].id);
                 loadArticle(items[0].id);
             } catch (e) {
                 container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
             }
+        }
+
+        async function refreshList() {
+            try {
+                const items = await fetchList();
+                const current = currentNews ? currentNews.id : null;
+                if (items.length === 0) {
+                    document.getElementById('sideList').innerHTML = '<div class="empty-state"><p>暂无内容</p></div>';
+                    document.getElementById('sideCount').textContent = '';
+                    return;
+                }
+                renderSidebar(items, current);
+            } catch (e) { /* 忽略列表刷新失败 */ }
         }
 
         async function loadArticle(id) {
@@ -125,7 +144,8 @@
                 const news = await resp.json();
                 currentNews = news;
 
-                fetch(`/api/news/${id}/read`, { method: 'POST' });
+                try { await fetch(`/api/news/${id}/read`, { method: 'POST' }); } catch (e) { /* ignore */ }
+                refreshList();
 
                 const sourceLink = news.source_url
                     ? `<a href="${escapeHtml(news.source_url)}" target="_blank" rel="noopener" class="detail-source-link">查看原文 &rarr;</a>`
@@ -138,7 +158,6 @@
                         <span>收录于 ${formatDate(news.collected_at)}</span>
                     </div>
                     <h1 class="detail-title">${escapeHtml(news.title)}</h1>
-                    <div class="markdown-body">${renderMarkdown(news.content)}</div>
                     <div class="detail-actions">
                         ${sourceLink}
                         <button type="button" class="detail-flag-btn ${news.is_fav ? 'active' : ''}" id="favBtn">
@@ -150,6 +169,7 @@
                             <span class="flag-label">${news.is_later ? '已稍后' : '稍后再读'}</span>
                         </button>
                     </div>
+                    <div class="markdown-body">${renderMarkdown(news.content)}</div>
                 `;
 
                 document.title = `${news.title} - 定时资讯`;
