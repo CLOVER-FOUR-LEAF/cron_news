@@ -6,7 +6,7 @@
     <title>{{ kind_title }} - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=33">
+    <link rel="stylesheet" href="/static/css/style.css?v=34">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -201,6 +201,12 @@
 
         let readPosted = false;
         let currentScrollHandler = null;
+        function markSidebarRead(id) {
+            const card = document.querySelector(`#sideList .related-card[data-id="${id}"]`);
+            if (!card) return;
+            const st = card.querySelector('.related-read-status');
+            if (st) { st.className = 'related-read-status read'; st.textContent = '已读'; }
+        }
         function setupReadScroll(id) {
             if (currentScrollHandler) {
                 window.removeEventListener('scroll', currentScrollHandler);
@@ -208,10 +214,13 @@
             readPosted = false;
             currentScrollHandler = () => {
                 if (readPosted) return;
-                const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 120;
-                if (nearBottom) {
+                const article = document.getElementById('articleMain');
+                const rect = article.getBoundingClientRect();
+                if (rect.bottom <= window.innerHeight + 80) {
                     readPosted = true;
-                    fetch(`/api/news/${id}/read`, { method: 'POST' }).then(() => refreshList()).catch(() => {});
+                    fetch(`/api/news/${id}/read`, { method: 'POST' })
+                        .then(() => markSidebarRead(id))
+                        .catch(() => {});
                 }
             };
             window.addEventListener('scroll', currentScrollHandler, { passive: true });

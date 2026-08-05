@@ -6,7 +6,7 @@
     <title>新闻详情 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=33">
+    <link rel="stylesheet" href="/static/css/style.css?v=34">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         .markdown-body {
@@ -274,10 +274,11 @@
 
         let readPosted = false;
         function setupReadScroll() {
+            const article = document.getElementById('newsDetail');
             const onScroll = () => {
                 if (readPosted) return;
-                const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 120;
-                if (nearBottom) {
+                const rect = article.getBoundingClientRect();
+                if (rect.bottom <= window.innerHeight + 80) {
                     readPosted = true;
                     fetch(`/api/news/${NEWS_ID}/read`, { method: 'POST' }).catch(() => {});
                 }

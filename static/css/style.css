@@ -2587,6 +2587,13 @@ button.header-icon-btn {
 .prompt-grid .agent-textarea {
     flex: 1;
     min-height: 0;
+    line-height: 1.75;
+}
+
+.prompt-edit-btn {
+    font-size: 0.72rem;
+    padding: 3px 12px;
+    flex-shrink: 0;
 }
 
 .agent-col {

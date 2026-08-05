@@ -543,22 +543,30 @@
         </div>
         <div class="prompt-grid">
             <div class="agent-col">
-                <div class="agent-col-head"><div class="agent-col-title">定时资讯</div></div>
-                <textarea id="promptTimed" class="agent-textarea agent-textarea-fixed" spellcheck="false"></textarea>
+                <div class="agent-col-head">
+                    <div class="agent-col-title">定时资讯</div>
+                    <button type="button" class="btn-compact prompt-edit-btn" data-prompt="timed">编辑</button>
+                </div>
+                <textarea id="promptTimed" class="agent-textarea agent-textarea-fixed agent-readonly prompt-textarea" spellcheck="false" readonly></textarea>
             </div>
             <div class="agent-col">
-                <div class="agent-col-head"><div class="agent-col-title">智能推荐</div></div>
-                <textarea id="promptRecommend" class="agent-textarea agent-textarea-fixed" spellcheck="false"></textarea>
+                <div class="agent-col-head">
+                    <div class="agent-col-title">智能推荐</div>
+                    <button type="button" class="btn-compact prompt-edit-btn" data-prompt="recommend">编辑</button>
+                </div>
+                <textarea id="promptRecommend" class="agent-textarea agent-textarea-fixed agent-readonly prompt-textarea" spellcheck="false" readonly></textarea>
             </div>
             <div class="agent-col">
-                <div class="agent-col-head"><div class="agent-col-title">AI 简报</div></div>
-                <textarea id="promptBrief" class="agent-textarea agent-textarea-fixed" spellcheck="false"></textarea>
+                <div class="agent-col-head">
+                    <div class="agent-col-title">AI 简报</div>
+                    <button type="button" class="btn-compact prompt-edit-btn" data-prompt="brief">编辑</button>
+                </div>
+                <textarea id="promptBrief" class="agent-textarea agent-textarea-fixed agent-readonly prompt-textarea" spellcheck="false" readonly></textarea>
             </div>
         </div>
         <div class="modal-footer">
             <button class="btn-secondary" id="promptResetBtn">恢复默认</button>
-            <button class="btn-secondary" data-close>取消</button>
-            <button class="btn-primary" id="savePromptBtn">保存</button>
+            <button class="btn-secondary" data-close>关闭</button>
         </div>
     </div>
 </div>
@@ -1010,6 +1018,7 @@
             state.searchConfigs = data.search_configs || [];
             state.activeSearch = data.active_search || null;
             state.workMode = data.work_mode || '';
+            state.agentRecommend = !!data.agent_recommend_enabled;
             state.dbMode = data.db_mode || 'system';
             state.dbConfig = data.db_config || {};
             state.dbComplete = !!data.db_complete;
@@ -1060,6 +1069,11 @@
         document.querySelectorAll('.panel-item.agent-only').forEach(item => {
             item.style.display = mode === 'assist' ? 'none' : '';
         });
+
+        const recEntry = document.querySelector('.panel-item[data-action="my-recommend"]');
+        if (recEntry) {
+            recEntry.style.display = (mode === 'autonomous' && state.agentRecommend) ? '' : 'none';
+        }
 
         if (mode === '') {
             openModal('workmodeChooseModal');
@@ -2115,16 +2129,41 @@
     });
 
     /* ===== 提示词管理 ===== */
+    const PROMPT_KEYS = ['timed', 'recommend', 'brief'];
+    const PROMPT_TA_ID = { timed: 'promptTimed', recommend: 'promptRecommend', brief: 'promptBrief' };
     let promptData = { prompts: {}, defaults: {} };
+    let promptEditing = {};
+    let promptTimers = {};
+
+    function setPromptMode(key, editing) {
+        const ta = $(PROMPT_TA_ID[key]);
+        ta.readOnly = !editing;
+        ta.classList.toggle('agent-readonly', !editing);
+        const btn = document.querySelector(`.prompt-edit-btn[data-prompt="${key}"]`);
+        if (btn) btn.textContent = editing ? '确认' : '编辑';
+    }
+
+    async function savePromptField(key) {
+        try {
+            const resp = await fetch('/api/agent/prompts', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [key]: $(PROMPT_TA_ID[key]).value })
+            });
+            if (resp.ok) showToast(`${key === 'timed' ? '定时资讯' : key === 'recommend' ? '智能推荐' : 'AI 简报'} 提示词已保存`, 'success');
+        } catch (e) { /* ignore */ }
+    }
 
     async function loadPromptModal() {
         try {
             const resp = await fetch('/api/agent/prompts');
             const data = await resp.json();
             promptData = { prompts: data.prompts || {}, defaults: data.defaults || {} };
-            $('promptTimed').value = promptData.prompts.timed || '';
-            $('promptRecommend').value = promptData.prompts.recommend || '';
-            $('promptBrief').value = promptData.prompts.brief || '';
+            PROMPT_KEYS.forEach(key => {
+                $(PROMPT_TA_ID[key]).value = promptData.prompts[key] || '';
+                promptEditing[key] = false;
+                setPromptMode(key, false);
+            });
             openModal('promptModal');
         } catch (e) {
             showToast('加载提示词失败', 'error');
@@ -2135,33 +2174,37 @@
         loadPromptModal();
     });
 
-    $('promptResetBtn').addEventListener('click', () => {
-        $('promptTimed').value = promptData.defaults.timed || '';
-        $('promptRecommend').value = promptData.defaults.recommend || '';
-        $('promptBrief').value = promptData.defaults.brief || '';
+    document.querySelectorAll('.prompt-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const key = btn.dataset.prompt;
+            promptEditing[key] = !promptEditing[key];
+            setPromptMode(key, promptEditing[key]);
+            if (!promptEditing[key]) savePromptField(key);
+        });
     });
 
-    $('savePromptBtn').addEventListener('click', async () => {
-        const payload = {
-            timed: $('promptTimed').value,
-            recommend: $('promptRecommend').value,
-            brief: $('promptBrief').value
-        };
+    PROMPT_KEYS.forEach(key => {
+        $(PROMPT_TA_ID[key]).addEventListener('input', () => {
+            if (!promptEditing[key]) return;
+            clearTimeout(promptTimers[key]);
+            promptTimers[key] = setTimeout(() => savePromptField(key), 800);
+        });
+    });
+
+    $('promptResetBtn').addEventListener('click', async () => {
+        PROMPT_KEYS.forEach(key => {
+            $(PROMPT_TA_ID[key]).value = promptData.defaults[key] || '';
+            promptEditing[key] = false;
+            setPromptMode(key, false);
+        });
         try {
             const resp = await fetch('/api/agent/prompts', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ ...promptData.defaults })
             });
-            if (resp.ok) {
-                closeModal('promptModal');
-                showToast('提示词已保存，即刻生效', 'success');
-            } else {
-                showToast('保存失败', 'error');
-            }
-        } catch (e) {
-            showToast('保存失败', 'error');
-        }
+            if (resp.ok) showToast('已恢复默认提示词', 'success');
+        } catch (e) { /* ignore */ }
     });
 
     /* ===== 运行日志 ===== */
