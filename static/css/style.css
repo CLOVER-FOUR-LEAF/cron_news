@@ -2592,8 +2592,28 @@ button.header-icon-btn {
 
 .prompt-edit-btn {
     font-size: 0.72rem;
-    padding: 3px 12px;
+    padding: 4px 12px;
     flex-shrink: 0;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-elevated);
+    border-radius: 6px;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: all var(--transition-fast);
+}
+
+.prompt-edit-btn:hover {
+    border-color: var(--border-accent);
+    color: var(--accent-gold);
+    background: rgba(200, 168, 82, 0.1);
+}
+
+.prompt-edit-btn.editing {
+    border-color: rgba(200, 168, 82, 0.5);
+    color: var(--accent-gold);
+    background: rgba(200, 168, 82, 0.15);
+    font-weight: 600;
 }
 
 .agent-col {

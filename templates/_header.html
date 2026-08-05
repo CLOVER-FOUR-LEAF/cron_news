@@ -566,7 +566,7 @@
         </div>
         <div class="modal-footer">
             <button class="btn-secondary" id="promptResetBtn">恢复默认</button>
-            <button class="btn-secondary" data-close>关闭</button>
+            <button class="btn-primary" id="savePromptBtn">保存</button>
         </div>
     </div>
 </div>
@@ -2140,7 +2140,10 @@
         ta.readOnly = !editing;
         ta.classList.toggle('agent-readonly', !editing);
         const btn = document.querySelector(`.prompt-edit-btn[data-prompt="${key}"]`);
-        if (btn) btn.textContent = editing ? '确认' : '编辑';
+        if (btn) {
+            btn.textContent = editing ? '确认' : '编辑';
+            btn.classList.toggle('editing', editing);
+        }
     }
 
     async function savePromptField(key) {
@@ -2205,6 +2208,32 @@
             });
             if (resp.ok) showToast('已恢复默认提示词', 'success');
         } catch (e) { /* ignore */ }
+    });
+
+    $('savePromptBtn').addEventListener('click', async () => {
+        try {
+            const resp = await fetch('/api/agent/prompts', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    timed: $('promptTimed').value,
+                    recommend: $('promptRecommend').value,
+                    brief: $('promptBrief').value
+                })
+            });
+            if (resp.ok) {
+                PROMPT_KEYS.forEach(key => {
+                    promptEditing[key] = false;
+                    setPromptMode(key, false);
+                });
+                closeModal('promptModal');
+                showToast('提示词已保存，即刻生效', 'success');
+            } else {
+                showToast('保存失败', 'error');
+            }
+        } catch (e) {
+            showToast('保存失败', 'error');
+        }
     });
 
     /* ===== 运行日志 ===== */
