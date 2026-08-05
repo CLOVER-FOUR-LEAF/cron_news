@@ -6,7 +6,7 @@
     <title>新闻详情 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=31">
+    <link rel="stylesheet" href="/static/css/style.css?v=32">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         .markdown-body {
@@ -159,7 +159,8 @@
                 }
                 const news = await resp.json();
 
-                fetch(`/api/news/${NEWS_ID}/read`, { method: 'POST' });
+                fetch(`/api/news/${NEWS_ID}/reading`, { method: 'POST' });
+                setupReadScroll();
 
                 const sourceName = news.source_url
                     ? `<a href="${escapeHtml(news.source_url)}" target="_blank" rel="noopener" class="detail-source-name">${escapeHtml(news.source || '来源')}</a>`
@@ -235,7 +236,7 @@
 
             const readStatus = item.is_read
                 ? '<span class="related-read-status read">已读</span>'
-                : '<span class="related-read-status unread">未读</span>';
+                : (item.is_reading ? '<span class="related-read-status reading">在读</span>' : '<span class="related-read-status unread">未读</span>');
 
             el.innerHTML = `
                 <div class="related-title">${escapeHtml(item.title)}</div>
@@ -269,6 +270,20 @@
         function bindFlagButtons() {
             document.getElementById('favBtn').addEventListener('click', () => toggleFlag('fav'));
             document.getElementById('laterBtn').addEventListener('click', () => toggleFlag('later'));
+        }
+
+        let readPosted = false;
+        function setupReadScroll() {
+            const onScroll = () => {
+                if (readPosted) return;
+                const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 120;
+                if (nearBottom) {
+                    readPosted = true;
+                    fetch(`/api/news/${NEWS_ID}/read`, { method: 'POST' }).catch(() => {});
+                }
+            };
+            window.addEventListener('scroll', onScroll, { passive: true });
+            onScroll();
         }
 
         loadDetail();

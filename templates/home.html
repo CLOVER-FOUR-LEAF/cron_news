@@ -6,7 +6,7 @@
     <title>定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=31">
+    <link rel="stylesheet" href="/static/css/style.css?v=32">
 </head>
 <body>
     {% include "_header.html" %}
@@ -77,7 +77,7 @@
 
             const readStatus = item.is_read
                 ? '<span class="ticker-read-status read">已读</span>'
-                : '<span class="ticker-read-status unread">未读</span>';
+                : (item.is_reading ? '<span class="ticker-read-status reading">在读</span>' : '<span class="ticker-read-status unread">未读</span>');
 
             const laterBtn = `
                 <button type="button" class="card-later-btn ticker-later-btn ${item.is_later ? 'active' : ''}" data-id="${item.id}" title="稍后再读">

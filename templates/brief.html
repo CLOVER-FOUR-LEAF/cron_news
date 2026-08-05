@@ -6,7 +6,7 @@
     <title>每日简报 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=31">
+    <link rel="stylesheet" href="/static/css/style.css?v=32">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -30,6 +30,7 @@
                     </div>
                 </div>
                 <div class="brief-field">
+                    <label>时间</label>
                     <div class="brief-selected-label">当前选择：<strong id="selectedDateLabel"></strong></div>
                     <div class="calendar">
                         <div class="cal-head">
@@ -47,11 +48,14 @@
                         <div class="cal-grid" id="calGrid"></div>
                     </div>
                 </div>
-                <div class="brief-export">
-                    <button type="button" class="btn-secondary" id="exportMdBtn">导出 Markdown</button>
-                    <button type="button" class="btn-secondary" id="exportWordBtn">导出 Word</button>
+                <div class="brief-field">
+                    <label>更多操作</label>
+                    <div class="brief-export">
+                        <button type="button" class="btn-secondary" id="exportMdBtn">导出 Markdown</button>
+                        <button type="button" class="btn-secondary" id="exportWordBtn">导出 Word</button>
+                    </div>
                 </div>
-                <p class="brief-side-hint">简报由自主模式 Agent 在每次采集完成后按分类自动生成，圆点标记表示当日有简报。</p>
+                <p class="brief-side-hint brief-side-hint-bottom">简报由自主模式 Agent 在每次采集完成后按分类自动生成，圆点标记表示当日有简报。</p>
             </aside>
 
             <div class="brief-main" id="briefMain">

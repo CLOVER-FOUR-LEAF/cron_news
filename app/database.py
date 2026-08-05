@@ -93,6 +93,7 @@ def _ensure_news_user_action_columns(sync_conn):
         ("fav_at", "ALTER TABLE news ADD COLUMN fav_at DATETIME"),
         ("is_later", "ALTER TABLE news ADD COLUMN is_later SMALLINT DEFAULT 0"),
         ("later_at", "ALTER TABLE news ADD COLUMN later_at DATETIME"),
+        ("is_reading", "ALTER TABLE news ADD COLUMN is_reading SMALLINT DEFAULT 0"),
     ]
     for col, ddl in additions:
         if col not in cols:

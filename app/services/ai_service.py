@@ -11,8 +11,13 @@ from app.models.news import News
 from app.models.category import Category
 from app.crud.category import get_default_category
 from app.env_store import read_env_file, write_env_file
+from app.services.agent_prompts import get_agent_prompt
 
 EmitFn = Callable[..., Awaitable[None]]
+
+
+def _timed_system_prompt() -> str:
+    return get_agent_prompt("timed")
 
 
 async def search_news(query: str, max_results: int = 10, hours: int | None = None) -> list[dict[str, Any]]:
@@ -69,7 +74,7 @@ async def generate_news_content(title: str, summary: str) -> str:
             json={
                 "model": settings.LLM_MODEL,
                 "messages": [
-                    {"role": "system", "content": "你是一位专业的新闻编辑，擅长撰写各类新闻报道。"},
+                    {"role": "system", "content": _timed_system_prompt()},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.7,

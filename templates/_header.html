@@ -467,27 +467,16 @@
         <div class="agent-grid">
             <div class="agent-col">
                 <div class="agent-col-head">
-                    <div class="agent-col-title">基本提示词</div>
-                    <span class="agent-col-badge">
-                        <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                            <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
-                            <path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.3"/>
-                        </svg>
-                        自动生成 · 只读
-                    </span>
+                    <div class="agent-col-title">运行日志</div>
+                    <span class="agent-col-badge">最近 10 次运行</span>
                 </div>
-                <textarea id="agentBasePrompt" class="agent-textarea agent-textarea-fixed agent-readonly" readonly spellcheck="false"></textarea>
-            </div>
-
-            <div class="agent-col">
-                <div class="agent-col-head">
-                    <div class="agent-col-title">扩展提示词</div>
-                    <div class="segmented segmented-sm">
-                        <button type="button" class="segmented-btn" id="agentExtPresetBtn">预设</button>
-                        <button type="button" class="segmented-btn" id="agentExtCustomBtn">自定义</button>
-                    </div>
+                <div class="log-filters agent-log-filters">
+                    <select id="agentLogDateSel" class="log-select" title="按执行日期筛选"></select>
+                    <select id="agentLogAgentSel" class="log-select" title="按 Agent 筛选"></select>
                 </div>
-                <textarea id="agentExtPrompt" class="agent-textarea agent-textarea-fixed" spellcheck="false"></textarea>
+                <div class="terminal-body agent-terminal" id="agentLogBody">
+                    <div class="term-line"><span class="term-text">加载中...</span></div>
+                </div>
             </div>
 
             <div class="agent-col">
@@ -528,14 +517,14 @@
                         启用后将额外调用大模型，会增加 Token 消耗量
                     </div>
                 </div>
-                <button type="button" class="feature-card log-card" id="openAgentLogBtn">
+                <button type="button" class="feature-card log-card" id="openPromptBtn">
                     <div class="feature-top">
-                        <div class="feature-name">查看运行日志</div>
+                        <div class="feature-name">提示词管理</div>
                         <span class="log-card-arrow">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </span>
                     </div>
-                    <div class="feature-desc">查看最近 10 次 Agent 运行日志，包含采集、智能推荐与每日简报的完整过程。</div>
+                    <div class="feature-desc">定制定时资讯、智能推荐、AI 简报三个 Agent 的系统提示词，保存后立即生效。</div>
                 </button>
             </div>
         </div>
@@ -546,21 +535,33 @@
     </div>
 </div>
 
-<div id="agentLogModal" class="modal">
-    <div class="modal-content modal-wide terminal-modal">
-        <div class="terminal-header">
-            <div class="terminal-dots">
-                <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
+<div id="promptModal" class="modal">
+    <div class="modal-content prompt-modal">
+        <div class="modal-header">
+            <div class="modal-title-group">
+                <h3>提示词管理</h3>
+                <span class="modal-title-hint">定制三个 Agent 的系统提示词，保存后立即生效</span>
             </div>
-            <span class="terminal-title">agent@cron-news ~ 运行日志</span>
-            <div class="log-filters">
-                <select id="agentLogDateSel" class="log-select" title="按执行日期筛选"></select>
-                <select id="agentLogAgentSel" class="log-select" title="按 Agent 筛选"></select>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="prompt-grid">
+            <div class="agent-col">
+                <div class="agent-col-head"><div class="agent-col-title">定时资讯</div></div>
+                <textarea id="promptTimed" class="agent-textarea agent-textarea-fixed" spellcheck="false"></textarea>
+            </div>
+            <div class="agent-col">
+                <div class="agent-col-head"><div class="agent-col-title">智能推荐</div></div>
+                <textarea id="promptRecommend" class="agent-textarea agent-textarea-fixed" spellcheck="false"></textarea>
+            </div>
+            <div class="agent-col">
+                <div class="agent-col-head"><div class="agent-col-title">AI 简报</div></div>
+                <textarea id="promptBrief" class="agent-textarea agent-textarea-fixed" spellcheck="false"></textarea>
             </div>
         </div>
-        <div class="terminal-body" id="agentLogBody"></div>
         <div class="modal-footer">
-            <button class="btn-primary" data-close>关闭</button>
+            <button class="btn-secondary" id="promptResetBtn">恢复默认</button>
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="savePromptBtn">保存</button>
         </div>
     </div>
 </div>
@@ -993,7 +994,7 @@
             else if (action === 'my-favorites') window.location.href = '/my/favorites';
             else if (action === 'my-later') window.location.href = '/my/later';
             else if (action === 'category') { renderCategories(); openModal('categoryModal'); }
-            else if (action === 'agent') { refreshConfig().then(() => { loadAgentForm(); openModal('agentModal'); }); }
+            else if (action === 'agent') { refreshConfig().then(() => { loadAgentForm(); refreshAgentLogs(); openModal('agentModal'); }); }
             else if (action === 'llm') { refreshConfig().then(() => { renderLLMList(); openModal('llmModal'); }); }
             else if (action === 'search') { refreshConfig().then(() => { renderSearchList(); openModal('searchModal'); }); }
             else if (action === 'task') { refreshConfig().then(() => { loadTaskForm(); openModal('taskModal'); }); }
@@ -2063,41 +2064,17 @@
     }
 
     /* ===== Agent 管理 ===== */
-    state.agentExtMode = 'preset';
-    state.agentExtPreset = '';
     state.agentRecommend = false;
     state.agentBrief = false;
 
     function loadAgentForm() {
         const data = state.searchConfig || {};
-        $('agentBasePrompt').value = data.agent_base_prompt || '';
-        state.agentExtPreset = data.agent_ext_preset || '';
-        state.agentExtMode = data.agent_ext_mode === 'custom' ? 'custom' : 'preset';
         state.agentRecommend = !!data.agent_recommend_enabled;
         state.agentBrief = !!data.agent_brief_enabled;
-
-        const customSaved = data.agent_ext_prompt || '';
-        $('agentExtPrompt').dataset.custom = customSaved;
-
         renderAgentForm();
     }
 
     function renderAgentForm() {
-        const isPreset = state.agentExtMode === 'preset';
-        $('agentExtPresetBtn').classList.toggle('active', isPreset);
-        $('agentExtCustomBtn').classList.toggle('active', !isPreset);
-
-        const ta = $('agentExtPrompt');
-        if (isPreset) {
-            ta.value = state.agentExtPreset;
-            ta.readOnly = true;
-            ta.classList.add('agent-readonly');
-        } else {
-            ta.value = ta.dataset.custom || state.agentExtPreset;
-            ta.readOnly = false;
-            ta.classList.remove('agent-readonly');
-        }
-
         const sw = $('recommendSwitch');
         sw.classList.toggle('on', state.agentRecommend);
         sw.setAttribute('aria-checked', String(state.agentRecommend));
@@ -2106,16 +2083,6 @@
         bw.classList.toggle('on', state.agentBrief);
         bw.setAttribute('aria-checked', String(state.agentBrief));
     }
-
-    $('agentExtPresetBtn').addEventListener('click', () => {
-        state.agentExtMode = 'preset';
-        renderAgentForm();
-    });
-
-    $('agentExtCustomBtn').addEventListener('click', () => {
-        state.agentExtMode = 'custom';
-        renderAgentForm();
-    });
 
     $('recommendSwitch').addEventListener('click', () => {
         state.agentRecommend = !state.agentRecommend;
@@ -2129,8 +2096,6 @@
 
     $('saveAgentBtn').addEventListener('click', async () => {
         const payload = {
-            agent_ext_mode: state.agentExtMode,
-            agent_ext_prompt: state.agentExtMode === 'custom' ? $('agentExtPrompt').value : '',
             agent_recommend_enabled: state.agentRecommend,
             agent_brief_enabled: state.agentBrief
         };
@@ -2144,6 +2109,56 @@
                 showToast('Agent 配置已保存', 'success');
                 closeModal('agentModal');
                 await refreshConfig();
+            } else {
+                showToast('保存失败', 'error');
+            }
+        } catch (e) {
+            showToast('保存失败', 'error');
+        }
+    });
+
+    /* ===== 提示词管理 ===== */
+    let promptDefaults = {};
+
+    async function loadPromptModal() {
+        try {
+            const resp = await fetch('/api/agent/prompts');
+            const data = await resp.json();
+            promptDefaults = data.prompts || {};
+            $('promptTimed').value = promptDefaults.timed || '';
+            $('promptRecommend').value = promptDefaults.recommend || '';
+            $('promptBrief').value = promptDefaults.brief || '';
+            openModal('promptModal');
+        } catch (e) {
+            showToast('加载提示词失败', 'error');
+        }
+    }
+
+    $('openPromptBtn').addEventListener('click', () => {
+        loadPromptModal();
+    });
+
+    $('promptResetBtn').addEventListener('click', () => {
+        $('promptTimed').value = '';
+        $('promptRecommend').value = '';
+        $('promptBrief').value = '';
+    });
+
+    $('savePromptBtn').addEventListener('click', async () => {
+        const payload = {
+            timed: $('promptTimed').value,
+            recommend: $('promptRecommend').value,
+            brief: $('promptBrief').value
+        };
+        try {
+            const resp = await fetch('/api/agent/prompts', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (resp.ok) {
+                closeModal('promptModal');
+                showToast('提示词已保存，即刻生效', 'success');
             } else {
                 showToast('保存失败', 'error');
             }
@@ -2226,9 +2241,7 @@
         body.scrollTop = body.scrollHeight;
     }
 
-    $('openAgentLogBtn').addEventListener('click', async () => {
-        closeModal('agentModal');
-        openModal('agentLogModal');
+    async function refreshAgentLogs() {
         const body = $('agentLogBody');
         body.innerHTML = '<div class="term-line"><span class="term-text">加载中...</span></div>';
         try {
@@ -2237,7 +2250,7 @@
         } catch (e) {
             body.innerHTML = '<div class="term-line"><span class="term-text">加载失败</span></div>';
         }
-    });
+    }
 
     $('agentLogDateSel').addEventListener('change', renderAgentLogs);
     $('agentLogAgentSel').addEventListener('change', renderAgentLogs);

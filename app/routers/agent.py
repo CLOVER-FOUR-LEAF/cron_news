@@ -1,13 +1,36 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import AgentRun
+from app.services.agent_prompts import get_all_prompts, save_prompts, AGENT_LABELS
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
+
+
+class PromptsModel(BaseModel):
+    timed: str | None = None
+    recommend: str | None = None
+    brief: str | None = None
+
+
+@router.get("/prompts")
+async def get_prompts():
+    prompts = get_all_prompts()
+    return {
+        "agents": AGENT_LABELS,
+        "prompts": prompts,
+    }
+
+
+@router.put("/prompts")
+async def update_prompts(body: PromptsModel):
+    save_prompts(body.model_dump())
+    return {"ok": True}
 
 
 @router.get("/runs")

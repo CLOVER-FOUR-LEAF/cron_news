@@ -6,7 +6,7 @@
     <title>{{ kind_title }} - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=31">
+    <link rel="stylesheet" href="/static/css/style.css?v=32">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -82,7 +82,7 @@
                 el.dataset.id = item.id;
                 const readStatus = item.is_read
                     ? '<span class="related-read-status read">已读</span>'
-                    : '<span class="related-read-status unread">未读</span>';
+                    : (item.is_reading ? '<span class="related-read-status reading">在读</span>' : '<span class="related-read-status unread">未读</span>');
                 el.innerHTML = `
                     <div class="related-title">${escapeHtml(item.title)}</div>
                     <div class="related-meta">
@@ -144,8 +144,9 @@
                 const news = await resp.json();
                 currentNews = news;
 
-                try { await fetch(`/api/news/${id}/read`, { method: 'POST' }); } catch (e) { /* ignore */ }
+                try { await fetch(`/api/news/${id}/reading`, { method: 'POST' }); } catch (e) { /* ignore */ }
                 refreshList();
+                setupReadScroll(id);
 
                 const sourceLink = news.source_url
                     ? `<a href="${escapeHtml(news.source_url)}" target="_blank" rel="noopener" class="detail-source-link">查看原文 &rarr;</a>`
@@ -196,6 +197,25 @@
         function bindFlagButtons() {
             document.getElementById('favBtn').addEventListener('click', () => toggleFlag('fav'));
             document.getElementById('laterBtn').addEventListener('click', () => toggleFlag('later'));
+        }
+
+        let readPosted = false;
+        let currentScrollHandler = null;
+        function setupReadScroll(id) {
+            if (currentScrollHandler) {
+                window.removeEventListener('scroll', currentScrollHandler);
+            }
+            readPosted = false;
+            currentScrollHandler = () => {
+                if (readPosted) return;
+                const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 120;
+                if (nearBottom) {
+                    readPosted = true;
+                    fetch(`/api/news/${id}/read`, { method: 'POST' }).then(() => refreshList()).catch(() => {});
+                }
+            };
+            window.addEventListener('scroll', currentScrollHandler, { passive: true });
+            currentScrollHandler();
         }
 
         loadList();

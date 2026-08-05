@@ -532,6 +532,10 @@ a {
     color: #6bc96b !important;
 }
 
+.ticker-read-status.reading {
+    color: #e8b45a !important;
+}
+
 .ticker-section[data-cat] .ticker-item:hover .ticker-item-title { color: var(--cat); }
 
 /* ========== CATEGORY PAGE GRID ========== */
@@ -855,6 +859,10 @@ a {
     color: #6bc96b !important;
 }
 
+.card-read-status.reading {
+    color: #e8b45a !important;
+}
+
 /* ========== NEWS DETAIL ========== */
 .detail-layout {
     display: flex;
@@ -976,6 +984,10 @@ a {
 
 .related-read-status.read {
     color: #6bc96b !important;
+}
+
+.related-read-status.reading {
+    color: #e8b45a !important;
 }
 
 .detail-back {
@@ -1816,7 +1828,7 @@ button.header-icon-btn {
     position: absolute;
     top: calc(100% + 12px);
     right: 0;
-    width: 240px;
+    width: 280px;
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
@@ -2523,9 +2535,44 @@ button.header-icon-btn {
 .agent-grid {
     flex: 1;
     display: grid;
-    grid-template-columns: 1.08fr 1.08fr 0.84fr;
+    grid-template-columns: 1.15fr 0.85fr;
     gap: 20px;
     padding: 20px 24px;
+    min-height: 0;
+}
+
+.agent-log-filters {
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.agent-terminal {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    border: 1px solid rgba(200, 168, 82, 0.12);
+    border-radius: 8px;
+}
+
+.prompt-modal {
+    width: min(1180px, calc(100vw - 64px));
+    max-width: none;
+    height: min(640px, calc(100vh - 120px));
+    display: flex;
+    flex-direction: column;
+}
+
+.prompt-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding: 20px 24px;
+    min-height: 0;
+}
+
+.prompt-grid .agent-textarea {
+    flex: 1;
     min-height: 0;
 }
 
@@ -2753,6 +2800,16 @@ button.header-icon-btn {
     gap: 12px;
     padding: 9px 12px;
     margin-bottom: 4px;
+    flex-wrap: nowrap;
+}
+
+.panel-workmode .workmode-seg {
+    flex-shrink: 0;
+}
+
+.panel-workmode-label {
+    min-width: 0;
+    white-space: nowrap;
 }
 
 .panel-workmode-label {
@@ -3630,6 +3687,15 @@ button.header-icon-btn {
     font-size: 0.72rem;
     line-height: 1.7;
     color: var(--text-dim);
+}
+
+.brief-side-hint-bottom {
+    margin-top: auto;
+}
+
+.brief-field {
+    display: flex;
+    flex-direction: column;
 }
 
 .brief-export {

@@ -6,7 +6,7 @@
     <title>阅读统计 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=31">
+    <link rel="stylesheet" href="/static/css/style.css?v=32">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         .stats-container {
@@ -131,6 +131,7 @@
         .expand-item .item-status { font-size: 0.7rem; font-weight: 500; flex-shrink: 0; width: 28px; text-align: center; }
         .expand-item .item-status.read { color: #6bc96b; }
         .expand-item .item-status.unread { color: #e86b6b; }
+        .expand-item .item-status.reading { color: #e8b45a; }
         .expand-empty { text-align: center; padding: 40px; color: var(--text-dim); font-size: 0.85rem; }
 
         .stats-section { margin-bottom: 40px; }
@@ -311,6 +312,7 @@
         .recent-item .item-status { font-size: 0.72rem; font-weight: 500; flex-shrink: 0; width: 32px; text-align: center; }
         .recent-item .item-status.read { color: #6bc96b; }
         .recent-item .item-status.unread { color: #e86b6b; }
+        .recent-item .item-status.reading { color: #e8b45a; }
     </style>
 </head>
 <body>
@@ -357,6 +359,7 @@
                             </div>
                             <div class="heat-legend" id="heatLegend"></div>
                         </div>
+                        <div class="chart-tip heat-tip" id="heatTip"></div>
                         <div class="heat-stats" id="heatStats"></div>
                     </div>
                 </div>
@@ -547,7 +550,7 @@
                             <span class="item-title">${escapeHtml(item.title)}</span>
                             <span class="item-source">${escapeHtml(item.source || '未知')}</span>
                             <span class="item-time">${formatTime(item.collected_at)}</span>
-                            <span class="item-status ${item.is_read?'read':'unread'}">${item.is_read?'已读':'未读'}</span>
+                            <span class="item-status ${item.is_read?'read':(item.is_reading?'reading':'unread')}">${item.is_read?'已读':(item.is_reading?'在读':'未读')}</span>
                         </a>
                     `;
                 }).join('');
@@ -732,7 +735,7 @@
                     }
                     const iso = isoOf(d);
                     const count = byDay[iso] || 0;
-                    gridHtml += `<span class="heat-cell" style="background:${heatColor(count)}" title="${iso} · ${count > 0 ? `阅读 ${count} 条` : '无阅读'}"></span>`;
+                    gridHtml += `<span class="heat-cell" data-date="${iso}" data-count="${count}" style="background:${heatColor(count)}"></span>`;
                 });
             });
             document.getElementById('heatGrid').innerHTML = gridHtml;
@@ -760,6 +763,26 @@
                     <div class="hs-label">活跃天数</div>
                 </div>
             `;
+        }
+
+        function bindHeatTip() {
+            const grid = document.getElementById('heatGrid');
+            const tip = document.getElementById('heatTip');
+            if (!grid || !tip) return;
+            grid.addEventListener('mouseover', (e) => {
+                const cell = e.target.closest('.heat-cell');
+                if (!cell || !cell.dataset.date) { tip.style.opacity = 0; return; }
+                const count = parseInt(cell.dataset.count, 10) || 0;
+                tip.textContent = `${cell.dataset.date} · ${count > 0 ? `阅读 ${count} 条` : '无阅读'}`;
+                const card = tip.parentElement;
+                const rect = card.getBoundingClientRect();
+                const cx = e.clientX - rect.left + 12;
+                const cy = e.clientY - rect.top + 8;
+                tip.style.left = Math.min(cx, card.clientWidth - 150) + 'px';
+                tip.style.top = cy + 'px';
+                tip.style.opacity = 1;
+            });
+            grid.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
         }
 
         function renderCategoryPieChart(categoryStats) {
@@ -918,7 +941,7 @@
                         <span class="item-title">${escapeHtml(item.title)}</span>
                         <span class="item-source">${escapeHtml(item.source || '未知来源')}</span>
                         <span class="item-time">${formatTime(item.read_at || item.collected_at)}</span>
-                        <span class="item-status ${item.is_read?'read':'unread'}">${item.is_read?'已读':'未读'}</span>
+                        <span class="item-status ${item.is_read?'read':(item.is_reading?'reading':'unread')}">${item.is_read?'已读':(item.is_reading?'在读':'未读')}</span>
                     </a>
                 `;
             }).join('');
@@ -927,6 +950,7 @@
         bindRangeSeg('lineRangeSeg', days => { lineRange = days; renderLineChart(); });
         bindRangeSeg('barRangeSeg', days => { barRange = days; renderDailyBarChart(); });
         attachBarAxisTip();
+        bindHeatTip();
         loadStats();
     </script>
 </body>

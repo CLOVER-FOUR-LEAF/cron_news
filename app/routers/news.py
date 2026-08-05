@@ -60,6 +60,17 @@ async def mark_as_read(
     return {"message": "ok"}
 
 
+@router.post("/news/{news_id}/reading")
+async def mark_as_reading(
+    news_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    success = await news_crud.mark_news_as_reading(db, news_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="新闻不存在")
+    return {"message": "ok"}
+
+
 @router.post("/news/{news_id}/fav")
 async def toggle_fav(
     news_id: int,

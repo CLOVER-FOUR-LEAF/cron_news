@@ -146,11 +146,22 @@ async def create_news(db: AsyncSession, news_in: NewsCreate) -> News:
     return news
 
 
+async def mark_news_as_reading(db: AsyncSession, news_id: int) -> bool:
+    news = await get_news_by_id(db, news_id)
+    if not news:
+        return False
+    if news.is_read == 0:
+        news.is_reading = 1
+    await db.flush()
+    return True
+
+
 async def mark_news_as_read(db: AsyncSession, news_id: int) -> bool:
     news = await get_news_by_id(db, news_id)
     if not news:
         return False
     news.is_read = 1
+    news.is_reading = 0
     if news.read_at is None:
         news.read_at = datetime.now()
     if news.is_later:
@@ -239,6 +250,7 @@ async def get_news_stats(db: AsyncSession) -> dict:
             "collected_at": row.News.collected_at.isoformat() if row.News.collected_at else None,
             "read_at": row.News.read_at.isoformat() if row.News.read_at else None,
             "is_read": row.News.is_read,
+            "is_reading": row.News.is_reading,
         }
         for row in result.all()
     ]
@@ -265,6 +277,7 @@ def _recommend_item(n: News) -> dict:
         "collected_at": n.collected_at.isoformat() if n.collected_at else None,
         "read_at": n.read_at.isoformat() if n.read_at else None,
         "is_read": n.is_read,
+        "is_reading": n.is_reading,
     }
 
 

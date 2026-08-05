@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import News, Category, Brief
+from app.services.agent_prompts import get_agent_prompt
 
 EmitFn = Callable[..., Awaitable[None]]
 
@@ -26,7 +27,7 @@ async def _ask_llm(prompt: str) -> str:
             json={
                 "model": settings.LLM_MODEL,
                 "messages": [
-                    {"role": "system", "content": "你是一位资深新闻编辑，擅长提炼要点、撰写简洁有力的每日简报。"},
+                    {"role": "system", "content": get_agent_prompt("brief")},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.5,
