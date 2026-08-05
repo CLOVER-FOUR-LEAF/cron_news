@@ -24,8 +24,8 @@ class PromptsModel(BaseModel):
 
 
 @router.get("/prompts")
-async def get_prompts():
-    prompts = get_all_prompts()
+async def get_prompts(db: AsyncSession = Depends(get_db)):
+    prompts = await get_all_prompts(db)
     return {
         "agents": AGENT_LABELS,
         "prompts": prompts,
@@ -34,8 +34,8 @@ async def get_prompts():
 
 
 @router.put("/prompts")
-async def update_prompts(body: PromptsModel):
-    save_prompts(body.model_dump())
+async def update_prompts(body: PromptsModel, db: AsyncSession = Depends(get_db)):
+    await save_prompts(db, body.model_dump())
     return {"ok": True}
 
 

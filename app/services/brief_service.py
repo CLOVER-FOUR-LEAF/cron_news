@@ -16,7 +16,7 @@ def _llm_ready() -> bool:
     return bool(settings.LLM_BASE_URL and settings.LLM_API_KEY and settings.LLM_MODEL)
 
 
-async def _ask_llm(prompt: str) -> str:
+async def _ask_llm(system_prompt: str, prompt: str) -> str:
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
             f"{settings.LLM_BASE_URL}/chat/completions",
@@ -27,7 +27,7 @@ async def _ask_llm(prompt: str) -> str:
             json={
                 "model": settings.LLM_MODEL,
                 "messages": [
-                    {"role": "system", "content": get_agent_prompt("brief")},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.5,
@@ -46,6 +46,8 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
     if not _llm_ready():
         await _emit("error", "大语言模型未配置，无法生成每日简报")
         return {"generated": 0}
+
+    system_prompt = await get_agent_prompt(db, "brief")
 
     await _emit("thinking", "每日简报 Agent 启动，分析今日各分类新闻…")
 
@@ -82,7 +84,7 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
 
         await _emit("tool", f'llm.brief("{cat.name}") {len(items)} 条新闻')
         try:
-            content = await _ask_llm(prompt)
+            content = await _ask_llm(system_prompt, prompt)
         except Exception as e:
             await _emit("error", f"[{cat.name}] 简报生成失败: {e}")
             continue

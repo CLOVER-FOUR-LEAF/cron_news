@@ -16,10 +16,6 @@ from app.services.agent_prompts import get_agent_prompt
 EmitFn = Callable[..., Awaitable[None]]
 
 
-def _timed_system_prompt() -> str:
-    return get_agent_prompt("timed")
-
-
 async def search_news(query: str, max_results: int = 10, hours: int | None = None) -> list[dict[str, Any]]:
     if not settings.SEARCH_BASE_URL or not settings.SEARCH_API_KEY:
         raise ValueError("搜索服务未配置")
@@ -48,9 +44,11 @@ async def search_news(query: str, max_results: int = 10, hours: int | None = Non
         return response.json().get("results", [])
 
 
-async def generate_news_content(title: str, summary: str) -> str:
+async def generate_news_content(db, title: str, summary: str) -> str:
     if not settings.LLM_BASE_URL or not settings.LLM_API_KEY or not settings.LLM_MODEL:
         return summary or ""
+
+    system_prompt = await get_agent_prompt(db, "timed")
 
     prompt = f"""请根据以下新闻标题和摘要，生成一篇完整的Markdown格式新闻正文。
 要求：
@@ -74,7 +72,7 @@ async def generate_news_content(title: str, summary: str) -> str:
             json={
                 "model": settings.LLM_MODEL,
                 "messages": [
-                    {"role": "system", "content": _timed_system_prompt()},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.7,
@@ -143,7 +141,7 @@ async def process_search_results(
         if llm_ready:
             await _emit("tool", f'llm.generate("{_short(title)}") → 生成正文')
             try:
-                content = await generate_news_content(title, summary)
+                content = await generate_news_content(db, title, summary)
             except Exception as e:
                 await _emit("error", f"正文生成失败，回退为摘要: {e}")
                 content = summary or ""

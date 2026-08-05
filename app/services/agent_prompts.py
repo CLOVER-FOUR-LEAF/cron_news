@@ -4,11 +4,13 @@
 - recommend: 智能推荐（相关性分析）
 - brief:     AI 每日简报（分类总结）
 
-用户可在「Agent 管理 → 提示词管理」中查看/编辑这些系统提示词，
-保存后写入 .env（AGENT_PROMPT_*），未设置时回退到内置默认提示词。
+自定义提示词存储在数据库（agent_prompts 表），内容为空时回退到内置默认提示词。
 """
 
-from app.env_store import read_env_file, write_env_file
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import AgentPrompt
 
 AGENTS = ["timed", "recommend", "brief"]
 
@@ -54,25 +56,34 @@ DEFAULT_PROMPTS = {
     ),
 }
 
-ENV_KEYS = {
-    "timed": "AGENT_PROMPT_TIMED",
-    "recommend": "AGENT_PROMPT_RECOMMEND",
-    "brief": "AGENT_PROMPT_BRIEF",
-}
+
+def get_default_prompt(name: str) -> str:
+    return DEFAULT_PROMPTS.get(name, "")
 
 
-def get_agent_prompt(name: str) -> str:
-    env = read_env_file()
-    return env.get(ENV_KEYS.get(name, ""), "").strip() or DEFAULT_PROMPTS.get(name, "")
+async def get_agent_prompt(db: AsyncSession, name: str) -> str:
+    result = await db.execute(select(AgentPrompt).where(AgentPrompt.name == name))
+    row = result.scalars().first()
+    if row and row.content.strip():
+        return row.content
+    return DEFAULT_PROMPTS.get(name, "")
 
 
-def get_all_prompts() -> dict[str, str]:
-    return {name: get_agent_prompt(name) for name in AGENTS}
+async def get_all_prompts(db: AsyncSession) -> dict[str, str]:
+    prompts: dict[str, str] = {}
+    for name in AGENTS:
+        prompts[name] = await get_agent_prompt(db, name)
+    return prompts
 
 
-def save_prompts(data: dict) -> None:
-    env = read_env_file()
+async def save_prompts(db: AsyncSession, data: dict) -> None:
     for name in AGENTS:
         if name in data and data[name] is not None:
-            env[ENV_KEYS[name]] = data[name].strip()
-    write_env_file(env)
+            content = data[name].strip()
+            result = await db.execute(select(AgentPrompt).where(AgentPrompt.name == name))
+            row = result.scalars().first()
+            if row:
+                row.content = content
+            else:
+                db.add(AgentPrompt(name=name, content=content))
+    await db.flush()

@@ -21,7 +21,7 @@ def _llm_ready() -> bool:
     return bool(settings.LLM_BASE_URL and settings.LLM_API_KEY and settings.LLM_MODEL)
 
 
-async def _ask_llm(prompt: str) -> str:
+async def _ask_llm(system_prompt: str, prompt: str) -> str:
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
             f"{settings.LLM_BASE_URL}/chat/completions",
@@ -32,7 +32,7 @@ async def _ask_llm(prompt: str) -> str:
             json={
                 "model": settings.LLM_MODEL,
                 "messages": [
-                    {"role": "system", "content": get_agent_prompt("recommend")},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.3,
@@ -66,6 +66,8 @@ async def run_recommend_task(db: AsyncSession, emit: EmitFn | None = None) -> di
     if not _llm_ready():
         await _emit("error", "大语言模型未配置，无法执行智能推荐")
         return {"updated": 0}
+
+    system_prompt = await get_agent_prompt(db, "recommend")
 
     await _emit("thinking", "智能推荐 Agent 启动，分析新闻相关性…")
 
@@ -110,7 +112,7 @@ async def run_recommend_task(db: AsyncSession, emit: EmitFn | None = None) -> di
 
         await _emit("tool", f'llm.relate([{news.id}]) "{news.title[:24]}…"')
         try:
-            answer = await _ask_llm(prompt)
+            answer = await _ask_llm(system_prompt, prompt)
             related = _parse_ids(answer, valid_ids, news.id)
             news.related_ids = json.dumps(related)
             updated += 1
