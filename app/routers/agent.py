@@ -7,7 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import AgentRun
-from app.services.agent_prompts import get_all_prompts, save_prompts, AGENT_LABELS
+from app.services.agent_prompts import (
+    get_all_prompts,
+    save_prompts,
+    AGENT_LABELS,
+    DEFAULT_PROMPTS,
+)
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -24,6 +29,7 @@ async def get_prompts():
     return {
         "agents": AGENT_LABELS,
         "prompts": prompts,
+        "defaults": dict(DEFAULT_PROMPTS),
     }
 
 

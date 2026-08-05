@@ -466,11 +466,8 @@
         </div>
         <div class="agent-grid">
             <div class="agent-col">
-                <div class="agent-col-head">
-                    <div class="agent-col-title">运行日志</div>
-                    <span class="agent-col-badge">最近 10 次运行</span>
-                </div>
-                <div class="log-filters agent-log-filters">
+                <div class="agent-col-head agent-log-head">
+                    <div class="agent-col-title">运行日志<span class="agent-col-badge">最近 10 次运行</span></div>
                     <select id="agentLogDateSel" class="log-select" title="按执行日期筛选"></select>
                     <select id="agentLogAgentSel" class="log-select" title="按 Agent 筛选"></select>
                 </div>
@@ -2118,16 +2115,16 @@
     });
 
     /* ===== 提示词管理 ===== */
-    let promptDefaults = {};
+    let promptData = { prompts: {}, defaults: {} };
 
     async function loadPromptModal() {
         try {
             const resp = await fetch('/api/agent/prompts');
             const data = await resp.json();
-            promptDefaults = data.prompts || {};
-            $('promptTimed').value = promptDefaults.timed || '';
-            $('promptRecommend').value = promptDefaults.recommend || '';
-            $('promptBrief').value = promptDefaults.brief || '';
+            promptData = { prompts: data.prompts || {}, defaults: data.defaults || {} };
+            $('promptTimed').value = promptData.prompts.timed || '';
+            $('promptRecommend').value = promptData.prompts.recommend || '';
+            $('promptBrief').value = promptData.prompts.brief || '';
             openModal('promptModal');
         } catch (e) {
             showToast('加载提示词失败', 'error');
@@ -2139,9 +2136,9 @@
     });
 
     $('promptResetBtn').addEventListener('click', () => {
-        $('promptTimed').value = '';
-        $('promptRecommend').value = '';
-        $('promptBrief').value = '';
+        $('promptTimed').value = promptData.defaults.timed || '';
+        $('promptRecommend').value = promptData.defaults.recommend || '';
+        $('promptBrief').value = promptData.defaults.brief || '';
     });
 
     $('savePromptBtn').addEventListener('click', async () => {

@@ -152,6 +152,8 @@ async def mark_news_as_reading(db: AsyncSession, news_id: int) -> bool:
         return False
     if news.is_read == 0:
         news.is_reading = 1
+        if news.reading_at is None:
+            news.reading_at = datetime.now()
     await db.flush()
     return True
 
@@ -255,6 +257,29 @@ async def get_news_stats(db: AsyncSession) -> dict:
         for row in result.all()
     ]
 
+    reading_query = (
+        select(News, Category.name, Category.color)
+        .outerjoin(Category, News.category_id == Category.id)
+        .where(News.is_deleted == 0, News.is_reading == 1, News.is_read == 0)
+        .order_by(News.reading_at.desc())
+        .limit(10)
+    )
+    result = await db.execute(reading_query)
+    recent_reading = [
+        {
+            "id": row.News.id,
+            "title": row.News.title,
+            "category_name": row[1],
+            "category_color": row[2] or "#8a8690",
+            "source": row.News.source,
+            "collected_at": row.News.collected_at.isoformat() if row.News.collected_at else None,
+            "reading_at": row.News.reading_at.isoformat() if row.News.reading_at else None,
+            "is_read": row.News.is_read,
+            "is_reading": row.News.is_reading,
+        }
+        for row in result.all()
+    ]
+
     return {
         "total": total,
         "read_count": read_count,
@@ -264,6 +289,7 @@ async def get_news_stats(db: AsyncSession) -> dict:
         "daily_stats": daily_stats,
         "read_by_day": read_by_day,
         "recent_reads": recent_reads,
+        "recent_reading": recent_reading,
     }
 
 

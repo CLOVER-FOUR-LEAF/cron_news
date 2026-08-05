@@ -6,7 +6,7 @@
     <title>阅读统计 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=32">
+    <link rel="stylesheet" href="/static/css/style.css?v=33">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         .stats-container {
@@ -392,6 +392,11 @@
             </div>
 
             <div class="stats-section">
+                <div class="stats-section-title">最近在读</div>
+                <div class="recent-list" id="readingList"></div>
+            </div>
+
+            <div class="stats-section">
                 <div class="stats-section-title">最近阅读</div>
                 <div class="recent-list" id="recentList"></div>
             </div>
@@ -470,6 +475,7 @@
                 renderDash(STATS);
                 renderCategoryPieChart(STATS.category_stats);
                 renderDailyBarChart();
+                renderRecentReading(STATS.recent_reading);
                 renderRecentReads(STATS.recent_reads);
             } catch (e) {
                 console.error('Failed to load stats:', e);
@@ -928,6 +934,23 @@
                 btn.classList.add('active');
                 onChange(parseInt(btn.dataset.days, 10));
             });
+        }
+
+        function renderRecentReading(reads) {
+            const container = document.getElementById('readingList');
+            if (!reads || reads.length === 0) { container.innerHTML = '<div class="expand-empty">暂无在读内容</div>'; return; }
+            container.innerHTML = reads.map(item => {
+                const color = item.category_color || CAT_COLORS[item.category_name] || '#888';
+                return `
+                    <a href="/news/${item.id}" class="recent-item">
+                        <span class="item-cat" style="color:${color};border:1px solid ${color}30;background:${color}10">${escapeHtml(item.category_name || '默认')}</span>
+                        <span class="item-title">${escapeHtml(item.title)}</span>
+                        <span class="item-source">${escapeHtml(item.source || '未知来源')}</span>
+                        <span class="item-time">${formatTime(item.reading_at || item.collected_at)}</span>
+                        <span class="item-status reading">在读</span>
+                    </a>
+                `;
+            }).join('');
         }
 
         function renderRecentReads(reads) {

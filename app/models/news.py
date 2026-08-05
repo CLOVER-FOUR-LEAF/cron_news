@@ -24,6 +24,7 @@ class News(Base):
     is_deleted: Mapped[int] = mapped_column(SmallInteger, default=0, comment="逻辑删除")
     is_read: Mapped[int] = mapped_column(SmallInteger, default=0, comment="已读状态")
     is_reading: Mapped[int] = mapped_column(SmallInteger, default=0, comment="在读状态")
+    reading_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="开始阅读时间")
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="阅读时间")
     is_fav: Mapped[int] = mapped_column(SmallInteger, default=0, comment="收藏状态")
     fav_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="收藏时间")
