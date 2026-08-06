@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     await seed_categories()
     await migrate_legacy_configs()
+    ensure_default_nickname()
     scheduler_service.start()
     yield
     scheduler_service.stop()
@@ -67,6 +68,19 @@ async def migrate_legacy_configs():
                 print("[Config] 已从 env 迁移旧的模型配置到数据库")
         except Exception as e:
             print(f"[Config] 迁移旧模型配置失败: {e}")
+
+
+def ensure_default_nickname():
+    """首次启动未设置用户名时，生成默认用户名 User + 6 位随机数字。"""
+    import random
+
+    from app.env_store import read_env_file, write_env_file
+
+    env = read_env_file()
+    if not env.get("NICKNAME"):
+        env["NICKNAME"] = f"User{random.randint(100000, 999999)}"
+        write_env_file(env)
+        print(f"[Config] 已生成默认用户名 {env['NICKNAME']}")
 
 
 async def seed_categories():

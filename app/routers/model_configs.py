@@ -12,6 +12,7 @@ from app.services.model_configs import (
     get_provider,
     providers_for_type,
     set_enabled,
+    set_disabled,
     config_to_dict,
     get_configs,
     api_key_value,
@@ -147,14 +148,10 @@ async def delete_config(config_id: int, db: AsyncSession = Depends(get_db)):
     cfg = result.scalars().first()
     if not cfg:
         raise HTTPException(status_code=404, detail="配置不存在")
-    was_enabled = cfg.enabled
+    if cfg.enabled:
+        raise HTTPException(status_code=400, detail="已启用的配置不能删除，请先取消启用")
     await db.delete(cfg)
     await db.flush()
-    if was_enabled:
-        remaining = await get_configs(db, cfg.config_type)
-        if remaining:
-            remaining[0].enabled = True
-            await db.flush()
     return {"ok": True}
 
 
@@ -163,5 +160,23 @@ async def enable_config(config_id: int, db: AsyncSession = Depends(get_db)):
     cfg = await set_enabled(db, config_id)
     if not cfg:
         raise HTTPException(status_code=404, detail="配置不存在")
+    await db.refresh(cfg)
+    return config_to_dict(cfg)
+
+
+@router.post("/{config_id}/disable")
+async def disable_config(config_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ModelConfig).where(ModelConfig.id == config_id))
+    cfg = result.scalars().first()
+    if not cfg:
+        raise HTTPException(status_code=404, detail="配置不存在")
+    if cfg.enabled and cfg.config_type == "image":
+        env = read_env_file()
+        if env.get("AGENT_COVER_ENABLED", "") == "true":
+            raise HTTPException(
+                status_code=400,
+                detail="自动生成资讯封面功能已开启，请先关闭该功能后再取消启用当前文生图模型",
+            )
+    await set_disabled(db, config_id)
     await db.refresh(cfg)
     return config_to_dict(cfg)

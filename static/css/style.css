@@ -1404,6 +1404,15 @@ a {
     background: rgba(199, 80, 80, 0.1);
 }
 
+.btn-icon.disabled,
+.btn-icon.disabled:hover {
+    opacity: 0.35;
+    cursor: not-allowed;
+    border-color: var(--border-subtle);
+    color: var(--text-dim);
+    background: transparent;
+}
+
 /* Modal */
 .modal {
     display: none;

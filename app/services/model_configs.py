@@ -76,6 +76,16 @@ async def get_active_endpoint(db: AsyncSession, config_type: str) -> dict | None
     }
 
 
+async def set_disabled(db: AsyncSession, config_id: int) -> ModelConfig | None:
+    result = await db.execute(select(ModelConfig).where(ModelConfig.id == config_id))
+    target = result.scalars().first()
+    if not target:
+        return None
+    target.enabled = False
+    await db.flush()
+    return target
+
+
 async def set_enabled(db: AsyncSession, config_id: int) -> ModelConfig | None:
     """启用指定配置，并关闭同类型其它配置。"""
     result = await db.execute(select(ModelConfig).where(ModelConfig.id == config_id))

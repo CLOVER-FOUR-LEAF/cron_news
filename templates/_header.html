@@ -46,7 +46,7 @@
                     <div class="panel-greeting">
                         <div class="panel-avatar" id="panelAvatar"><span>访</span></div>
                         <div class="panel-greeting-text">
-                            <div class="panel-hello">你好，<span id="panelNickname">访客</span></div>
+                            <div class="panel-hello">你好，<span id="panelNickname"></span></div>
                             <div class="panel-sub">你的阅读空间</div>
                         </div>
                     </div>
@@ -174,23 +174,6 @@
                             </span>
                             大模型配置
                             <span class="panel-item-badge badge-red" id="llmBadge" style="display:none">
-                                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                                    <path d="M8 1.8L14.5 13.5H1.5L8 1.8z" fill="currentColor"/>
-                                    <path d="M8 6.3v3.2" stroke="#151519" stroke-width="1.4" stroke-linecap="round"/>
-                                    <circle cx="8" cy="11.6" r="0.85" fill="#151519"/>
-                                </svg>
-                            </span>
-                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                        </button>
-                        <button type="button" class="panel-item agent-only" data-action="search">
-                            <span class="panel-item-icon">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
-                                    <path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12" stroke="currentColor" stroke-width="1.2"/>
-                                </svg>
-                            </span>
-                            搜索服务配置
-                            <span class="panel-item-badge badge-red" id="searchBadge" style="display:none">
                                 <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
                                     <path d="M8 1.8L14.5 13.5H1.5L8 1.8z" fill="currentColor"/>
                                     <path d="M8 6.3v3.2" stroke="#151519" stroke-width="1.4" stroke-linecap="round"/>
@@ -814,7 +797,7 @@
         editingConfig: null,
         editingConfigType: 'llm',
         deletingConfig: null,
-        nickname: '访客',
+        nickname: '',
         avatar: '',
         editingCatId: null,
         deletingCatId: null,
@@ -940,7 +923,6 @@
             else if (action === 'category') { renderCategories(); openModal('categoryModal'); }
             else if (action === 'agent') { refreshConfig().then(() => { loadAgentForm(); refreshAgentLogs(); openModal('agentModal'); }); }
             else if (action === 'llm') { refreshConfig().then(() => { renderAllConfigs(); openModal('modelConfigModal'); }); }
-            else if (action === 'search') { refreshConfig().then(() => { renderAllConfigs(); openModal('modelConfigModal'); }); }
             else if (action === 'task') { refreshConfig().then(() => { loadTaskForm(); openModal('taskModal'); }); }
         });
     });
@@ -950,7 +932,7 @@
         try {
             const resp = await fetch('/api/config');
             const data = await resp.json();
-            state.nickname = data.nickname || '访客';
+            state.nickname = data.nickname || '';
             state.avatar = data.avatar_url || '';
             state.configs = {
                 llm: data.llm_configs || [],
@@ -1036,12 +1018,12 @@
     function renderWarnings() {
         const w = computeWarnings();
 
-        $('llmBadge').style.display = w.llm ? '' : 'none';
-        $('searchBadge').style.display = w.search ? '' : 'none';
+        const llmBadge = $('llmBadge');
+        if (llmBadge) llmBadge.style.display = w.llm ? '' : 'none';
         $('categoryBadge').style.display = w.category ? '' : 'none';
 
-        $('llmTitleWarn').style.display = w.llm ? '' : 'none';
-        $('searchTitleWarn').style.display = w.search ? '' : 'none';
+        const llmTitleWarn = $('llmTitleWarn');
+        if (llmTitleWarn) llmTitleWarn.style.display = w.llm ? '' : 'none';
         $('categoryTitleHint').style.display = w.category ? '' : 'none';
 
         const badge = $('entryBadge');
@@ -1323,7 +1305,7 @@
 
     /* ===== 个人资料 ===== */
     function openProfileModal() {
-        $('nicknameInput').value = state.nickname === '访客' ? '' : state.nickname;
+        $('nicknameInput').value = state.nickname;
         renderAvatarPreview();
         openModal('profileModal');
     }
@@ -1359,7 +1341,7 @@
     });
 
     $('saveProfileBtn').addEventListener('click', async () => {
-        const nickname = $('nicknameInput').value.trim() || '访客';
+        const nickname = $('nicknameInput').value.trim() || state.nickname;
         try {
             const resp = await fetch('/api/config', {
                 method: 'PUT',
@@ -1666,18 +1648,18 @@
                         <div class="llm-config-sub">${escapeHtml(small)}${cfg.has_api_key ? '' : ' · 未填配置 API Key'}</div>
                     </div>
                     <div class="llm-config-actions">
-                        <button type="button" class="btn-icon cfg-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '停用' : '启用'}">
+                        <button type="button" class="btn-icon cfg-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '\u53d6\u6d88\u542f\u7528' : '\u542f\u7528'}">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M8 1.5v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                                 <path d="M4.2 3.8a5.5 5.5 0 107.6 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                             </svg>
                         </button>
-                        <button type="button" class="btn-icon cfg-edit-btn" title="编辑">
+                        <button type="button" class="btn-icon cfg-edit-btn" title="\u7f16\u8f91">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
                             </svg>
                         </button>
-                        <button type="button" class="btn-icon btn-icon-danger cfg-del-btn" title="删除">
+                        <button type="button" class="btn-icon btn-icon-danger cfg-del-btn ${isActive ? 'disabled' : ''}" title="${isActive ? '\u5df2\u542f\u7528\u7684\u914d\u7f6e\u4e0d\u80fd\u5220\u9664\uff0c\u8bf7\u5148\u53d6\u6d88\u542f\u7528' : '\u5220\u9664'}" ${isActive ? 'disabled' : ''}>
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
@@ -1695,6 +1677,10 @@
         });
         container.querySelectorAll('.cfg-del-btn').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (btn.disabled || btn.classList.contains('disabled')) {
+                    showToast('已启用的配置不能删除，请先取消启用', 'error');
+                    return;
+                }
                 const id = btn.closest('.llm-config-item').dataset.id;
                 const cfg = state.configs[config_type].find(c => String(c.id) === String(id));
                 if (!cfg) return;
@@ -1823,14 +1809,17 @@
     });
 
     async function toggleConfigEnable(config_type, id) {
+        const cfg = (state.configs[config_type] || []).find(c => String(c.id) === String(id));
+        const turningOff = !!(cfg && cfg.enabled);
         try {
-            const resp = await fetch(`/api/model-configs/${id}/enable`, { method: 'POST' });
+            const resp = await fetch(`/api/model-configs/${id}/${turningOff ? 'disable' : 'enable'}`, { method: 'POST' });
             if (resp.ok) {
                 await refreshConfig();
                 renderAllConfigs();
                 renderWarnings();
             } else {
-                showToast('操作失败', 'error');
+                const data = await resp.json();
+                showToast(data.detail || '操作失败', 'error');
             }
         } catch (e) {
             showToast('操作失败', 'error');
