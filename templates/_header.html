@@ -522,6 +522,23 @@
                         启用后将额外调用大模型，会增加 Token 消耗量
                     </div>
                 </div>
+                <div class="feature-card">
+                    <div class="feature-top">
+                        <div class="feature-name">自动生成资讯封面</div>
+                        <button type="button" class="switch" id="coverSwitch" role="switch" aria-checked="false" title="">
+                            <span class="switch-knob"></span>
+                        </button>
+                    </div>
+                    <div class="feature-desc">资讯助手 Agent 可调用文生图模型为新增新闻生成封面图；未启用任何文生图模型时，无法开启此功能。</div>
+                    <div class="feature-warn">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 2L1.5 13.5h13L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                            <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                            <circle cx="8" cy="11.4" r="0.8" fill="currentColor"/>
+                        </svg>
+                        启用后将额外调用文生图模型，会增加 Token 消耗量
+                    </div>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -570,138 +587,79 @@
     </div>
 </div>
 
-<div id="llmModal" class="modal">
-    <div class="modal-content modal-wide">
+<div id="modelConfigModal" class="modal">
+    <div class="modal-content modal-wide config-3col-modal">
         <div class="modal-header">
             <div class="modal-title-group">
-                <h3>大模型配置</h3>
-                <span class="modal-title-warn" id="llmTitleWarn" style="display:none">至少启用一项配置</span>
+                <h3>模型与服务配置</h3>
+                <span class="modal-title-hint">大语言 / 文生图 / 搜索服务统一管理，同一类型仅可启用一个配置</span>
             </div>
-            <div class="modal-header-actions">
-                <button class="btn-primary btn-compact" id="addLLMBtn">
-                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                        <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    </svg>
-                    新增配置
-                </button>
-                <button class="modal-close" data-close>&times;</button>
-            </div>
-        </div>
-        <div class="modal-body">
-            <p class="modal-desc">配置大模型服务商，同一时间仅可启用一个配置</p>
-            <div id="llmConfigList" class="llm-config-list"></div>
-        </div>
-    </div>
-</div>
-
-<div id="llmEditModal" class="modal">
-    <div class="modal-content modal-sm">
-        <div class="modal-header">
-            <h3 id="llmEditTitle">新增配置</h3>
             <button class="modal-close" data-close>&times;</button>
         </div>
-        <div class="modal-body">
-            <div class="form-group">
-                <label>模型厂商</label>
-                <select id="llmProviderSelect" class="form-select"></select>
-            </div>
-            <div class="form-group collapsible collapsed" id="llmNameGroup">
-                <label>名称</label>
-                <input type="text" id="llmNameInput" maxlength="30">
-            </div>
-            <div class="form-group">
-                <label>Base URL</label>
-                <input type="text" id="llmUrlInput">
-            </div>
-            <div class="form-group">
-                <label>API Key</label>
-                <div class="input-with-toggle">
-                    <input type="password" id="llmApiKeyInput">
-                    <button type="button" class="btn-toggle" data-toggle="llmApiKeyInput">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.2"/>
-                            <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/>
-                        </svg>
+        <div class="modal-body config-3col-body">
+            <div class="config-col">
+                <div class="config-col-head">
+                    <span class="config-col-title">大语言模型</span>
+                    <button type="button" class="btn-primary btn-compact config-add-btn" data-type="llm">
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        新增
                     </button>
                 </div>
+                <div class="config-col-body" id="configListLlm"></div>
             </div>
-            <div class="form-group">
-                <label>Model</label>
-                <input type="text" id="llmModelInput">
+            <div class="config-col">
+                <div class="config-col-head">
+                    <span class="config-col-title">文生图模型</span>
+                    <button type="button" class="btn-primary btn-compact config-add-btn" data-type="image">
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        新增
+                    </button>
+                </div>
+                <div class="config-col-body" id="configListImage"></div>
             </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn-secondary" data-close>取消</button>
-            <button class="btn-primary" id="saveLLMBtn">保存</button>
+            <div class="config-col">
+                <div class="config-col-head">
+                    <span class="config-col-title">搜索服务</span>
+                    <button type="button" class="btn-primary btn-compact config-add-btn" data-type="search">
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        新增
+                    </button>
+                </div>
+                <div class="config-col-body" id="configListSearch"></div>
+            </div>
         </div>
     </div>
 </div>
 
-<div id="llmDeleteModal" class="modal">
+<div id="configEditModal" class="modal">
     <div class="modal-content modal-sm">
         <div class="modal-header">
-            <h3>确认删除</h3>
-            <button class="modal-close" data-close>&times;</button>
-        </div>
-        <div class="modal-body">
-            <p>确定要删除配置"<span id="deleteLLMName"></span>"吗？</p>
-            <p class="text-dim">删除后该配置立即失效，此操作不可恢复。</p>
-        </div>
-        <div class="modal-footer">
-            <button class="btn-secondary" data-close>取消</button>
-            <button class="btn-danger" id="confirmDeleteLLMBtn">删除</button>
-        </div>
-    </div>
-</div>
-
-<div id="searchModal" class="modal">
-    <div class="modal-content modal-wide">
-        <div class="modal-header">
-            <div class="modal-title-group">
-                <h3>搜索服务配置</h3>
-                <span class="modal-title-warn" id="searchTitleWarn" style="display:none">至少启用一项配置</span>
-            </div>
-            <div class="modal-header-actions">
-                <button class="btn-primary btn-compact" id="addSearchBtn">
-                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                        <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    </svg>
-                    新增配置
-                </button>
-                <button class="modal-close" data-close>&times;</button>
-            </div>
-        </div>
-        <div class="modal-body">
-            <p class="modal-desc">配置联网搜索服务商，同一时间仅可启用一个配置</p>
-            <div id="searchConfigList" class="llm-config-list"></div>
-        </div>
-    </div>
-</div>
-
-<div id="searchEditModal" class="modal">
-    <div class="modal-content modal-sm">
-        <div class="modal-header">
-            <h3 id="searchEditTitle">新增配置</h3>
+            <h3 id="configEditTitle">新增配置</h3>
             <button class="modal-close" data-close>&times;</button>
         </div>
         <div class="modal-body">
             <div class="form-group">
-                <label>搜索服务商</label>
-                <select id="searchProviderSelect" class="form-select"></select>
+                <label>服务商</label>
+                <select id="configProviderSelect" class="form-select"></select>
             </div>
-            <div class="form-group collapsible collapsed" id="searchNameGroup">
+            <div class="form-group collapsible collapsed" id="configNameGroup">
                 <label>名称</label>
-                <input type="text" id="searchNameInput" maxlength="30">
+                <input type="text" id="configNameInput" maxlength="30">
             </div>
+            <div class="form-group">
+                <label>模型 ID</label>
+                <input type="text" id="configModelInput">
+            </div>
+            <p class="config-bill-hint">当前预设均为按量计费配置，如需使用各家订阅，请选择自定义选项自行配置。</p>
             <div class="form-group">
                 <label>Base URL</label>
-                <input type="text" id="searchUrlInput">
+                <input type="text" id="configUrlInput">
             </div>
             <div class="form-group">
                 <label>API Key</label>
                 <div class="input-with-toggle">
-                    <input type="password" id="searchApiKeyInput">
-                    <button type="button" class="btn-toggle" data-toggle="searchApiKeyInput">
+                    <input type="password" id="configApiKeyInput">
+                    <button type="button" class="btn-toggle" data-toggle="configApiKeyInput">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                             <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.2"/>
                             <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/>
@@ -712,24 +670,24 @@
         </div>
         <div class="modal-footer">
             <button class="btn-secondary" data-close>取消</button>
-            <button class="btn-primary" id="saveSearchBtn">保存</button>
+            <button class="btn-primary" id="saveConfigBtn">保存</button>
         </div>
     </div>
 </div>
 
-<div id="searchDeleteModal" class="modal">
+<div id="configDeleteModal" class="modal">
     <div class="modal-content modal-sm">
         <div class="modal-header">
             <h3>确认删除</h3>
             <button class="modal-close" data-close>&times;</button>
         </div>
         <div class="modal-body">
-            <p>确定要删除配置"<span id="deleteSearchName"></span>"吗？</p>
+            <p>确定要删除配置"<span id="deleteConfigName"></span>"吗？</p>
             <p class="text-dim">删除后该配置立即失效，此操作不可恢复。</p>
         </div>
         <div class="modal-footer">
             <button class="btn-secondary" data-close>取消</button>
-            <button class="btn-danger" id="confirmDeleteSearchBtn">删除</button>
+            <button class="btn-danger" id="confirmDeleteConfigBtn">删除</button>
         </div>
     </div>
 </div>
@@ -846,38 +804,20 @@
 
 <script>
 (function() {
-    const LLM_PROVIDERS = [
-        { id: 'custom', name: '自定义', url: '', color: '#8a8690' },
-        { id: 'deepseek', name: 'DeepSeek', url: 'https://api.deepseek.com/v1', color: '#4d6bfe' },
-        { id: 'kimi', name: 'Kimi', url: 'https://api.moonshot.cn/v1', color: '#14b8a6' },
-        { id: 'zhipu', name: '智谱AI', url: 'https://open.bigmodel.cn/api/paas/v4', color: '#3b82f6' },
-        { id: 'minimax', name: 'MiniMax', url: 'https://api.minimax.chat/v1', color: '#a855f7' },
-        { id: 'mimo', name: 'MiMo', url: 'https://api.mimo.xiaomi.com/v1', color: '#ff6900' },
-        { id: 'bailian', name: '阿里云百炼', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', color: '#f59e0b' },
-        { id: 'volcano', name: '字节方舟', url: 'https://ark.cn-beijing.volces.com/api/v3', color: '#06b6d4' },
-        { id: 'hunyuan', name: '腾讯混元', url: 'https://api.hunyuan.cloud.tencent.com/v1', color: '#f43f5e' }
-    ];
-
-    const SEARCH_PROVIDERS = [
-        { id: 'custom', name: '自定义', url: '', color: '#8a8690' },
-        { id: 'tavily', name: 'Tavily', url: 'https://api.tavily.com', color: '#0ea5e9' },
-        { id: 'mimo', name: 'MiMo', url: 'https://api.mimo.xiaomi.com/v1', color: '#ff6900' },
-        { id: 'kimi', name: 'Kimi', url: 'https://api.moonshot.cn/v1', color: '#14b8a6' }
-    ];
-
     const state = {
         categories: [],
-        llmConfigs: {},
-        activeLLM: null,
+        configs: { llm: [], image: [], search: [] },
+        activeConfig: { llm: '', image: '', search: '' },
+        hasLlmKey: false,
+        hasSearchKey: false,
+        providerOptions: { llm: [], image: [], search: [] },
+        editingConfig: null,
+        editingConfigType: 'llm',
+        deletingConfig: null,
         nickname: '访客',
         avatar: '',
         editingCatId: null,
         deletingCatId: null,
-        editingLLM: null,
-        searchConfigs: [],
-        activeSearch: null,
-        editingSearch: null,
-        deletingSearch: null,
         workMode: '',
         pendingWorkMode: null,
         dragItem: null,
@@ -999,8 +939,8 @@
             else if (action === 'my-later') window.location.href = '/my/later';
             else if (action === 'category') { renderCategories(); openModal('categoryModal'); }
             else if (action === 'agent') { refreshConfig().then(() => { loadAgentForm(); refreshAgentLogs(); openModal('agentModal'); }); }
-            else if (action === 'llm') { refreshConfig().then(() => { renderLLMList(); openModal('llmModal'); }); }
-            else if (action === 'search') { refreshConfig().then(() => { renderSearchList(); openModal('searchModal'); }); }
+            else if (action === 'llm') { refreshConfig().then(() => { renderAllConfigs(); openModal('modelConfigModal'); }); }
+            else if (action === 'search') { refreshConfig().then(() => { renderAllConfigs(); openModal('modelConfigModal'); }); }
             else if (action === 'task') { refreshConfig().then(() => { loadTaskForm(); openModal('taskModal'); }); }
         });
     });
@@ -1012,10 +952,18 @@
             const data = await resp.json();
             state.nickname = data.nickname || '访客';
             state.avatar = data.avatar_url || '';
-            state.llmConfigs = data.llm_configs || [];
-            state.activeLLM = data.active_llm || null;
-            state.searchConfigs = data.search_configs || [];
-            state.activeSearch = data.active_search || null;
+            state.configs = {
+                llm: data.llm_configs || [],
+                image: data.image_configs || [],
+                search: data.search_configs || []
+            };
+            state.activeConfig = {
+                llm: data.active_llm || '',
+                image: data.active_image || '',
+                search: data.active_search || ''
+            };
+            state.hasLlmKey = !!data.has_llm_key;
+            state.hasSearchKey = !!data.has_search_key;
             state.workMode = data.work_mode || '';
             state.agentRecommend = !!data.agent_recommend_enabled;
             state.dbMode = data.db_mode || 'system';
@@ -1040,11 +988,7 @@
     function renderGreeting() {
         $('panelNickname').textContent = state.nickname;
         const av = $('panelAvatar');
-        if (state.avatar) {
-            av.innerHTML = `<img src="${escapeHtml(state.avatar)}" alt="">`;
-        } else {
-            av.innerHTML = `<span>${escapeHtml(state.nickname.charAt(0) || '访')}</span>`;
-        }
+        av.innerHTML = `<img src="${escapeHtml(state.avatar || '/images/avatar/default-avatar.png')}" alt="">`;
     }
 
     /* ===== 工作模式 ===== */
@@ -1083,8 +1027,8 @@
     function computeWarnings() {
         const w = { llm: false, search: false, category: false };
         if (state.workMode !== 'autonomous') return w;
-        w.llm = !state.activeLLM;
-        w.search = !state.activeSearch;
+        w.llm = !state.hasLlmKey;
+        w.search = !state.hasSearchKey;
         w.category = state.categories.filter(c => !c.is_default).length === 0;
         return w;
     }
@@ -1387,15 +1331,9 @@
     function renderAvatarPreview() {
         const img = $('avatarPreview');
         const ph = $('avatarPlaceholder');
-        if (state.avatar) {
-            img.src = state.avatar;
-            img.style.display = 'block';
-            ph.style.display = 'none';
-        } else {
-            img.style.display = 'none';
-            ph.style.display = 'flex';
-            ph.textContent = state.nickname.charAt(0) || '访';
-        }
+        img.src = state.avatar || '/images/avatar/default-avatar.png';
+        img.style.display = 'block';
+        ph.style.display = 'none';
     }
 
     $('avatarPicker').addEventListener('click', () => $('avatarInput').click());
@@ -1668,80 +1606,78 @@
         }
     });
 
-    /* ===== 大模型配置 ===== */
-    const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        /* ===== 模型与服务配置（大语言 / 文生图 / 搜索） ===== */
+    const CONFIG_TYPE_LABEL = { llm: '大语言模型', image: '文生图模型', search: '搜索服务' };
 
-    function providerById(id) {
-        return LLM_PROVIDERS.find(p => p.id === id) || LLM_PROVIDERS[0];
+    function configTypeOf(el) {
+        const id = el.closest('.config-col').id;
+        return id === 'configListLlm' ? 'llm' : (id === 'configListImage' ? 'image' : 'search');
     }
 
-    function initProviderSelect() {
-        const sel = $('llmProviderSelect');
-        sel.innerHTML = '<option value="" disabled hidden>下拉选择提供商</option>' +
-            LLM_PROVIDERS.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        sel.addEventListener('change', applyProviderState);
-    }
-
-    function applyProviderState() {
-        const val = $('llmProviderSelect').value;
-        const isCustom = val === 'custom';
-        $('llmNameGroup').classList.toggle('collapsed', !isCustom);
-        const urlInput = $('llmUrlInput');
-        if (val && !isCustom) {
-            urlInput.value = providerById(val).url;
-            urlInput.setAttribute('readonly', 'readonly');
-            urlInput.classList.add('input-readonly');
-        } else {
-            urlInput.removeAttribute('readonly');
-            urlInput.classList.remove('input-readonly');
+    async function loadProviderOptions(config_type) {
+        try {
+            const resp = await fetch(`/api/model-configs/providers?config_type=${config_type}`);
+            const data = await resp.json();
+            state.providerOptions[config_type] = data.items || [];
+            return state.providerOptions[config_type];
+        } catch (e) {
+            state.providerOptions[config_type] = [];
+            return [];
         }
     }
 
-    function renderLLMList() {
-        const container = $('llmConfigList');
-        if (!state.llmConfigs.length) {
+    function renderConfigList(config_type) {
+        const containerId = { llm: 'configListLlm', image: 'configListImage', search: 'configListSearch' }[config_type];
+        const container = $(containerId);
+        if (!container) return;
+        const configs = state.configs[config_type] || [];
+        const activeId = state.activeConfig[config_type];
+
+        if (!configs.length) {
             container.innerHTML = `
                 <div class="llm-empty">
                     <svg width="40" height="40" viewBox="0 0 16 16" fill="none">
                         <rect x="4.5" y="4.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="0.8"/>
                         <path d="M6.5 2v2.5M9.5 2v2.5M6.5 11.5V14M9.5 11.5V14M2 6.5h2.5M2 9.5h2.5M11.5 6.5H14M11.5 9.5H14" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"/>
                     </svg>
-                    <p>暂无模型配置</p>
-                    <span>点击右上角「新增配置」创建第一个模型配置</span>
+                    <p>暂无配置</p>
+                    <span>点击上方「新增」创建第一个${CONFIG_TYPE_LABEL[config_type]}配置</span>
                 </div>
             `;
             return;
         }
 
-        container.innerHTML = state.llmConfigs.map(cfg => {
-            const provider = providerById(cfg.provider);
-            const isActive = state.activeLLM === cfg.id;
-            const color = provider.color;
+        container.innerHTML = configs.map(cfg => {
+            const isActive = String(cfg.id) === String(activeId);
             const activeStyle = isActive
-                ? `background:${color}16;border-color:${color}66;box-shadow:inset 3px 0 0 ${color};`
+                ? 'background:#c8a85214;border-color:#c8a85255;box-shadow:inset 3px 0 0 #c8a852;'
                 : '';
+            const big = cfg.config_type === 'search' ? (cfg.provider_name || cfg.name) : (cfg.name || cfg.model_id);
+            const small = cfg.config_type === 'search'
+                ? '搜索服务'
+                : (cfg.provider_name || cfg.provider);
             return `
                 <div class="llm-config-item ${isActive ? 'is-active' : ''}" data-id="${cfg.id}" style="${activeStyle}">
                     <div class="llm-config-main">
                         <div class="llm-config-name">
-                            ${escapeHtml(cfg.name || provider.name)}
-                            ${isActive ? `<span class="llm-enabled-badge" style="background:${color};color:#0b0b0f">已启用</span>` : ''}
+                            ${escapeHtml(big)}
+                            ${isActive ? '<span class="llm-enabled-badge" style="background:#c8a852;color:#0b0b0f">已启用</span>' : ''}
                         </div>
-                        <div class="llm-config-sub">${escapeHtml(provider.name)} · ${escapeHtml(cfg.model || '未设置模型')} · ${escapeHtml(cfg.url || '')}</div>
+                        <div class="llm-config-sub">${escapeHtml(small)}${cfg.has_api_key ? '' : ' · 未填配置 API Key'}</div>
                     </div>
                     <div class="llm-config-actions">
-                        <button type="button" class="btn-icon llm-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '停用' : '启用'}">
+                        <button type="button" class="btn-icon cfg-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '停用' : '启用'}">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M8 1.5v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                                 <path d="M4.2 3.8a5.5 5.5 0 107.6 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                             </svg>
                         </button>
-                        <button type="button" class="btn-icon llm-edit-btn" title="编辑">
+                        <button type="button" class="btn-icon cfg-edit-btn" title="编辑">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
                             </svg>
                         </button>
-                        <button type="button" class="btn-icon btn-icon-danger llm-del-btn" title="删除">
+                        <button type="button" class="btn-icon btn-icon-danger cfg-del-btn" title="删除">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
@@ -1751,333 +1687,187 @@
             `;
         }).join('');
 
-        container.querySelectorAll('.llm-enable-btn').forEach(btn => {
-            btn.addEventListener('click', () => toggleLLMEnable(btn.closest('.llm-config-item').dataset.id));
+        container.querySelectorAll('.cfg-enable-btn').forEach(btn => {
+            btn.addEventListener('click', () => toggleConfigEnable(config_type, btn.closest('.llm-config-item').dataset.id));
         });
-        container.querySelectorAll('.llm-edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => openLLMEdit(btn.closest('.llm-config-item').dataset.id));
+        container.querySelectorAll('.cfg-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => openConfigEdit(config_type, btn.closest('.llm-config-item').dataset.id));
         });
-        container.querySelectorAll('.llm-del-btn').forEach(btn => {
+        container.querySelectorAll('.cfg-del-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.closest('.llm-config-item').dataset.id;
-                const cfg = state.llmConfigs.find(c => c.id === id);
+                const cfg = state.configs[config_type].find(c => String(c.id) === String(id));
                 if (!cfg) return;
-                state.deletingLLM = id;
-                $('deleteLLMName').textContent = cfg.name || providerById(cfg.provider).name;
-                openModal('llmDeleteModal');
+                state.deletingConfig = { type: config_type, id };
+                $('deleteConfigName').textContent = cfg.config_type === 'search' ? (cfg.provider_name || cfg.name) : (cfg.name || cfg.model_id);
+                openModal('configDeleteModal');
             });
         });
     }
 
-    function openLLMEdit(configId) {
-        state.editingLLM = configId || null;
-        const cfg = configId ? state.llmConfigs.find(c => c.id === configId) : null;
-
-        $('llmEditTitle').textContent = cfg ? '编辑配置' : '新增配置';
-
-        const sel = $('llmProviderSelect');
-        sel.value = cfg ? (cfg.provider || 'custom') : '';
-        if (cfg && !sel.value) sel.value = '';
-
-        $('llmNameInput').value = cfg && cfg.provider === 'custom' ? (cfg.name || '') : '';
-        $('llmUrlInput').value = cfg ? (cfg.url || '') : '';
-        $('llmApiKeyInput').value = cfg ? (cfg.api_key || '') : '';
-        $('llmApiKeyInput').type = 'password';
-        $('llmModelInput').value = cfg ? (cfg.model || '') : '';
-
-        applyProviderState();
-        openModal('llmEditModal');
+    function renderAllConfigs() {
+        renderConfigList('llm');
+        renderConfigList('image');
+        renderConfigList('search');
     }
 
-    $('addLLMBtn').addEventListener('click', () => openLLMEdit(null));
-
-    $('saveLLMBtn').addEventListener('click', async () => {
-        const val = $('llmProviderSelect').value;
-        const isCustom = val === '' || val === 'custom';
-        const providerId = isCustom ? 'custom' : val;
-        const provider = providerById(providerId);
-
-        const url = $('llmUrlInput').value.trim();
-        const apiKey = $('llmApiKeyInput').value.trim();
-        const model = $('llmModelInput').value.trim();
-
-        let name = '';
-        if (isCustom) {
-            name = $('llmNameInput').value.trim();
-            if (!name) { showToast('请输入配置名称', 'error'); return; }
-        } else {
-            name = provider.name;
-        }
-
-        if (!url) { showToast('请输入 Base URL', 'error'); return; }
-        if (!apiKey) { showToast('请输入 API Key', 'error'); return; }
-        if (!model) { showToast('请输入 Model', 'error'); return; }
-
-        if (state.editingLLM) {
-            const cfg = state.llmConfigs.find(c => c.id === state.editingLLM);
-            if (cfg) Object.assign(cfg, { name, provider: providerId, url, api_key: apiKey, model });
-        } else {
-            state.llmConfigs.push({ id: genId(), name, provider: providerId, url, api_key: apiKey, model });
-        }
-
-        try {
-            await persistLLM();
-            closeModal('llmEditModal');
-            renderLLMList();
-        } catch (e) {
-            showToast('保存失败', 'error');
-        }
+    document.querySelectorAll('.config-add-btn').forEach(btn => {
+        btn.addEventListener('click', () => openConfigEdit(btn.dataset.type, null));
     });
 
-    async function toggleLLMEnable(id) {
-        if (state.activeLLM === id) {
-            state.activeLLM = '';
-        } else {
-            const cfg = state.llmConfigs.find(c => c.id === id);
-            if (!cfg || !cfg.api_key || !cfg.model) {
-                showToast('请先完善 API Key 和 Model 再启用', 'error');
-                return;
-            }
-            state.activeLLM = id;
-        }
-        try {
-            await persistLLM();
-            renderLLMList();
-            renderWarnings();
-        } catch (e) {
-            alert('操作失败');
-        }
-    }
+    async function openConfigEdit(config_type, configId) {
+        state.editingConfigType = config_type;
+        state.editingConfig = configId ? state.configs[config_type].find(c => String(c.id) === String(configId)) : null;
 
-    $('confirmDeleteLLMBtn').addEventListener('click', async () => {
-        if (!state.deletingLLM) return;
-        state.llmConfigs = state.llmConfigs.filter(c => c.id !== state.deletingLLM);
-        if (state.activeLLM === state.deletingLLM) state.activeLLM = '';
-        state.deletingLLM = null;
-        try {
-            await persistLLM();
-            closeModal('llmDeleteModal');
-            renderLLMList();
-        } catch (e) {
-            showToast('删除失败', 'error');
-        }
-    });
+        $('configEditTitle').textContent = state.editingConfig ? '编辑配置' : '新增配置';
+        $('configModelInput').style.display = config_type === 'search' ? 'none' : '';
+        $('configModelInput').closest('.form-group').style.display = config_type === 'search' ? 'none' : '';
 
-    async function persistLLM() {
-        const resp = await fetch('/api/config', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ llm_configs: state.llmConfigs, active_llm: state.activeLLM })
-        });
-        if (!resp.ok) throw new Error('persist failed');
-        return resp.json();
-    }
-
-    /* ===== 搜索服务配置 ===== */
-    function searchProviderById(id) {
-        return SEARCH_PROVIDERS.find(p => p.id === id) || SEARCH_PROVIDERS[0];
-    }
-
-    function initSearchProviderSelect() {
-        const sel = $('searchProviderSelect');
+        const opts = await loadProviderOptions(config_type);
+        const sel = $('configProviderSelect');
         sel.innerHTML = '<option value="" disabled hidden>下拉选择服务商</option>' +
-            SEARCH_PROVIDERS.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        sel.addEventListener('change', applySearchProviderState);
+            opts.map(p => `<option value="${p.id}">${p.name}</option>`).join('') +
+            '<option value="custom">自定义</option>';
+
+        const cfg = state.editingConfig;
+        if (cfg) {
+            const isPreset = opts.some(o => o.id === cfg.provider);
+            sel.value = cfg.provider;
+            $('configNameInput').value = cfg.provider === 'custom' ? (cfg.provider_name || '') : '';
+            $('configUrlInput').value = cfg.base_url || '';
+            $('configModelInput').value = cfg.model_id || '';
+            $('configApiKeyInput').value = '';
+            $('configApiKeyInput').type = 'password';
+            applyConfigProviderState(isPreset ? cfg.provider : 'custom');
+        } else {
+            sel.value = '';
+            $('configNameInput').value = '';
+            $('configUrlInput').value = '';
+            $('configModelInput').value = '';
+            $('configApiKeyInput').value = '';
+            $('configApiKeyInput').type = 'password';
+            applyConfigProviderState('custom');
+        }
+        openModal('configEditModal');
     }
 
-    function applySearchProviderState() {
-        const val = $('searchProviderSelect').value;
-        const isCustom = val === 'custom';
-        $('searchNameGroup').classList.toggle('collapsed', !isCustom);
-        const urlInput = $('searchUrlInput');
-        if (val && !isCustom) {
-            urlInput.value = searchProviderById(val).url;
+    function applyConfigProviderState(providerId) {
+        const opts = state.providerOptions[state.editingConfigType] || [];
+        const preset = opts.find(o => o.id === providerId);
+        const isCustom = providerId === 'custom' || !preset;
+        $('configNameGroup').classList.toggle('collapsed', !isCustom);
+        const urlInput = $('configUrlInput');
+        if (!isCustom && preset.base_url) {
+            urlInput.value = preset.base_url;
             urlInput.setAttribute('readonly', 'readonly');
             urlInput.classList.add('input-readonly');
         } else {
             urlInput.removeAttribute('readonly');
             urlInput.classList.remove('input-readonly');
         }
-    }
-
-    function renderSearchList() {
-        const container = $('searchConfigList');
-        if (!state.searchConfigs.length) {
-            container.innerHTML = `
-                <div class="llm-empty">
-                    <svg width="40" height="40" viewBox="0 0 16 16" fill="none">
-                        <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="0.8"/>
-                        <path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"/>
-                    </svg>
-                    <p>暂无搜索服务配置</p>
-                    <span>点击右上角「新增配置」创建第一个搜索服务配置</span>
-                </div>
-            `;
-            return;
+        if (!isCustom && preset.api_key) {
+            $('configApiKeyInput').value = preset.api_key;
+        } else if (!state.editingConfig || !preset) {
+            $('configApiKeyInput').value = '';
         }
-
-        container.innerHTML = state.searchConfigs.map(cfg => {
-            const provider = searchProviderById(cfg.provider);
-            const isActive = state.activeSearch === cfg.id;
-            const color = provider.color;
-            const activeStyle = isActive
-                ? `background:${color}16;border-color:${color}66;box-shadow:inset 3px 0 0 ${color};`
-                : '';
-            return `
-                <div class="llm-config-item ${isActive ? 'is-active' : ''}" data-id="${cfg.id}" style="${activeStyle}">
-                    <div class="llm-config-main">
-                        <div class="llm-config-name">
-                            ${escapeHtml(cfg.name || provider.name)}
-                            ${isActive ? `<span class="llm-enabled-badge" style="background:${color};color:#0b0b0f">已启用</span>` : ''}
-                        </div>
-                        <div class="llm-config-sub">${escapeHtml(provider.name)} · ${escapeHtml(cfg.url || '')}</div>
-                    </div>
-                    <div class="llm-config-actions">
-                        <button type="button" class="btn-icon search-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '停用' : '启用'}">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                <path d="M8 1.5v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                                <path d="M4.2 3.8a5.5 5.5 0 107.6 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                            </svg>
-                        </button>
-                        <button type="button" class="btn-icon search-edit-btn" title="编辑">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-                            </svg>
-                        </button>
-                        <button type="button" class="btn-icon btn-icon-danger search-del-btn" title="删除">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        container.querySelectorAll('.search-enable-btn').forEach(btn => {
-            btn.addEventListener('click', () => toggleSearchEnable(btn.closest('.llm-config-item').dataset.id));
-        });
-        container.querySelectorAll('.search-edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => openSearchEdit(btn.closest('.llm-config-item').dataset.id));
-        });
-        container.querySelectorAll('.search-del-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const id = btn.closest('.llm-config-item').dataset.id;
-                const cfg = state.searchConfigs.find(c => c.id === id);
-                if (!cfg) return;
-                state.deletingSearch = id;
-                $('deleteSearchName').textContent = cfg.name || searchProviderById(cfg.provider).name;
-                openModal('searchDeleteModal');
-            });
-        });
     }
 
-    function openSearchEdit(configId) {
-        state.editingSearch = configId || null;
-        const cfg = configId ? state.searchConfigs.find(c => c.id === configId) : null;
+    $('configProviderSelect').addEventListener('change', () => {
+        applyConfigProviderState($('configProviderSelect').value);
+    });
 
-        $('searchEditTitle').textContent = cfg ? '编辑配置' : '新增配置';
+    $('saveConfigBtn').addEventListener('click', async () => {
+        const config_type = state.editingConfigType;
+        const provider = $('configProviderSelect').value;
+        if (!provider) { showToast('请选择服务商', 'error'); return; }
 
-        const sel = $('searchProviderSelect');
-        sel.value = cfg ? (cfg.provider || 'custom') : '';
+        const opts = state.providerOptions[config_type] || [];
+        const preset = opts.find(o => o.id === provider);
+        const isCustom = provider === 'custom' || !preset;
+        const name = isCustom ? $('configNameInput').value.trim() : '';
+        const url = $('configUrlInput').value.trim();
+        const model = $('configModelInput').value.trim();
+        const apiKey = $('configApiKeyInput').value.trim();
 
-        $('searchNameInput').value = cfg && cfg.provider === 'custom' ? (cfg.name || '') : '';
-        $('searchUrlInput').value = cfg ? (cfg.url || '') : '';
-        $('searchApiKeyInput').value = cfg ? (cfg.api_key || '') : '';
-        $('searchApiKeyInput').type = 'password';
-
-        applySearchProviderState();
-        openModal('searchEditModal');
-    }
-
-    $('addSearchBtn').addEventListener('click', () => openSearchEdit(null));
-
-    $('saveSearchBtn').addEventListener('click', async () => {
-        const val = $('searchProviderSelect').value;
-        const isCustom = val === '' || val === 'custom';
-        const providerId = isCustom ? 'custom' : val;
-        const provider = searchProviderById(providerId);
-
-        const url = $('searchUrlInput').value.trim();
-        const apiKey = $('searchApiKeyInput').value.trim();
-
-        let name = '';
-        if (isCustom) {
-            name = $('searchNameInput').value.trim();
-            if (!name) { showToast('请输入配置名称', 'error'); return; }
-        } else {
-            name = provider.name;
-        }
-
+        if (isCustom && !name) { showToast('请输入配置名称', 'error'); return; }
         if (!url) { showToast('请输入 Base URL', 'error'); return; }
-        if (!apiKey) { showToast('请输入 API Key', 'error'); return; }
-
-        if (state.editingSearch) {
-            const cfg = state.searchConfigs.find(c => c.id === state.editingSearch);
-            if (cfg) Object.assign(cfg, { name, provider: providerId, url, api_key: apiKey });
-        } else {
-            state.searchConfigs.push({ id: genId(), name, provider: providerId, url, api_key: apiKey });
-        }
+        if (config_type !== 'search' && !model) { showToast('请输入模型 ID', 'error'); return; }
 
         try {
-            await persistSearch();
-            closeModal('searchEditModal');
-            renderSearchList();
+            let resp;
+            if (state.editingConfig) {
+                const id = state.editingConfig.id;
+                resp = await fetch(`/api/model-configs/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, base_url: url, model_id: model, api_key: apiKey })
+                });
+            } else {
+                resp = await fetch('/api/model-configs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider, name, base_url: url, model_id: model, config_type, api_key: apiKey, enabled: false })
+                });
+            }
+            if (resp.ok) {
+                closeModal('configEditModal');
+                await refreshConfig();
+                renderAllConfigs();
+            } else {
+                const data = await resp.json();
+                showToast(data.detail || '保存失败', 'error');
+            }
         } catch (e) {
             showToast('保存失败', 'error');
         }
     });
 
-    async function toggleSearchEnable(id) {
-        if (state.activeSearch === id) {
-            state.activeSearch = '';
-        } else {
-            const cfg = state.searchConfigs.find(c => c.id === id);
-            if (!cfg || !cfg.api_key) {
-                showToast('请先完善 API Key 再启用', 'error');
-                return;
-            }
-            state.activeSearch = id;
-        }
+    async function toggleConfigEnable(config_type, id) {
         try {
-            await persistSearch();
-            renderSearchList();
-            renderWarnings();
+            const resp = await fetch(`/api/model-configs/${id}/enable`, { method: 'POST' });
+            if (resp.ok) {
+                await refreshConfig();
+                renderAllConfigs();
+                renderWarnings();
+            } else {
+                showToast('操作失败', 'error');
+            }
         } catch (e) {
-            alert('操作失败');
+            showToast('操作失败', 'error');
         }
     }
 
-    $('confirmDeleteSearchBtn').addEventListener('click', async () => {
-        if (!state.deletingSearch) return;
-        state.searchConfigs = state.searchConfigs.filter(c => c.id !== state.deletingSearch);
-        if (state.activeSearch === state.deletingSearch) state.activeSearch = '';
-        state.deletingSearch = null;
+    $('confirmDeleteConfigBtn').addEventListener('click', async () => {
+        const target = state.deletingConfig;
+        if (!target) return;
         try {
-            await persistSearch();
-            closeModal('searchDeleteModal');
-            renderSearchList();
+            const resp = await fetch(`/api/model-configs/${target.id}`, { method: 'DELETE' });
+            if (resp.ok) {
+                closeModal('configDeleteModal');
+                state.deletingConfig = null;
+                await refreshConfig();
+                renderAllConfigs();
+                renderWarnings();
+            } else {
+                showToast('删除失败', 'error');
+            }
         } catch (e) {
             showToast('删除失败', 'error');
         }
     });
 
-    async function persistSearch() {
-        const resp = await fetch('/api/config', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ search_configs: state.searchConfigs, active_search: state.activeSearch })
-        });
-        if (!resp.ok) throw new Error('persist failed');
-        return resp.json();
-    }
-
-    /* ===== Agent 管理 ===== */
+/* ===== Agent 管理 ===== */
     state.agentRecommend = false;
+    state.agentCover = false;
+
+    function imageConfigReady() {
+        return !!(state.activeConfig.image && (state.configs.image || []).some(c => String(c.id) === String(state.activeConfig.image) && c.has_api_key));
+    }
 
     function loadAgentForm() {
         const data = state.searchConfig || {};
         state.agentRecommend = !!data.agent_recommend_enabled;
+        state.agentCover = !!data.agent_cover_enabled;
         renderAgentForm();
     }
 
@@ -2085,6 +1875,14 @@
         const sw = $('recommendSwitch');
         sw.classList.toggle('on', state.agentRecommend);
         sw.setAttribute('aria-checked', String(state.agentRecommend));
+
+        const cw = $('coverSwitch');
+        const canCover = imageConfigReady();
+        cw.classList.toggle('on', state.agentCover && canCover);
+        cw.setAttribute('aria-checked', String(state.agentCover && canCover));
+        cw.title = canCover
+            ? '自动生成资讯封面'
+            : '请先在大模型配置中启用一个文生图模型（并填写 API Key）';
     }
 
     $('recommendSwitch').addEventListener('click', () => {
@@ -2092,9 +1890,20 @@
         renderAgentForm();
     });
 
+    $('coverSwitch').addEventListener('click', () => {
+        if (!state.agentCover && !imageConfigReady()) {
+            showToast('请先在大模型配置中启用一个文生图模型', 'error');
+            renderAgentForm();
+            return;
+        }
+        state.agentCover = !state.agentCover;
+        renderAgentForm();
+    });
+
     $('saveAgentBtn').addEventListener('click', async () => {
         const payload = {
-            agent_recommend_enabled: state.agentRecommend
+            agent_recommend_enabled: state.agentRecommend,
+            agent_cover_enabled: state.agentCover && imageConfigReady()
         };
         try {
             const resp = await fetch('/api/config', {
@@ -2629,8 +2438,6 @@
     $('searchBtn').addEventListener('click', doSearch);
 
     /* ===== 初始化 ===== */
-    initProviderSelect();
-    initSearchProviderSelect();
     refreshConfig();
     loadCategories();
     setInterval(() => {

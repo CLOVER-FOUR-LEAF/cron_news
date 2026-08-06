@@ -2,12 +2,15 @@
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, BASE_DIR
+from app.database import get_db
 from app.env_store import read_env_file, write_env_file
 from app.services.prompts import build_base_prompt, DEFAULT_EXT_PROMPT
+from app.services.model_configs import get_configs, get_enabled_config, config_to_dict, api_key_value
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -37,13 +40,16 @@ class ConfigUpdate(BaseModel):
     agent_ext_prompt: str | None = None
     agent_recommend_enabled: bool | None = None
     agent_brief_enabled: bool | None = None
+    agent_cover_enabled: bool | None = None
     work_mode: str | None = None
 
 
 class ConfigResponse(BaseModel):
     llm_configs: list = []
-    active_llm: str = ""
+    image_configs: list = []
     search_configs: list = []
+    active_llm: str = ""
+    active_image: str = ""
     active_search: str = ""
     nickname: str = ""
     avatar_url: str = ""
@@ -64,6 +70,7 @@ class ConfigResponse(BaseModel):
     agent_ext_prompt: str = ""
     agent_recommend_enabled: bool = False
     agent_brief_enabled: bool = False
+    agent_cover_enabled: bool = False
     work_mode: str = ""
     db_mode: str = "system"
     db_config: dict = {}
@@ -103,7 +110,7 @@ def derive_task_cron(mode: str, interval_hours: int, start_hour: int, custom_cro
 
 
 @router.get("", response_model=ConfigResponse)
-async def get_config():
+async def get_config(db: AsyncSession = Depends(get_db)):
     from app.services import db_service
 
     env_vars = read_env_file()
@@ -113,19 +120,29 @@ async def get_config():
     selected_categories = _parse_json_list(env_vars.get("TASK_SELECTED_CATEGORIES", ""))
     selected_categories = [str(x) for x in selected_categories]
 
+    llm_configs = [config_to_dict(c) for c in await get_configs(db, "llm")]
+    image_configs = [config_to_dict(c) for c in await get_configs(db, "image")]
+    search_configs = [config_to_dict(c) for c in await get_configs(db, "search")]
+
+    llm_enabled = await get_enabled_config(db, "llm")
+    image_enabled = await get_enabled_config(db, "image")
+    search_enabled = await get_enabled_config(db, "search")
+
     return ConfigResponse(
-        llm_configs=_parse_json_list(env_vars.get("LLM_CONFIGS", "")),
-        active_llm=env_vars.get("ACTIVE_LLM", ""),
-        search_configs=_parse_json_list(env_vars.get("SEARCH_CONFIGS", "")),
-        active_search=env_vars.get("ACTIVE_SEARCH", ""),
+        llm_configs=llm_configs,
+        image_configs=image_configs,
+        search_configs=search_configs,
+        active_llm=str(llm_enabled.id) if llm_enabled else "",
+        active_image=str(image_enabled.id) if image_enabled else "",
+        active_search=str(search_enabled.id) if search_enabled else "",
         nickname=env_vars.get("NICKNAME", ""),
         avatar_url=env_vars.get("AVATAR_URL", ""),
-        llm_base_url=env_vars.get("LLM_BASE_URL", ""),
-        llm_model=env_vars.get("LLM_MODEL", ""),
-        search_base_url=env_vars.get("SEARCH_BASE_URL", ""),
+        llm_base_url=llm_enabled.base_url if llm_enabled else "",
+        llm_model=llm_enabled.model_id if llm_enabled else "",
+        search_base_url=search_enabled.base_url if search_enabled else "",
         search_cron=env_vars.get("SEARCH_CRON", "0 */6 * * *"),
-        has_llm_key=bool(env_vars.get("LLM_API_KEY", "")),
-        has_search_key=bool(env_vars.get("SEARCH_API_KEY", "")),
+        has_llm_key=bool(llm_enabled and api_key_value(llm_enabled.env_key)),
+        has_search_key=bool(search_enabled and api_key_value(search_enabled.env_key)),
         task_mode=env_vars.get("TASK_MODE", "preset"),
         task_interval_hours=interval_hours,
         task_start_hour=_parse_int(env_vars.get("TASK_START_HOUR", ""), 0),
@@ -137,6 +154,7 @@ async def get_config():
         agent_ext_prompt=env_vars.get("AGENT_EXT_PROMPT", ""),
         agent_recommend_enabled=env_vars.get("AGENT_RECOMMEND_ENABLED", "") == "true",
         agent_brief_enabled=env_vars.get("AGENT_BRIEF_ENABLED", "") == "true",
+        agent_cover_enabled=env_vars.get("AGENT_COVER_ENABLED", "") == "true",
         work_mode=env_vars.get("WORK_MODE", ""),
         db_mode=db_state["mode"],
         db_config=db_state["config"],
@@ -147,39 +165,6 @@ async def get_config():
 @router.put("")
 async def update_config(config: ConfigUpdate):
     env_vars = read_env_file()
-
-    if config.llm_configs is not None:
-        env_vars["LLM_CONFIGS"] = json.dumps(config.llm_configs, ensure_ascii=False)
-
-    if config.active_llm is not None:
-        env_vars["ACTIVE_LLM"] = config.active_llm
-
-        configs = config.llm_configs
-        if configs is None:
-            configs = _parse_json_list(env_vars.get("LLM_CONFIGS", ""))
-
-        if config.active_llm and configs:
-            active = next((c for c in configs if isinstance(c, dict) and c.get("id") == config.active_llm), None)
-            if active:
-                env_vars["LLM_BASE_URL"] = active.get("url", "")
-                env_vars["LLM_API_KEY"] = active.get("api_key", "")
-                env_vars["LLM_MODEL"] = active.get("model", "")
-
-    if config.search_configs is not None:
-        env_vars["SEARCH_CONFIGS"] = json.dumps(config.search_configs, ensure_ascii=False)
-
-    if config.active_search is not None:
-        env_vars["ACTIVE_SEARCH"] = config.active_search
-
-        s_configs = config.search_configs
-        if s_configs is None:
-            s_configs = _parse_json_list(env_vars.get("SEARCH_CONFIGS", ""))
-
-        if config.active_search and s_configs:
-            active = next((c for c in s_configs if isinstance(c, dict) and c.get("id") == config.active_search), None)
-            if active:
-                env_vars["SEARCH_BASE_URL"] = active.get("url", "")
-                env_vars["SEARCH_API_KEY"] = active.get("api_key", "")
 
     task_touched = any(v is not None for v in (
         config.task_mode, config.task_interval_hours, config.task_start_hour,
@@ -205,6 +190,8 @@ async def update_config(config: ConfigUpdate):
         env_vars["AGENT_RECOMMEND_ENABLED"] = "true" if config.agent_recommend_enabled else "false"
     if config.agent_brief_enabled is not None:
         env_vars["AGENT_BRIEF_ENABLED"] = "true" if config.agent_brief_enabled else "false"
+    if config.agent_cover_enabled is not None:
+        env_vars["AGENT_COVER_ENABLED"] = "true" if config.agent_cover_enabled else "false"
     if config.work_mode is not None:
         env_vars["WORK_MODE"] = config.work_mode
 
@@ -235,11 +222,6 @@ async def update_config(config: ConfigUpdate):
 
     write_env_file(env_vars)
 
-    settings.LLM_BASE_URL = env_vars.get("LLM_BASE_URL", "")
-    settings.LLM_API_KEY = env_vars.get("LLM_API_KEY", "")
-    settings.LLM_MODEL = env_vars.get("LLM_MODEL", "")
-    settings.SEARCH_BASE_URL = env_vars.get("SEARCH_BASE_URL", "")
-    settings.SEARCH_API_KEY = env_vars.get("SEARCH_API_KEY", "")
     settings.SEARCH_CRON = env_vars.get("SEARCH_CRON", "0 */6 * * *")
 
     return {"message": "ok"}

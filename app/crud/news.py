@@ -14,6 +14,7 @@ from app.schemas.news import NewsCreate
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 IMAGES_DIR = BASE_DIR / "images"
+COVER_DIR = IMAGES_DIR / "cover"
 
 
 async def get_news_list(
@@ -136,11 +137,10 @@ async def create_news(db: AsyncSession, news_in: NewsCreate) -> News:
     if news_in.cover_url:
         old_path = BASE_DIR / news_in.cover_url.lstrip('/')
         if old_path.exists():
-            ext = old_path.suffix
-            new_filename = f"{news.id}{ext}"
-            new_path = IMAGES_DIR / new_filename
+            COVER_DIR.mkdir(parents=True, exist_ok=True)
+            new_path = COVER_DIR / f"{news.id}.png"
             shutil.move(str(old_path), str(new_path))
-            news.cover_url = f"/images/{new_filename}"
+            news.cover_url = f"/images/cover/{news.id}.png"
             await db.flush()
 
     return news

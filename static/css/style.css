@@ -2058,6 +2058,58 @@ button.header-icon-btn {
     max-width: 620px;
 }
 
+/* ========== 模型与服务配置（三列） ========== */
+.modal-content.config-3col-modal {
+    max-width: 1080px;
+}
+
+.config-3col-body {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.config-col {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 14px;
+}
+
+.config-col-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.config-col-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.config-col-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    max-height: 520px;
+    min-height: 200px;
+}
+
+.config-bill-hint {
+    font-size: 0.72rem;
+    line-height: 1.6;
+    color: var(--text-dim);
+    margin: 2px 0 8px;
+}
+
 .modal-toolbar {
     display: flex;
     align-items: center;

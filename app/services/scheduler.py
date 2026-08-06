@@ -169,6 +169,17 @@ class Scheduler:
     def _work_mode(self) -> str:
         return read_env_file().get("WORK_MODE", "")
 
+    async def _search_ready(self) -> bool:
+        try:
+            from app.services.model_configs import get_active_endpoint
+
+            async with get_session() as session:
+                endpoint = await get_active_endpoint(session, "search")
+                return bool(endpoint and endpoint["api_key"])
+        except Exception as e:
+            print(f"[Scheduler] 检查搜索服务配置失败: {e}")
+            return False
+
     async def _loop(self):
         while True:
             try:
@@ -194,7 +205,7 @@ class Scheduler:
                     self._next_run = None
                     continue
 
-                if settings.SEARCH_BASE_URL and settings.SEARCH_API_KEY:
+                if await self._search_ready():
                     await self._run_search()
                 else:
                     print("[Scheduler] 搜索服务未配置，跳过本次执行")

@@ -95,6 +95,8 @@ Content-Type: application/json
 
 成功返回 `201` 及完整新闻对象（含自增 `id`）。
 
+> 封面：若传 `cover_url`，平台会把该图片移动到 `/images/cover/{id}.png` 并改写字段；不传封面时由平台按开关状态自动处理（关闭时随机默认封面，开启时由文生图模型生成）。
+
 ### 查询新闻列表
 
 ```
@@ -137,6 +139,22 @@ GET /api/news/{id}/related?limit=10
 返回与指定新闻相关的内容列表（平台开启智能推荐时为 AI 计算的跨分类结果，否则回退为同分类最新新闻）。
 
 ---
+
+## 模型与服务配置接口
+
+平台的大语言 / 文生图 / 搜索服务配置统一入库（`model_configs` 表），env 仅存各服务商 API Key。
+
+```
+GET  /api/model-configs?config_type=llm|image|search    # 列表（含 enabled / has_api_key）
+POST /api/model-configs                                  # 新增
+PUT  /api/model-configs/{id}                             # 编辑
+DELETE /api/model-configs/{id}                           # 删除
+POST /api/model-configs/{id}/enable                      # 启用（同类型仅一个启用）
+GET  /api/model-configs/providers?config_type=llm|image|search  # 预设服务商列表
+```
+
+- 新增时 `provider` 传预设 id（如 `bailian`、`volcano`）或 `custom`；预设会从 env 读取该厂商已配置的 API Key。
+- 封面相关：开启「自动生成资讯封面」后，资讯助手会为新增新闻调用启用的文生图模型生成封面；关闭时随机抽取一张系统默认封面。封面统一保存到 `/images/cover/{新闻id}.png`。
 
 ## 统计接口
 

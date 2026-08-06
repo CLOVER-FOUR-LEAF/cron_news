@@ -1,23 +1,31 @@
 ﻿import json
+import random
+import shutil
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable, Awaitable
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
+from app.config import settings, BASE_DIR
 from app.models.news import News
 from app.models.category import Category
 from app.crud.category import get_default_category
 from app.env_store import read_env_file, write_env_file
 from app.services.agent_prompts import get_agent_prompt
+from app.services.model_configs import get_active_endpoint
 
 EmitFn = Callable[..., Awaitable[None]]
 
+COVER_DIR = BASE_DIR / "images" / "cover"
+DEFAULT_COVER_DIR = COVER_DIR / "default"
 
-async def search_news(query: str, max_results: int = 10, hours: int | None = None) -> list[dict[str, Any]]:
-    if not settings.SEARCH_BASE_URL or not settings.SEARCH_API_KEY:
+
+async def search_news(db: AsyncSession, query: str, max_results: int = 10, hours: int | None = None) -> list[dict[str, Any]]:
+    endpoint = await get_active_endpoint(db, "search")
+    if not endpoint or not endpoint["api_key"]:
         raise ValueError("搜索服务未配置")
 
     payload: dict[str, Any] = {
@@ -33,9 +41,9 @@ async def search_news(query: str, max_results: int = 10, hours: int | None = Non
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
-            f"{settings.SEARCH_BASE_URL}/search",
+            f"{endpoint['base_url']}/search",
             headers={
-                "Authorization": f"Bearer {settings.SEARCH_API_KEY}",
+                "Authorization": f"Bearer {endpoint['api_key']}",
                 "Content-Type": "application/json",
             },
             json=payload,
@@ -45,7 +53,8 @@ async def search_news(query: str, max_results: int = 10, hours: int | None = Non
 
 
 async def generate_news_content(db, title: str, summary: str) -> str:
-    if not settings.LLM_BASE_URL or not settings.LLM_API_KEY or not settings.LLM_MODEL:
+    endpoint = await get_active_endpoint(db, "llm")
+    if not endpoint or not endpoint["api_key"] or not endpoint["model_id"]:
         return summary or ""
 
     system_prompt = await get_agent_prompt(db, "timed")
@@ -64,13 +73,13 @@ async def generate_news_content(db, title: str, summary: str) -> str:
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
-            f"{settings.LLM_BASE_URL}/chat/completions",
+            f"{endpoint['base_url']}/chat/completions",
             headers={
-                "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                "Authorization": f"Bearer {endpoint['api_key']}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": settings.LLM_MODEL,
+                "model": endpoint["model_id"],
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
@@ -81,6 +90,80 @@ async def generate_news_content(db, title: str, summary: str) -> str:
         )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
+
+
+def _cover_enabled() -> bool:
+    return read_env_file().get("AGENT_COVER_ENABLED", "") == "true"
+
+
+def _default_cover_paths() -> list[Path]:
+    if not DEFAULT_COVER_DIR.exists():
+        return []
+    return sorted(DEFAULT_COVER_DIR.glob("*.png"))
+
+
+async def generate_cover_image(db, title: str, summary: str) -> bytes | None:
+    """调用启用的文生图模型生成封面图，失败返回 None。"""
+    endpoint = await get_active_endpoint(db, "image")
+    if not endpoint or not endpoint["api_key"] or not endpoint["model_id"]:
+        return None
+    prompt = (
+        "为以下新闻生成一张新闻封面图，写实风格，构图清晰，无文字水印，16:9 横向构图：\n"
+        f"标题：{title}\n摘要：{summary}"
+    )
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        response = await client.post(
+            f"{endpoint['base_url']}/images/generations",
+            headers={
+                "Authorization": f"Bearer {endpoint['api_key']}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": endpoint["model_id"],
+                "prompt": prompt,
+                "size": "1024x576",
+                "n": 1,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        item = (data.get("data") or [{}])[0]
+        b64 = item.get("b64_json")
+        if b64:
+            import base64
+
+            return base64.b64decode(b64)
+        url = item.get("url")
+        if url:
+            img = await client.get(url, timeout=60.0)
+            img.raise_for_status()
+            return img.content
+    return None
+
+
+async def assign_news_cover(db, news: News, emit: EmitFn | None = None) -> None:
+    """为新闻分配封面：功能开启时调用文生图，否则随机抽取默认封面，统一存为 cover/{id}.png。"""
+    COVER_DIR.mkdir(parents=True, exist_ok=True)
+    target = COVER_DIR / f"{news.id}.png"
+    image_bytes: bytes | None = None
+
+    if _cover_enabled():
+        try:
+            image_bytes = await generate_cover_image(db, news.title, news.summary or "")
+        except Exception as e:
+            if emit:
+                await emit("error", f"封面生成失败，改用默认封面: {e}")
+
+    if image_bytes:
+        target.write_bytes(image_bytes)
+    else:
+        candidates = _default_cover_paths()
+        if candidates:
+            shutil.copy(str(random.choice(candidates)), str(target))
+
+    if target.exists():
+        news.cover_url = f"/images/cover/{news.id}.png"
+        await db.flush()
 
 
 def _short(text: str, limit: int = 36) -> str:
@@ -109,7 +192,11 @@ async def process_search_results(
     else:
         category_id = category.id
 
-    llm_ready = bool(settings.LLM_BASE_URL and settings.LLM_API_KEY and settings.LLM_MODEL)
+    llm_endpoint = await get_active_endpoint(db, "llm")
+    llm_ready = bool(llm_endpoint and llm_endpoint["api_key"] and llm_endpoint["model_id"])
+    cover_enabled = _cover_enabled()
+    cover_candidates = _default_cover_paths()
+    can_cover = cover_enabled or bool(cover_candidates)
 
     count = 0
     skipped = 0
@@ -158,13 +245,18 @@ async def process_search_results(
             collected_at=collected_at,
         )
         db.add(news)
+        await db.flush()
         count += 1
+        if can_cover:
+            try:
+                await assign_news_cover(db, news, emit)
+            except Exception as e:
+                await _emit("error", f"封面处理失败: {e}")
         await _emit("save", f"✓ {_short(title, 42)}")
 
     if skipped:
         await _emit("info", f"过滤重复新闻 {skipped} 条")
 
-    await db.flush()
     return count
 
 
@@ -220,7 +312,7 @@ async def run_search_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[
         await _emit("thinking", f"分析「{cat.name}」领域最近 {interval_hours} 小时的热点…")
         await _emit("tool", f'search("{query}") → 调用搜索服务')
         try:
-            search_results = await search_news(query, max_results=15, hours=interval_hours)
+            search_results = await search_news(db, query, max_results=15, hours=interval_hours)
         except Exception as e:
             await _emit("error", f"「{cat.name}」搜索失败: {e}")
             results[cat.name] = f"错误: {str(e)}"

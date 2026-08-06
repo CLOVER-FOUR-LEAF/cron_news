@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import init_db, get_session
 from app.models import Category
 from app.crud.category import COLOR_POOL, DEFAULT_COLOR
-from app.routers import news, category, config, db as db_router, agent as agent_router, scheduler as scheduler_router
+from app.routers import news, category, config, db as db_router, agent as agent_router, scheduler as scheduler_router, model_configs as model_configs_router
 from app.services import db_service
 from app.services.scheduler import scheduler as scheduler_service
 
@@ -49,10 +49,24 @@ async def lifespan(app: FastAPI):
     await choose_startup_database()
     await init_db()
     await seed_categories()
+    await migrate_legacy_configs()
     scheduler_service.start()
     yield
     scheduler_service.stop()
     print(f"Shutting down {settings.APP_NAME}")
+
+
+async def migrate_legacy_configs():
+    from app.services.model_configs import migrate_legacy_configs as _migrate
+
+    async with get_session() as session:
+        try:
+            migrated = await _migrate(session)
+            await session.commit()
+            if migrated:
+                print("[Config] 已从 env 迁移旧的模型配置到数据库")
+        except Exception as e:
+            print(f"[Config] 迁移旧模型配置失败: {e}")
 
 
 async def seed_categories():
@@ -108,6 +122,7 @@ app.include_router(config.router)
 app.include_router(db_router.router)
 app.include_router(agent_router.router)
 app.include_router(scheduler_router.router)
+app.include_router(model_configs_router.router)
 
 
 async def get_categories():

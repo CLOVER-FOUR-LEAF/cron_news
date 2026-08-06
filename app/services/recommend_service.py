@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.news import News
 from app.services.agent_prompts import get_agent_prompt
+from app.services.model_configs import get_active_endpoint
 
 EmitFn = Callable[..., Awaitable[None]]
 
@@ -17,20 +18,19 @@ BATCH_SIZE = 20
 RELATED_LIMIT = 6
 
 
-def _llm_ready() -> bool:
-    return bool(settings.LLM_BASE_URL and settings.LLM_API_KEY and settings.LLM_MODEL)
-
-
-async def _ask_llm(system_prompt: str, prompt: str) -> str:
+async def _ask_llm(db, system_prompt: str, prompt: str) -> str:
+    endpoint = await get_active_endpoint(db, "llm")
+    if not endpoint or not endpoint["api_key"] or not endpoint["model_id"]:
+        raise ValueError("大语言模型未配置")
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
-            f"{settings.LLM_BASE_URL}/chat/completions",
+            f"{endpoint['base_url']}/chat/completions",
             headers={
-                "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                "Authorization": f"Bearer {endpoint['api_key']}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": settings.LLM_MODEL,
+                "model": endpoint["model_id"],
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
@@ -63,7 +63,7 @@ async def run_recommend_task(db: AsyncSession, emit: EmitFn | None = None) -> di
         if emit:
             await emit(event_type, text, **extra)
 
-    if not _llm_ready():
+    if not await get_active_endpoint(db, "llm"):
         await _emit("error", "大语言模型未配置，无法执行智能推荐")
         return {"updated": 0}
 
@@ -112,7 +112,7 @@ async def run_recommend_task(db: AsyncSession, emit: EmitFn | None = None) -> di
 
         await _emit("tool", f'llm.relate([{news.id}]) "{news.title[:24]}…"')
         try:
-            answer = await _ask_llm(system_prompt, prompt)
+            answer = await _ask_llm(db, system_prompt, prompt)
             related = _parse_ids(answer, valid_ids, news.id)
             news.related_ids = json.dumps(related)
             updated += 1

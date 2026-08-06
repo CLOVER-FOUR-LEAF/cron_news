@@ -8,24 +8,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import News, Category, Brief
 from app.services.agent_prompts import get_agent_prompt
+from app.services.model_configs import get_active_endpoint
 
 EmitFn = Callable[..., Awaitable[None]]
 
 
-def _llm_ready() -> bool:
-    return bool(settings.LLM_BASE_URL and settings.LLM_API_KEY and settings.LLM_MODEL)
+async def _llm_endpoint(db) -> dict | None:
+    return await get_active_endpoint(db, "llm")
 
 
-async def _ask_llm(system_prompt: str, prompt: str) -> str:
+async def _ask_llm(db, system_prompt: str, prompt: str) -> str:
+    endpoint = await get_active_endpoint(db, "llm")
+    if not endpoint or not endpoint["api_key"] or not endpoint["model_id"]:
+        raise ValueError("大语言模型未配置")
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
-            f"{settings.LLM_BASE_URL}/chat/completions",
+            f"{endpoint['base_url']}/chat/completions",
             headers={
-                "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                "Authorization": f"Bearer {endpoint['api_key']}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": settings.LLM_MODEL,
+                "model": endpoint["model_id"],
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
@@ -43,7 +47,7 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
         if emit:
             await emit(event_type, text, **extra)
 
-    if not _llm_ready():
+    if not await _llm_endpoint(db):
         await _emit("error", "大语言模型未配置，无法生成每日简报")
         return {"generated": 0}
 
@@ -84,7 +88,7 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
 
         await _emit("tool", f'llm.brief("{cat.name}") {len(items)} 条新闻')
         try:
-            content = await _ask_llm(system_prompt, prompt)
+            content = await _ask_llm(db, system_prompt, prompt)
         except Exception as e:
             await _emit("error", f"[{cat.name}] 简报生成失败: {e}")
             continue

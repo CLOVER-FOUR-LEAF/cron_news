@@ -12,8 +12,16 @@ database/
 *.sqlite
 *.sqlite3
 
-# 图片资源
-images/
+# 图片资源（仅保留系统默认资源，用户生成的图片不入库）
+images/*
+!images/sign.png
+!images/avatar/
+images/avatar/*
+!images/avatar/default-avatar.png
+!images/cover/
+images/cover/*
+!images/cover/default/
+!images/cover/default/*
 
 # Python
 __pycache__/
