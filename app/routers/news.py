@@ -122,28 +122,28 @@ async def get_brief_note(
     date: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.models import BriefNote
+    from app.models import Brief
 
     result = await db.execute(
-        select(BriefNote).where(BriefNote.category_name == category, BriefNote.brief_date == date)
+        select(Brief).where(Brief.category_name == category, Brief.brief_date == date)
     )
-    note = result.scalars().first()
-    return {"content": note.content if note else ""}
+    brief = result.scalars().first()
+    return {"content": brief.note if brief else ""}
 
 
 @router.put("/brief/note")
 async def save_brief_note(body: BriefNoteModel, db: AsyncSession = Depends(get_db)):
-    from app.models import BriefNote
+    from app.models import Brief
 
     result = await db.execute(
-        select(BriefNote).where(BriefNote.category_name == body.category, BriefNote.brief_date == body.date)
+        select(Brief).where(Brief.category_name == body.category, Brief.brief_date == body.date)
     )
-    note = result.scalars().first()
-    if note:
-        note.content = body.content
+    brief = result.scalars().first()
+    if brief:
+        brief.note = body.content
     else:
-        note = BriefNote(category_name=body.category, brief_date=body.date, content=body.content)
-        db.add(note)
+        brief = Brief(category_name=body.category, brief_date=body.date, content="", note=body.content)
+        db.add(brief)
     await db.flush()
     return {"ok": True}
 
@@ -172,7 +172,55 @@ async def get_brief(
         brief = await brief_service.get_latest_brief(db, category)
     if not brief:
         raise HTTPException(status_code=404, detail="暂无该分类的简报")
-    return {"category": brief.category_name, "date": brief.brief_date, "content": brief.content}
+    return {
+        "category": brief.category_name,
+        "date": brief.brief_date,
+        "content": brief.content,
+        "source": brief.source,
+        "note": brief.note,
+    }
+
+
+class BriefCreateModel(BaseModel):
+    category: str
+    date: str
+    content: str = ""
+    note: str = ""
+    source: str = "外部"
+
+
+@router.post("/brief", status_code=201)
+async def create_brief(body: BriefCreateModel, db: AsyncSession = Depends(get_db)):
+    """供外部 Agent 写入每日简报（辅助模式下通常由外部 Agent 调用）。"""
+    from app.models import Brief
+
+    source = "外部" if body.source not in ("自主", "外部") else body.source
+    result = await db.execute(
+        select(Brief).where(Brief.category_name == body.category, Brief.brief_date == body.date)
+    )
+    brief = result.scalars().first()
+    if brief:
+        brief.content = body.content
+        if body.note:
+            brief.note = body.note
+        brief.source = source
+    else:
+        brief = Brief(
+            category_name=body.category,
+            brief_date=body.date,
+            content=body.content,
+            note=body.note,
+            source=source,
+        )
+        db.add(brief)
+    await db.flush()
+    return {
+        "category": brief.category_name,
+        "date": brief.brief_date,
+        "content": brief.content,
+        "source": brief.source,
+        "note": brief.note,
+    }
 
 
 @router.post("/news", response_model=NewsResponse, status_code=201)

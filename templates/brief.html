@@ -6,7 +6,7 @@
     <title>每日简报 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=35">
+    <link rel="stylesheet" href="/static/css/style.css?v=36">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -55,7 +55,16 @@
                         <button type="button" class="btn-secondary" id="exportWordBtn">导出 Word</button>
                     </div>
                 </div>
-                <p class="brief-side-hint brief-side-hint-bottom">简报由自主模式 Agent 在每次采集完成后按分类自动生成，圆点标记表示当日有简报。</p>
+                <div class="brief-field">
+                    <label>功能状态</label>
+                    <div class="brief-toggle-row">
+                        <span class="brief-toggle-text" id="briefToggleText">每日简报已开启</span>
+                        <button type="button" class="switch" id="briefPageSwitch" role="switch" aria-checked="true">
+                            <span class="switch-knob"></span>
+                        </button>
+                    </div>
+                </div>
+                <p class="brief-side-hint brief-side-hint-bottom">自主模式下由内置 Agent 在每次采集完成后自动生成简报；辅助模式下由外部 Agent 通过接口写入。圆点标记表示当日有简报。</p>
             </aside>
 
             <div class="brief-main" id="briefMain">
@@ -218,7 +227,7 @@
                     main.innerHTML = `
                         <div class="empty-state">
                             <p>${escapeHtml(currentCat)} · ${currentDate} 暂无简报</p>
-                            <p class="text-dim">在设置 · Agent 管理中启用「AI 每日简报」后，自主模式将在采集完成后自动生成。</p>
+                            <p class="text-dim">开启左侧「功能状态」开关后，自主模式将在采集完成后自动生成；辅助模式下由外部 Agent 写入。</p>
                         </div>`;
                     return;
                 }
@@ -229,8 +238,9 @@
                     <div class="brief-main-head">
                         <span class="brief-main-cat" style="--cat: ${CAT_COLORS[currentCat] || '#8a8690'}">${escapeHtml(currentCat)}</span>
                         <span class="brief-main-date">${escapeHtml(data.date)}</span>
+                        <span class="brief-main-source ${data.source === '外部' ? 'ext' : ''}">${escapeHtml(data.source || '自主')}</span>
                     </div>
-                    <div class="markdown-body">${marked.parse(data.content)}</div>
+                    <div class="markdown-body">${marked.parse(data.content || '')}</div>
                 `;
             } catch (e) {
                 currentBrief = null;
@@ -304,10 +314,54 @@
             }
         });
 
+        /* ===== 功能开关 ===== */
+        let briefEnabled = true;
+        const briefSwitch = $('briefPageSwitch');
+        const briefToggleText = $('briefToggleText');
+
+        function renderBriefSwitch() {
+            briefSwitch.classList.toggle('on', briefEnabled);
+            briefSwitch.setAttribute('aria-checked', String(briefEnabled));
+            briefToggleText.textContent = briefEnabled ? '每日简报已开启' : '每日简报已关闭';
+        }
+
+        async function loadBriefSwitch() {
+            try {
+                const resp = await fetch('/api/config');
+                const data = await resp.json();
+                briefEnabled = !!data.agent_brief_enabled;
+                renderBriefSwitch();
+            } catch (e) { /* 保持默认开启态 */ }
+        }
+
+        briefSwitch.addEventListener('click', async () => {
+            briefEnabled = !briefEnabled;
+            renderBriefSwitch();
+            try {
+                const resp = await fetch('/api/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ agent_brief_enabled: briefEnabled })
+                });
+                if (resp.ok) {
+                    showToast(briefEnabled ? '每日简报已开启' : '每日简报已关闭', 'success');
+                } else {
+                    briefEnabled = !briefEnabled;
+                    renderBriefSwitch();
+                    showToast('保存失败', 'error');
+                }
+            } catch (e) {
+                briefEnabled = !briefEnabled;
+                renderBriefSwitch();
+                showToast('保存失败', 'error');
+            }
+        });
+
         /* ===== 初始化 ===== */
         $('selectedDateLabel').textContent = currentDate;
         setCalViewFrom(currentDate);
         renderCatBtn();
+        loadBriefSwitch();
         refreshBriefDates().then(() => {
             renderCalendar();
             loadBrief();

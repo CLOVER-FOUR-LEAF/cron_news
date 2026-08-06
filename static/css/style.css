@@ -3785,6 +3785,36 @@ button.header-icon-btn {
     font-variant-numeric: tabular-nums;
 }
 
+.brief-main-source {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #c8a852;
+    padding: 3px 10px;
+    border: 1px solid rgba(200, 168, 82, 0.4);
+    background: rgba(200, 168, 82, 0.1);
+    border-radius: 5px;
+}
+
+.brief-main-source.ext {
+    color: var(--accent-blue, #4a8fd4);
+    border-color: rgba(74, 143, 212, 0.4);
+    background: rgba(74, 143, 212, 0.1);
+}
+
+.brief-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.brief-toggle-text {
+    font-size: 0.78rem;
+    color: var(--text-primary);
+}
+
 .brief-note {
     display: flex;
     flex-direction: column;

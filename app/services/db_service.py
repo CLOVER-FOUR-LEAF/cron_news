@@ -119,7 +119,7 @@ def is_busy() -> bool:
     return MIGRATION["state"] == "migrating"
 
 
-TABLE_ORDER = ["categories", "news"]
+TABLE_ORDER = ["categories", "news", "briefs", "agent_runs", "agent_prompts"]
 
 
 async def _copy_all(source_engine, target_engine) -> dict[str, int]:
@@ -128,6 +128,7 @@ async def _copy_all(source_engine, target_engine) -> dict[str, int]:
         _ensure_news_related_ids_column,
         _ensure_news_read_at_column,
         _ensure_news_user_action_columns,
+        _ensure_brief_columns,
     )
 
     async with target_engine.begin() as conn:
@@ -136,6 +137,7 @@ async def _copy_all(source_engine, target_engine) -> dict[str, int]:
         await conn.run_sync(_ensure_news_related_ids_column)
         await conn.run_sync(_ensure_news_read_at_column)
         await conn.run_sync(_ensure_news_user_action_columns)
+        await conn.run_sync(_ensure_brief_columns)
 
     counts = {}
     for table_name in TABLE_ORDER:

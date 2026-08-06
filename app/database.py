@@ -49,6 +49,7 @@ async def init_db():
         await conn.run_sync(_ensure_news_related_ids_column)
         await conn.run_sync(_ensure_news_read_at_column)
         await conn.run_sync(_ensure_news_user_action_columns)
+        await conn.run_sync(_ensure_brief_columns)
 
 
 def _ensure_category_color_column(sync_conn):
@@ -99,3 +100,46 @@ def _ensure_news_user_action_columns(sync_conn):
     for col, ddl in additions:
         if col not in cols:
             sync_conn.execute(text(ddl))
+
+
+def _ensure_brief_columns(sync_conn):
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(sync_conn)
+    tables = inspector.get_table_names()
+
+    if "briefs" not in tables:
+        return
+
+    cols = [c["name"] for c in inspector.get_columns("briefs")]
+    if "note" not in cols:
+        sync_conn.execute(text("ALTER TABLE briefs ADD COLUMN note TEXT DEFAULT ''"))
+    if "source" not in cols:
+        sync_conn.execute(text("ALTER TABLE briefs ADD COLUMN source VARCHAR(10) DEFAULT '自主'"))
+    if "updated_at" not in cols:
+        sync_conn.execute(text("ALTER TABLE briefs ADD COLUMN updated_at DATETIME"))
+
+    # 将旧版独立便签表（brief_notes）合并进 briefs 后删除
+    if "brief_notes" in tables:
+        rows = sync_conn.execute(
+            text("SELECT category_name, brief_date, content FROM brief_notes")
+        ).fetchall()
+        for category_name, brief_date, content in rows:
+            exists = sync_conn.execute(
+                text("SELECT 1 FROM briefs WHERE category_name = :c AND brief_date = :d"),
+                {"c": category_name, "d": brief_date},
+            ).scalar()
+            if exists:
+                sync_conn.execute(
+                    text("UPDATE briefs SET note = :n WHERE category_name = :c AND brief_date = :d"),
+                    {"n": content or "", "c": category_name, "d": brief_date},
+                )
+            else:
+                sync_conn.execute(
+                    text(
+                        "INSERT INTO briefs (category_name, brief_date, content, note, source) "
+                        "VALUES (:c, :d, '', :n, '外部')"
+                    ),
+                    {"c": category_name, "d": brief_date, "n": content or ""},
+                )
+        sync_conn.execute(text("DROP TABLE brief_notes"))

@@ -126,7 +126,6 @@
                                         <path d="M6.7 1.6h2.6l.35 1.5c.5.17.96.44 1.36.78l1.46-.5 1.3 2.25-1.15 1c.05.27.08.55.08.83s-.03.56-.08.83l1.15 1-1.3 2.25-1.46-.5c-.4.34-.86.6-1.36.78l-.35 1.5H6.7l-.35-1.5a4.1 4.1 0 01-1.36-.78l-1.46.5-1.3-2.25 1.15-1a4.2 4.2 0 010-1.66l-1.15-1 1.3-2.25 1.46.5c.4-.34.86-.6 1.36-.78l.35-1.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
                                         <circle cx="8" cy="7.5" r="1.7" stroke="currentColor" stroke-width="1.1"/>
                                     </svg>
-                                    <span class="db-gear-badge" id="dbGearBadge" style="display:none">!</span>
                                 </button>
                             </span>
                             <div class="workmode-seg" id="dbSeg">
@@ -292,6 +291,25 @@
         <div class="modal-footer">
             <button class="btn-secondary" data-close>取消</button>
             <button class="btn-primary" id="confirmWorkmodeBtn">确认切换</button>
+        </div>
+    </div>
+</div>
+
+<div id="briefEnableModal" class="modal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h3>每日简报未开启</h3>
+            <button class="modal-close" data-close>&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>当前「每日简报」功能处于<strong>关闭</strong>状态。</p>
+            <p>开启后：每次采集完成后，将按分类总结当日新闻自动生成简报，可在简报页面按分类与日期查看，支持导出与便签。</p>
+            <p class="text-dim">辅助模式下，简报将由外部 Agent 通过接口写入，同样可在简报页面查看。</p>
+            <p class="text-dim">自主模式下开启后将额外调用大模型，会增加 Token 消耗量。</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" data-close>取消</button>
+            <button class="btn-primary" id="enableBriefBtn">开启功能</button>
         </div>
     </div>
 </div>
@@ -480,6 +498,15 @@
                 <div class="agent-col-head">
                     <div class="agent-col-title">更多功能</div>
                 </div>
+                <button type="button" class="feature-card log-card" id="openPromptBtn">
+                    <div class="feature-top">
+                        <div class="feature-name">提示词管理</div>
+                        <span class="log-card-arrow">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </span>
+                    </div>
+                    <div class="feature-desc">定制定时资讯、智能推荐、AI 简报三个 Agent 的系统提示词，保存后立即生效。</div>
+                </button>
                 <div class="feature-card">
                     <div class="feature-top">
                         <div class="feature-name">智能推荐</div>
@@ -497,32 +524,6 @@
                         启用后将额外调用大模型，会增加 Token 消耗量
                     </div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-top">
-                        <div class="feature-name">AI 每日简报</div>
-                        <button type="button" class="switch" id="briefSwitch" role="switch" aria-checked="false">
-                            <span class="switch-knob"></span>
-                        </button>
-                    </div>
-                    <div class="feature-desc">每次采集完成后，由 Agent 按分类总结当日新闻生成每日简报，可在顶栏简报图标中按分类查看。</div>
-                    <div class="feature-warn">
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                            <path d="M8 2L1.5 13.5h13L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-                            <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                            <circle cx="8" cy="11.4" r="0.8" fill="currentColor"/>
-                        </svg>
-                        启用后将额外调用大模型，会增加 Token 消耗量
-                    </div>
-                </div>
-                <button type="button" class="feature-card log-card" id="openPromptBtn">
-                    <div class="feature-top">
-                        <div class="feature-name">提示词管理</div>
-                        <span class="log-card-arrow">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </span>
-                    </div>
-                    <div class="feature-desc">定制定时资讯、智能推荐、AI 简报三个 Agent 的系统提示词，保存后立即生效。</div>
-                </button>
             </div>
         </div>
         <div class="modal-footer">
@@ -986,7 +987,31 @@
 
     /* ===== 每日简报入口 ===== */
     $('briefBtn').addEventListener('click', () => {
+        if (!state.agentBrief) {
+            openModal('briefEnableModal');
+            return;
+        }
         window.location.href = '/brief';
+    });
+
+    $('enableBriefBtn').addEventListener('click', async () => {
+        try {
+            const resp = await fetch('/api/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agent_brief_enabled: true })
+            });
+            if (resp.ok) {
+                state.agentBrief = true;
+                closeModal('briefEnableModal');
+                showToast('已开启每日简报', 'success');
+                window.location.href = '/brief';
+            } else {
+                showToast('开启失败', 'error');
+            }
+        } catch (e) {
+            showToast('开启失败', 'error');
+        }
     });
 
     document.querySelectorAll('.panel-item').forEach(item => {
@@ -1019,6 +1044,7 @@
             state.activeSearch = data.active_search || null;
             state.workMode = data.work_mode || '';
             state.agentRecommend = !!data.agent_recommend_enabled;
+            state.agentBrief = !!data.agent_brief_enabled;
             state.dbMode = data.db_mode || 'system';
             state.dbConfig = data.db_config || {};
             state.dbComplete = !!data.db_complete;
@@ -1181,7 +1207,6 @@
         document.querySelectorAll('#dbSeg .db-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.db === state.dbMode);
         });
-        $('dbGearBadge').style.display = state.dbComplete ? 'none' : '';
         document.querySelector('#dbSeg .db-btn[data-db="standalone"]')
             .classList.toggle('disabled', !state.dbComplete);
     }
@@ -2076,12 +2101,10 @@
 
     /* ===== Agent 管理 ===== */
     state.agentRecommend = false;
-    state.agentBrief = false;
 
     function loadAgentForm() {
         const data = state.searchConfig || {};
         state.agentRecommend = !!data.agent_recommend_enabled;
-        state.agentBrief = !!data.agent_brief_enabled;
         renderAgentForm();
     }
 
@@ -2089,10 +2112,6 @@
         const sw = $('recommendSwitch');
         sw.classList.toggle('on', state.agentRecommend);
         sw.setAttribute('aria-checked', String(state.agentRecommend));
-
-        const bw = $('briefSwitch');
-        bw.classList.toggle('on', state.agentBrief);
-        bw.setAttribute('aria-checked', String(state.agentBrief));
     }
 
     $('recommendSwitch').addEventListener('click', () => {
@@ -2100,15 +2119,9 @@
         renderAgentForm();
     });
 
-    $('briefSwitch').addEventListener('click', () => {
-        state.agentBrief = !state.agentBrief;
-        renderAgentForm();
-    });
-
     $('saveAgentBtn').addEventListener('click', async () => {
         const payload = {
-            agent_recommend_enabled: state.agentRecommend,
-            agent_brief_enabled: state.agentBrief
+            agent_recommend_enabled: state.agentRecommend
         };
         try {
             const resp = await fetch('/api/config', {
@@ -2626,6 +2639,9 @@
     $('terminalClearBtn').addEventListener('click', () => {
         $('terminalBody').innerHTML = '';
     });
+
+    /* 暴露给各页面脚本使用 */
+    window.showToast = showToast;
 
     /* ===== 顶部搜索 ===== */
     function doSearch() {

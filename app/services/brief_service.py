@@ -94,7 +94,7 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
         )
         for old in existing.scalars().all():
             await db.delete(old)
-        db.add(Brief(category_name=cat.name, brief_date=today.isoformat(), content=content))
+        db.add(Brief(category_name=cat.name, brief_date=today.isoformat(), content=content, source="自主"))
         generated += 1
         await _emit("save", f"✓ [{cat.name}] 简报已生成")
 

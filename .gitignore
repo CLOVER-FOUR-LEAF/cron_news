@@ -1,8 +1,12 @@
 # 环境变量（含 API Key 等敏感信息）
 .env
 .env.*
+!.env.example
 
-# 数据库
+# 测试/假数据脚本
+test/
+
+# 数据
 database/
 *.db
 *.sqlite

@@ -1,6 +1,6 @@
 ---
 name: cron-news
-description: 与「定时资讯」新闻聚合平台对接。当需要向该平台推送新闻、查询新闻、管理分类或读取统计数据时使用本技能。适用场景：外部 Agent（如 OpenClaw、Hermes）把采集到的新闻写入平台展示，或从平台读取已有资讯。平台处于「辅助模式」时专为外部 Agent 提供数据接口。
+description: 与「定时资讯」新闻聚合平台对接。当需要向该平台推送新闻、查询新闻、管理分类、写入或读取每日简报或读取统计数据时使用本技能。适用场景：外部 Agent（如 OpenClaw、Hermes）把采集到的新闻写入平台展示、为平台生成每日简报，或从平台读取已有资讯。平台处于「辅助模式」时专为外部 Agent 提供数据接口。
 ---
 
 # 定时资讯 · 对接技能
@@ -148,6 +148,69 @@ GET /api/stats
 
 ---
 
+## 每日简报接口
+
+> 简报、便签、分类等数据统一存放在 `briefs` 表（每日简报），一条记录包含 `content`（简报正文）、`note`（便签）与 `source`（来源：**自主** / **外部**）。
+> - 自主模式下由平台内置 Agent 在每次采集完成后自动生成（`source=自主`）。
+> - **辅助模式下请由外部 Agent 生成并通过 `POST /api/brief` 写入**（`source=外部`），平台负责展示与便签。
+
+### 新增简报（外部 Agent 最常用）
+
+```
+POST /api/brief
+Content-Type: application/json
+
+{
+  "category": "科技",
+  "date": "2026-08-05",
+  "content": "## 科技 · 每日简报\n\n今日科技领域……",
+  "note": "可选的配套便签",
+  "source": "外部"
+}
+```
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `category` | 是 | 分类名称（需与平台分类一致，可先 `GET /api/categories` 获取） |
+| `date` | 是 | 简报日期 `YYYY-MM-DD` |
+| `content` | 否 | Markdown 简报正文 |
+| `note` | 否 | 配套便签 |
+| `source` | 否 | 默认 `外部`；传 `自主`/`外部` 之外的任意值按 `外部` 处理 |
+
+- 幂等：同一分类 + 日期已存在时更新 `content`（并保留/更新 `note`、`source`）。
+- 成功返回 `201` 及保存后的简报对象。
+
+### 读取简报
+
+```
+GET /api/brief/{category}?date=2026-08-05
+```
+
+- `date` 省略时返回该分类最近一期简报。
+- 返回：`{ "category", "date", "content", "source", "note" }`；不存在返回 `404`。
+
+### 获取有简报的日期（日历圆点）
+
+```
+GET /api/brief/dates/{category}
+```
+
+返回：`{ "dates": ["2026-08-05", ...] }`。
+
+### 便签读写
+
+```
+GET /api/brief/note?category=科技&date=2026-08-05
+PUT /api/brief/note
+Content-Type: application/json
+
+{ "category": "科技", "date": "2026-08-05", "content": "便签内容" }
+```
+
+便签与会话内自动保存的笔记共用，同一分类 + 日期唯一。
+
+---
+
 ## 常见工作流
 
 ### 工作流 A：把采集到的新闻写入平台
@@ -165,6 +228,13 @@ GET /api/stats
 
 1. `GET /api/news?category=科技&page_size=100` 按分类拉取。
 2. 或 `GET /api/news?keyword=关键词` 全文检索。
+
+### 工作流 D：辅助模式下为平台生成每日简报
+
+1. `GET /api/categories` 获取分类列表。
+2. 对每个分类 `GET /api/news?category={分类}&today_only=true&page_size=50` 拉取当日新闻。
+3. 汇总整理后 `POST /api/brief` 写入简报（`source` 默认 `外部`）。
+4. 平台简报页将自动展示这些简报，用户可在页面上补充便签。
 
 ---
 
