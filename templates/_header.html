@@ -295,21 +295,19 @@
     </div>
 </div>
 
-<div id="briefEnableModal" class="modal">
+<div id="briefToggleModal" class="modal">
     <div class="modal-content modal-sm">
         <div class="modal-header">
-            <h3>每日简报未开启</h3>
+            <h3 id="briefToggleTitle">每日简报</h3>
             <button class="modal-close" data-close>&times;</button>
         </div>
         <div class="modal-body">
-            <p>当前「每日简报」功能处于<strong>关闭</strong>状态。</p>
-            <p>开启后：每次采集完成后，将按分类总结当日新闻自动生成简报，可在简报页面按分类与日期查看，支持导出与便签。</p>
-            <p class="text-dim">辅助模式下，简报将由外部 Agent 通过接口写入，同样可在简报页面查看。</p>
-            <p class="text-dim">自主模式下开启后将额外调用大模型，会增加 Token 消耗量。</p>
+            <p id="briefToggleText"></p>
+            <p class="text-dim" id="briefToggleWarn"></p>
         </div>
         <div class="modal-footer">
             <button class="btn-secondary" data-close>取消</button>
-            <button class="btn-primary" id="enableBriefBtn">开启功能</button>
+            <button class="btn-primary" id="confirmBriefToggleBtn">确认</button>
         </div>
     </div>
 </div>
@@ -987,31 +985,7 @@
 
     /* ===== 每日简报入口 ===== */
     $('briefBtn').addEventListener('click', () => {
-        if (!state.agentBrief) {
-            openModal('briefEnableModal');
-            return;
-        }
         window.location.href = '/brief';
-    });
-
-    $('enableBriefBtn').addEventListener('click', async () => {
-        try {
-            const resp = await fetch('/api/config', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ agent_brief_enabled: true })
-            });
-            if (resp.ok) {
-                state.agentBrief = true;
-                closeModal('briefEnableModal');
-                showToast('已开启每日简报', 'success');
-                window.location.href = '/brief';
-            } else {
-                showToast('开启失败', 'error');
-            }
-        } catch (e) {
-            showToast('开启失败', 'error');
-        }
     });
 
     document.querySelectorAll('.panel-item').forEach(item => {
@@ -1044,7 +1018,6 @@
             state.activeSearch = data.active_search || null;
             state.workMode = data.work_mode || '';
             state.agentRecommend = !!data.agent_recommend_enabled;
-            state.agentBrief = !!data.agent_brief_enabled;
             state.dbMode = data.db_mode || 'system';
             state.dbConfig = data.db_config || {};
             state.dbComplete = !!data.db_complete;
@@ -2642,6 +2615,8 @@
 
     /* 暴露给各页面脚本使用 */
     window.showToast = showToast;
+    window.openModal = openModal;
+    window.closeModal = closeModal;
 
     /* ===== 顶部搜索 ===== */
     function doSearch() {

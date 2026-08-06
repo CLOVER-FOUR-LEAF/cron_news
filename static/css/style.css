@@ -3802,6 +3802,57 @@ button.header-icon-btn {
     background: rgba(74, 143, 212, 0.1);
 }
 
+.brief-main-source.user {
+    color: #4aad6a;
+    border-color: rgba(74, 173, 106, 0.4);
+    background: rgba(74, 173, 106, 0.1);
+}
+
+.brief-main {
+    display: flex;
+    flex-direction: column;
+}
+
+.brief-main-head {
+    flex: none;
+}
+
+.brief-editor {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1.9;
+    padding: 4px 0 0;
+}
+
+.brief-editor::placeholder {
+    color: var(--text-dim);
+    opacity: 0.75;
+    white-space: pre-wrap;
+}
+
+.brief-editor[readonly] {
+    cursor: default;
+}
+
+.brief-editor-foot {
+    flex: none;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
 .brief-toggle-row {
     display: flex;
     align-items: center;

@@ -185,7 +185,7 @@ class BriefCreateModel(BaseModel):
     category: str
     date: str
     content: str = ""
-    note: str = ""
+    note: str | None = None
     source: str = "外部"
 
 
@@ -194,14 +194,14 @@ async def create_brief(body: BriefCreateModel, db: AsyncSession = Depends(get_db
     """供外部 Agent 写入每日简报（辅助模式下通常由外部 Agent 调用）。"""
     from app.models import Brief
 
-    source = "外部" if body.source not in ("自主", "外部") else body.source
+    source = "外部" if body.source not in ("自主", "外部", "用户") else body.source
     result = await db.execute(
         select(Brief).where(Brief.category_name == body.category, Brief.brief_date == body.date)
     )
     brief = result.scalars().first()
     if brief:
         brief.content = body.content
-        if body.note:
+        if body.note is not None:
             brief.note = body.note
         brief.source = source
     else:
@@ -209,7 +209,7 @@ async def create_brief(body: BriefCreateModel, db: AsyncSession = Depends(get_db
             category_name=body.category,
             brief_date=body.date,
             content=body.content,
-            note=body.note,
+            note=body.note or "",
             source=source,
         )
         db.add(brief)
@@ -219,7 +219,46 @@ async def create_brief(body: BriefCreateModel, db: AsyncSession = Depends(get_db
         "date": brief.brief_date,
         "content": brief.content,
         "source": brief.source,
-        "note": brief.note,
+        "note": brief.note or "",
+    }
+
+
+@router.put("/brief")
+async def update_brief_editor(body: BriefCreateModel, db: AsyncSession = Depends(get_db)):
+    """用户编辑简报正文（简报页中间区域），自动保存。
+
+    - 每日简报功能关闭时，用户撰写的内容来源标记为「用户」；
+    - 功能开启时，保留既有来源（自主/外部），新建内容按「用户」记录。
+    """
+    from app.models import Brief
+
+    enabled = read_env_file().get("AGENT_BRIEF_ENABLED", "") == "true"
+    result = await db.execute(
+        select(Brief).where(Brief.category_name == body.category, Brief.brief_date == body.date)
+    )
+    brief = result.scalars().first()
+    if brief:
+        brief.content = body.content
+        if body.note is not None:
+            brief.note = body.note
+        if not enabled:
+            brief.source = "用户"
+    else:
+        brief = Brief(
+            category_name=body.category,
+            brief_date=body.date,
+            content=body.content,
+            note=body.note or "",
+            source="用户",
+        )
+        db.add(brief)
+    await db.flush()
+    return {
+        "category": brief.category_name,
+        "date": brief.brief_date,
+        "content": brief.content,
+        "source": brief.source,
+        "note": brief.note or "",
     }
 
 
