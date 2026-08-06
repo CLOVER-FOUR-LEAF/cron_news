@@ -1,0 +1,13 @@
+services:
+  cron-news:
+    build: .
+    container_name: cron-news
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      # 配置与数据库持久化到宿主机，避免容器重建后丢失
+      - ./.env:/app/.env
+      - ./database:/app/database
+    restart: unless-stopped

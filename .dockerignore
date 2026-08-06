@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.log
+test
+database
+.env
+images/avatar/avatar.png
+images/cover/*
+!images/cover/default/
+!images/cover/default/*
