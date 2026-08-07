@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import News
 from app.models.category import Category
+from app.crud.category import get_default_category
 from app.schemas.news import NewsCreate
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -120,13 +121,23 @@ async def get_related_news(db: AsyncSession, news_id: int, limit: int = 10, reco
 
 
 async def create_news(db: AsyncSession, news_in: NewsCreate) -> News:
+    category_id = news_in.category_id
+    if news_in.category:
+        result = await db.execute(select(Category).where(Category.name == news_in.category))
+        cat = result.scalars().first()
+        if cat:
+            category_id = cat.id
+        else:
+            default = await get_default_category(db)
+            category_id = default.id if default else category_id
+
     news = News(
         title=news_in.title,
         summary=news_in.summary,
         content=news_in.content,
         source_url=news_in.source_url,
         source=news_in.source,
-        category_id=news_in.category_id,
+        category_id=category_id,
         cover_url=news_in.cover_url,
         collected_at=news_in.collected_at or datetime.now(),
     )

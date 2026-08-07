@@ -16,7 +16,7 @@ class NewsBase(BaseModel):
 
 
 class NewsCreate(NewsBase):
-    pass
+    category: str | None = Field(None, max_length=50, description="分类名称(与category_id二选一，优先使用名称)")
 
 
 class NewsResponse(NewsBase):
