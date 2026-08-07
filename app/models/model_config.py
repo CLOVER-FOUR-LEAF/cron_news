@@ -17,6 +17,7 @@ class ModelConfig(Base):
     model_id: Mapped[str] = mapped_column(String(100), default="", comment="模型ID")
     config_type: Mapped[str] = mapped_column(String(20), nullable=False, comment="类型(llm/image/search)")
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否启用(每类型仅一个启用)")
-    env_key: Mapped[str] = mapped_column(String(50), default="", comment="env中存放apikey的键名")
+    env_key: Mapped[str] = mapped_column(String(50), default="", comment="旧版env键名(迁移用)")
+    api_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True, comment="加密后的API Key")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")

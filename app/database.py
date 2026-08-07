@@ -50,6 +50,7 @@ async def init_db():
         await conn.run_sync(_ensure_news_read_at_column)
         await conn.run_sync(_ensure_news_user_action_columns)
         await conn.run_sync(_ensure_brief_columns)
+        await conn.run_sync(_ensure_model_config_api_key_column)
 
 
 def _ensure_category_color_column(sync_conn):
@@ -143,3 +144,14 @@ def _ensure_brief_columns(sync_conn):
                     {"c": category_name, "d": brief_date, "n": content or ""},
                 )
         sync_conn.execute(text("DROP TABLE brief_notes"))
+
+
+def _ensure_model_config_api_key_column(sync_conn):
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(sync_conn)
+    if "model_configs" not in inspector.get_table_names():
+        return
+    cols = [c["name"] for c in inspector.get_columns("model_configs")]
+    if "api_key_enc" not in cols:
+        sync_conn.execute(text("ALTER TABLE model_configs ADD COLUMN api_key_enc TEXT"))

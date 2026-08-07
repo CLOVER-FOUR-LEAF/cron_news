@@ -10,7 +10,7 @@ from app.config import settings, BASE_DIR
 from app.database import get_db
 from app.env_store import read_env_file, write_env_file
 from app.services.prompts import build_base_prompt, DEFAULT_EXT_PROMPT
-from app.services.model_configs import get_configs, get_enabled_config, config_to_dict, api_key_value
+from app.services.model_configs import get_configs, get_enabled_config, config_to_dict, decrypt_api_key
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -141,8 +141,8 @@ async def get_config(db: AsyncSession = Depends(get_db)):
         llm_model=llm_enabled.model_id if llm_enabled else "",
         search_base_url=search_enabled.base_url if search_enabled else "",
         search_cron=env_vars.get("SEARCH_CRON", "0 */6 * * *"),
-        has_llm_key=bool(llm_enabled and api_key_value(llm_enabled.env_key)),
-        has_search_key=bool(search_enabled and api_key_value(search_enabled.env_key)),
+        has_llm_key=bool(llm_enabled and decrypt_api_key(llm_enabled.api_key_enc)),
+        has_search_key=bool(search_enabled and decrypt_api_key(search_enabled.api_key_enc)),
         task_mode=env_vars.get("TASK_MODE", "preset"),
         task_interval_hours=interval_hours,
         task_start_hour=_parse_int(env_vars.get("TASK_START_HOUR", ""), 0),

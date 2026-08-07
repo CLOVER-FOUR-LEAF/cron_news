@@ -1,4 +1,7 @@
-"""模型配置服务：大语言 / 文生图 / 搜索 三类配置统一入库，env 仅存各家 apikey。"""
+"""模型配置服务：大语言 / 文生图 / 搜索 三类配置统一入库，API Key 使用 Fernet 对称加密后存储。
+
+加密密钥存放在 .env 的 SECRET_KEY（首次启动自动生成），配合数据库持久化。
+"""
 
 import json
 
@@ -14,33 +17,38 @@ CONFIG_TYPES = {
     "search": "搜索",
 }
 
-# 提供商注册表：id / 显示名 / 默认 base_url / 支持类型 / env 中 apikey 键名
-PROVIDERS = [
-    {"id": "deepseek", "name": "DeepSeek", "base_url": "https://api.deepseek.com/v1", "types": ["llm"], "env_key": "API_KEY_DEEPSEEK"},
-    {"id": "kimi", "name": "Kimi", "base_url": "https://api.moonshot.cn/v1", "types": ["llm"], "env_key": "API_KEY_KIMI"},
-    {"id": "zhipu", "name": "智谱AI", "base_url": "https://open.bigmodel.cn/api/paas/v4", "types": ["llm"], "env_key": "API_KEY_ZHIPU"},
-    {"id": "minimax", "name": "MiniMax", "base_url": "https://api.minimax.chat/v1", "types": ["llm"], "env_key": "API_KEY_MINIMAX"},
-    {"id": "mimo", "name": "MiMo", "base_url": "https://api.mimo.xiaomi.com/v1", "types": ["llm", "search"], "env_key": "API_KEY_MIMO"},
-    {"id": "bailian", "name": "阿里云百炼", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "types": ["llm", "image"], "env_key": "API_KEY_BAILIAN"},
-    {"id": "volcano", "name": "字节方舟", "base_url": "https://ark.cn-beijing.volces.com/api/v3", "types": ["llm", "image"], "env_key": "API_KEY_VOLCANO"},
-    {"id": "hunyuan", "name": "腾讯混元", "base_url": "https://api.hunyuan.cloud.tencent.com/v1", "types": ["llm"], "env_key": "API_KEY_HUNYUAN"},
-    {"id": "tavily", "name": "Tavily", "base_url": "https://api.tavily.com", "types": ["search"], "env_key": "API_KEY_TAVILY"},
-]
+SECRET_KEY_ENV = "SECRET_KEY"
 
 
-def get_provider(provider_id: str) -> dict | None:
-    for p in PROVIDERS:
-        if p["id"] == provider_id:
-            return p
-    return None
+def _secret_key() -> bytes:
+    env = read_env_file()
+    key = env.get(SECRET_KEY_ENV)
+    if not key:
+        from cryptography.fernet import Fernet
+
+        key = Fernet.generate_key().decode()
+        env[SECRET_KEY_ENV] = key
+        write_env_file(env)
+    return key.encode()
 
 
-def providers_for_type(config_type: str) -> list[dict]:
-    return [p for p in PROVIDERS if config_type in p["types"]]
+def encrypt_api_key(value: str) -> str:
+    if not value:
+        return ""
+    from cryptography.fernet import Fernet
+
+    return Fernet(_secret_key()).encrypt(value.encode("utf-8")).decode("utf-8")
 
 
-def api_key_value(env_key: str) -> str:
-    return read_env_file().get(env_key, "")
+def decrypt_api_key(enc: str | None) -> str:
+    if not enc:
+        return ""
+    from cryptography.fernet import Fernet
+
+    try:
+        return Fernet(_secret_key()).decrypt(enc.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return ""
 
 
 async def get_configs(db: AsyncSession, config_type: str) -> list[ModelConfig]:
@@ -64,13 +72,13 @@ async def get_active_endpoint(db: AsyncSession, config_type: str) -> dict | None
     cfg = await get_enabled_config(db, config_type)
     if not cfg or not cfg.base_url:
         return None
-    api_key = api_key_value(cfg.env_key)
+    api_key = decrypt_api_key(cfg.api_key_enc)
     return {
         "base_url": cfg.base_url,
         "api_key": api_key,
         "model_id": cfg.model_id,
         "provider": cfg.provider,
-        "provider_name": cfg.provider_name,
+        "provider_name": cfg.provider_name or cfg.provider,
         "name": cfg.name,
         "id": cfg.id,
     }
@@ -105,49 +113,67 @@ async def set_enabled(db: AsyncSession, config_id: int) -> ModelConfig | None:
     return target
 
 
+def config_to_dict(cfg: ModelConfig) -> dict:
+    key = decrypt_api_key(cfg.api_key_enc)
+    return {
+        "id": cfg.id,
+        "provider": cfg.provider,
+        "provider_name": cfg.provider_name or cfg.provider,
+        "name": cfg.name,
+        "base_url": cfg.base_url,
+        "model_id": cfg.model_id,
+        "config_type": cfg.config_type,
+        "enabled": bool(cfg.enabled),
+        "has_api_key": bool(key),
+        "env_key": cfg.env_key,
+    }
+
+
 async def migrate_legacy_configs(db: AsyncSession) -> bool:
-    """将旧版 env 中的 LLM_CONFIGS / SEARCH_CONFIGS JSON 迁移进 model_configs 表。"""
+    """将旧版 env 中的 LLM_CONFIGS / SEARCH_CONFIGS JSON 及 API_KEY_* 迁移进 model_configs 表。"""
     from sqlalchemy import func
 
-    count = (await db.execute(select(func.count()).select_from(ModelConfig))).scalar()
-    if count:
-        return False
-
     env = read_env_file()
-    env_changed = False
+    changed = False
+    consumed_keys: set[str] = set()
+
+    # 1) 已存在的配置：若 api_key_enc 为空且 env 对应键有值，加密迁移入库存
+    result = await db.execute(select(ModelConfig))
+    rows = list(result.scalars().all())
+    for cfg in rows:
+        if not cfg.api_key_enc and cfg.env_key:
+            raw = env.get(cfg.env_key, "")
+            if raw:
+                cfg.api_key_enc = encrypt_api_key(raw)
+                consumed_keys.add(cfg.env_key)
+                changed = True
+
+    # 2) 首次迁移：从旧 JSON 配置创建实体
+    count = await db.execute(select(func.count()).select_from(ModelConfig))
+    if count.scalar():
+        await db.flush()
+        return changed
+
     added = 0
 
     def _to_row(entry: dict, config_type: str, enabled_id: str):
-        nonlocal env_changed, added
+        nonlocal added
         if not isinstance(entry, dict):
             return
-        provider = str(entry.get("provider", "custom"))
-        p = get_provider(provider)
+        provider = str(entry.get("provider", "") or entry.get("name", "") or "自定义")
+        base_url = str(entry.get("url", "") or "")
+        model_id = str(entry.get("model", "") or "")
         api_key = str(entry.get("api_key", "") or "")
-        if p:
-            env_key = p["env_key"]
-            provider_name = p["name"]
-            base_url = str(entry.get("url", "") or p["base_url"])
-            name = str(entry.get("model", "") or entry.get("name", "") or p["name"])
-        else:
-            from datetime import datetime
-
-            env_key = f"API_KEY_CUST_{datetime.now().strftime('%H%M%S')}"
-            provider_name = str(entry.get("name", "") or provider)
-            base_url = str(entry.get("url", ""))
-            name = str(entry.get("model", "") or entry.get("name", "") or provider_name)
-        if api_key and not env.get(env_key):
-            env[env_key] = api_key
-            env_changed = True
         db.add(ModelConfig(
             provider=provider,
-            provider_name=provider_name,
-            name=name,
+            provider_name=provider,
+            name=model_id or provider,
             base_url=base_url,
-            model_id=str(entry.get("model", "") or ""),
+            model_id=model_id,
             config_type=config_type,
             enabled=(str(entry.get("id", "")) == enabled_id),
-            env_key=env_key,
+            env_key="",
+            api_key_enc=encrypt_api_key(api_key),
         ))
         added += 1
 
@@ -170,22 +196,25 @@ async def migrate_legacy_configs(db: AsyncSession) -> bool:
         _to_row(e, "search", env.get("ACTIVE_SEARCH", ""))
 
     await db.flush()
-    if env_changed:
-        write_env_file(env)
-    return added > 0
 
+    # 迁移完成后清理 env 中已被消费的旧 API_KEY_*，保留 SECRET_KEY
+    removed = [k for k in consumed_keys if k in env]
+    if removed:
+        from pathlib import Path
 
-def config_to_dict(cfg: ModelConfig) -> dict:
-    key = api_key_value(cfg.env_key)
-    return {
-        "id": cfg.id,
-        "provider": cfg.provider,
-        "provider_name": cfg.provider_name or cfg.provider,
-        "name": cfg.name,
-        "base_url": cfg.base_url,
-        "model_id": cfg.model_id,
-        "config_type": cfg.config_type,
-        "enabled": bool(cfg.enabled),
-        "has_api_key": bool(key),
-        "env_key": cfg.env_key,
-    }
+        from app.config import BASE_DIR
+
+        env_file = BASE_DIR / ".env"
+        if env_file.exists():
+            lines = env_file.read_text(encoding="utf-8").splitlines()
+            keep = []
+            for line in lines:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#") and "=" in stripped:
+                    key = stripped.split("=", 1)[0].strip()
+                    if key in removed:
+                        continue
+                keep.append(line)
+            env_file.write_text("\n".join(keep).rstrip() + "\n", encoding="utf-8")
+
+    return changed or added > 0

@@ -113,3 +113,23 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 - **如何启用每日简报 / 智能推荐 / 自动生成封面？** 进入 **设置 → Agent 管理**，打开对应开关（自动生成封面需要先启用一个文生图模型）。
 - **提示词在哪里调整？** **设置 → Agent 管理 → 提示词管理**，可分别定制定时资讯、智能推荐、AI 简报的系统提示词。
 - **`sign.png`、`cover/default/*`、`avatar/default-avatar.png` 是什么？** 系统默认资源：站点 logo、默认新闻封面、默认头像，随代码仓库一起提供。
+
+---
+
+## 预设厂商参考
+
+新增配置时在「模型与服务配置 → 新增」中直接填写服务商名称、Base URL、API Key 与模型 ID 即可。以下为常见预设厂商信息（大语言 / 文生图 / 搜索），API Key 需在各厂商后台自行申请，填写后在平台内**加密存储**。
+
+| 厂商名称 | 支持类型 | Base URL | API 后台 / 申请地址 |
+|---------|---------|----------|---------------------|
+| DeepSeek | 大语言 | `https://api.deepseek.com/v1` | <https://platform.deepseek.com/> |
+| Kimi（月之暗面） | 大语言 | `https://api.moonshot.cn/v1` | <https://platform.moonshot.cn/> |
+| 智谱 AI | 大语言 | `https://open.bigmodel.cn/api/paas/v4` | <https://open.bigmodel.cn/> |
+| MiniMax | 大语言 | `https://api.minimax.chat/v1` | <https://platform.minimaxi.com/> |
+| MiMo（小米） | 大语言 / 搜索 | `https://api.mimo.xiaomi.com/v1` | <https://platform.mimo.xiaomi.com/> |
+| 阿里云百炼 | 大语言 / 文生图 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | <https://bailian.console.aliyun.com/> |
+| 字节方舟 | 大语言 / 文生图 | `https://ark.cn-beijing.volces.com/api/v3` | <https://console.volcengine.com/ark/> |
+| 腾讯混元 | 大语言 | `https://api.hunyuan.cloud.tencent.com/v1` | <https://console.cloud.tencent.com/hunyuan> |
+| Tavily | 搜索 | `https://api.tavily.com` | <https://app.tavily.com/> |
+
+> 以上 Base URL 为 OpenAI 兼容接口地址；文生图模型请使用各厂商文档中提供的文生图模型 ID（如阿里云百炼 `wanx2.1-t2i-turbo`、字节方舟 `seedream-3-0-t2i` 等）。其他厂商可按相同格式自定义配置。

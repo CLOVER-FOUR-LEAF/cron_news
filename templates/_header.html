@@ -622,18 +622,9 @@
         </div>
         <div class="modal-body">
             <div class="form-group">
-                <label>服务商</label>
-                <select id="configProviderSelect" class="form-select"></select>
+                <label>服务商名称</label>
+                <input type="text" id="configProviderInput" maxlength="50">
             </div>
-            <div class="form-group collapsible collapsed" id="configNameGroup">
-                <label>名称</label>
-                <input type="text" id="configNameInput" maxlength="30">
-            </div>
-            <div class="form-group">
-                <label>模型 ID</label>
-                <input type="text" id="configModelInput">
-            </div>
-            <p class="config-bill-hint">当前预设均为按量计费配置，如需使用各家订阅，请选择自定义选项自行配置。</p>
             <div class="form-group">
                 <label>Base URL</label>
                 <input type="text" id="configUrlInput">
@@ -649,9 +640,16 @@
                         </svg>
                     </button>
                 </div>
+                <span class="config-key-hint" id="configKeyHint"></span>
             </div>
+            <div class="form-group" id="configModelGroup">
+                <label>模型 ID</label>
+                <input type="text" id="configModelInput">
+            </div>
+            <p class="config-test-result" id="configTestResult"></p>
         </div>
         <div class="modal-footer">
+            <button class="btn-secondary" id="testConfigBtn">测试连接</button>
             <button class="btn-secondary" data-close>取消</button>
             <button class="btn-primary" id="saveConfigBtn">保存</button>
         </div>
@@ -793,7 +791,6 @@
         activeConfig: { llm: '', image: '', search: '' },
         hasLlmKey: false,
         hasSearchKey: false,
-        providerOptions: { llm: [], image: [], search: [] },
         editingConfig: null,
         editingConfigType: 'llm',
         deletingConfig: null,
@@ -1588,25 +1585,8 @@
         }
     });
 
-        /* ===== 模型与服务配置（大语言 / 文生图 / 搜索） ===== */
+            /* ===== 模型与服务配置（大语言 / 文生图 / 搜索） ===== */
     const CONFIG_TYPE_LABEL = { llm: '大语言模型', image: '文生图模型', search: '搜索服务' };
-
-    function configTypeOf(el) {
-        const id = el.closest('.config-col').id;
-        return id === 'configListLlm' ? 'llm' : (id === 'configListImage' ? 'image' : 'search');
-    }
-
-    async function loadProviderOptions(config_type) {
-        try {
-            const resp = await fetch(`/api/model-configs/providers?config_type=${config_type}`);
-            const data = await resp.json();
-            state.providerOptions[config_type] = data.items || [];
-            return state.providerOptions[config_type];
-        } catch (e) {
-            state.providerOptions[config_type] = [];
-            return [];
-        }
-    }
 
     function renderConfigList(config_type) {
         const containerId = { llm: 'configListLlm', image: 'configListImage', search: 'configListSearch' }[config_type];
@@ -1648,18 +1628,18 @@
                         <div class="llm-config-sub">${escapeHtml(small)}${cfg.has_api_key ? '' : ' · 未填配置 API Key'}</div>
                     </div>
                     <div class="llm-config-actions">
-                        <button type="button" class="btn-icon cfg-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '\u53d6\u6d88\u542f\u7528' : '\u542f\u7528'}">
+                        <button type="button" class="btn-icon cfg-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '取消启用' : '启用'}">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M8 1.5v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                                 <path d="M4.2 3.8a5.5 5.5 0 107.6 0" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                             </svg>
                         </button>
-                        <button type="button" class="btn-icon cfg-edit-btn" title="\u7f16\u8f91">
+                        <button type="button" class="btn-icon cfg-edit-btn" title="编辑">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
                             </svg>
                         </button>
-                        <button type="button" class="btn-icon btn-icon-danger cfg-del-btn ${isActive ? 'disabled' : ''}" title="${isActive ? '\u5df2\u542f\u7528\u7684\u914d\u7f6e\u4e0d\u80fd\u5220\u9664\uff0c\u8bf7\u5148\u53d6\u6d88\u542f\u7528' : '\u5220\u9664'}" ${isActive ? 'disabled' : ''}>
+                        <button type="button" class="btn-icon btn-icon-danger cfg-del-btn ${isActive ? 'disabled' : ''}" title="${isActive ? '已启用的配置不能删除，请先取消启用' : '删除'}" ${isActive ? 'disabled' : ''}>
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
@@ -1701,81 +1681,77 @@
         btn.addEventListener('click', () => openConfigEdit(btn.dataset.type, null));
     });
 
-    async function openConfigEdit(config_type, configId) {
+    function resetConfigTestResult() {
+        const el = $('configTestResult');
+        if (el) { el.style.display = 'none'; el.textContent = ''; }
+    }
+
+    function openConfigEdit(config_type, configId) {
         state.editingConfigType = config_type;
         state.editingConfig = configId ? state.configs[config_type].find(c => String(c.id) === String(configId)) : null;
 
         $('configEditTitle').textContent = state.editingConfig ? '编辑配置' : '新增配置';
-        $('configModelInput').style.display = config_type === 'search' ? 'none' : '';
-        $('configModelInput').closest('.form-group').style.display = config_type === 'search' ? 'none' : '';
-
-        const opts = await loadProviderOptions(config_type);
-        const sel = $('configProviderSelect');
-        sel.innerHTML = '<option value="" disabled hidden>下拉选择服务商</option>' +
-            opts.map(p => `<option value="${p.id}">${p.name}</option>`).join('') +
-            '<option value="custom">自定义</option>';
+        const modelGroup = $('configModelGroup');
+        if (modelGroup) modelGroup.style.display = config_type === 'search' ? 'none' : '';
 
         const cfg = state.editingConfig;
-        if (cfg) {
-            const isPreset = opts.some(o => o.id === cfg.provider);
-            sel.value = cfg.provider;
-            $('configNameInput').value = cfg.provider === 'custom' ? (cfg.provider_name || '') : '';
-            $('configUrlInput').value = cfg.base_url || '';
-            $('configModelInput').value = cfg.model_id || '';
-            $('configApiKeyInput').value = '';
-            $('configApiKeyInput').type = 'password';
-            applyConfigProviderState(isPreset ? cfg.provider : 'custom');
-        } else {
-            sel.value = '';
-            $('configNameInput').value = '';
-            $('configUrlInput').value = '';
-            $('configModelInput').value = '';
-            $('configApiKeyInput').value = '';
-            $('configApiKeyInput').type = 'password';
-            applyConfigProviderState('custom');
-        }
+        $('configProviderInput').value = cfg ? (cfg.provider_name || cfg.provider || '') : '';
+        $('configUrlInput').value = cfg ? (cfg.base_url || '') : '';
+        $('configModelInput').value = cfg ? (cfg.model_id || '') : '';
+        $('configApiKeyInput').value = '';
+        $('configApiKeyInput').type = 'password';
+        $('configKeyHint').textContent = cfg && cfg.has_api_key ? '已配置 API Key，留空表示不修改' : '';
+        $('configApiKeyInput').placeholder = cfg && cfg.has_api_key ? '已配置，留空不修改' : '输入 API Key';
+        resetConfigTestResult();
         openModal('configEditModal');
     }
 
-    function applyConfigProviderState(providerId) {
-        const opts = state.providerOptions[state.editingConfigType] || [];
-        const preset = opts.find(o => o.id === providerId);
-        const isCustom = providerId === 'custom' || !preset;
-        $('configNameGroup').classList.toggle('collapsed', !isCustom);
-        const urlInput = $('configUrlInput');
-        if (!isCustom && preset.base_url) {
-            urlInput.value = preset.base_url;
-            urlInput.setAttribute('readonly', 'readonly');
-            urlInput.classList.add('input-readonly');
-        } else {
-            urlInput.removeAttribute('readonly');
-            urlInput.classList.remove('input-readonly');
-        }
-        if (!isCustom && preset.api_key) {
-            $('configApiKeyInput').value = preset.api_key;
-        } else if (!state.editingConfig || !preset) {
-            $('configApiKeyInput').value = '';
+    async function testConfigNow() {
+        const config_type = state.editingConfigType;
+        const payload = {
+            provider: $('configProviderInput').value.trim(),
+            base_url: $('configUrlInput').value.trim(),
+            model_id: $('configModelInput').value.trim(),
+            config_type,
+            api_key: $('configApiKeyInput').value.trim(),
+        };
+        const resultEl = $('configTestResult');
+        if (!payload.base_url) { showToast('请输入 Base URL', 'error'); return; }
+        if (config_type !== 'search' && !payload.model_id) { showToast('请输入模型 ID', 'error'); return; }
+        const btn = $('testConfigBtn');
+        btn.disabled = true;
+        btn.textContent = '测试中…';
+        resultEl.style.display = 'none';
+        try {
+            const resp = await fetch('/api/model-configs/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            resultEl.textContent = data.message || '测试完成';
+            resultEl.className = 'config-test-result ' + (data.ok ? 'ok' : 'fail');
+            resultEl.style.display = '';
+        } catch (e) {
+            resultEl.textContent = '测试失败：网络错误';
+            resultEl.className = 'config-test-result fail';
+            resultEl.style.display = '';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '测试连接';
         }
     }
 
-    $('configProviderSelect').addEventListener('change', () => {
-        applyConfigProviderState($('configProviderSelect').value);
-    });
+    $('testConfigBtn').addEventListener('click', testConfigNow);
 
     $('saveConfigBtn').addEventListener('click', async () => {
         const config_type = state.editingConfigType;
-        const provider = $('configProviderSelect').value;
-        if (!provider) { showToast('请选择服务商', 'error'); return; }
-
-        const opts = state.providerOptions[config_type] || [];
-        const preset = opts.find(o => o.id === provider);
-        const isCustom = provider === 'custom' || !preset;
-        const name = isCustom ? $('configNameInput').value.trim() : '';
+        const provider = $('configProviderInput').value.trim();
         const url = $('configUrlInput').value.trim();
         const model = $('configModelInput').value.trim();
         const apiKey = $('configApiKeyInput').value.trim();
 
-        if (isCustom && !name) { showToast('请输入配置名称', 'error'); return; }
+        if (!provider) { showToast('请输入服务商名称', 'error'); return; }
         if (!url) { showToast('请输入 Base URL', 'error'); return; }
         if (config_type !== 'search' && !model) { showToast('请输入模型 ID', 'error'); return; }
 
@@ -1786,13 +1762,13 @@
                 resp = await fetch(`/api/model-configs/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, base_url: url, model_id: model, api_key: apiKey })
+                    body: JSON.stringify({ name: model, base_url: url, model_id: model, api_key: apiKey })
                 });
             } else {
                 resp = await fetch('/api/model-configs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider, name, base_url: url, model_id: model, config_type, api_key: apiKey, enabled: false })
+                    body: JSON.stringify({ provider, base_url: url, model_id: model, config_type, api_key: apiKey, enabled: false })
                 });
             }
             if (resp.ok) {

@@ -142,18 +142,19 @@ GET /api/news/{id}/related?limit=10
 
 ## 模型与服务配置接口
 
-平台的大语言 / 文生图 / 搜索服务配置统一入库（`model_configs` 表），env 仅存各服务商 API Key。
+平台的大语言 / 文生图 / 搜索服务配置统一入库（`model_configs` 表），API Key 使用 `SECRET_KEY` 加密后存储在数据库，不落盘明文。
 
 ```
 GET  /api/model-configs?config_type=llm|image|search    # 列表（含 enabled / has_api_key）
 POST /api/model-configs                                  # 新增
-PUT  /api/model-configs/{id}                             # 编辑
-DELETE /api/model-configs/{id}                           # 删除
+PUT  /api/model-configs/{id}                             # 编辑（api_key 留空表示不修改）
+DELETE /api/model-configs/{id}                           # 删除（已启用配置不可删除）
 POST /api/model-configs/{id}/enable                      # 启用（同类型仅一个启用）
-GET  /api/model-configs/providers?config_type=llm|image|search  # 预设服务商列表
+POST /api/model-configs/{id}/disable                     # 取消启用
+POST /api/model-configs/test                             # 测试连接（body 同新增字段，不落库）
 ```
 
-- 新增时 `provider` 传预设 id（如 `bailian`、`volcano`）或 `custom`；预设会从 env 读取该厂商已配置的 API Key。
+- 新增 / 测试连接时传入字段：`provider`（服务商名称）、`base_url`、`model_id`、`config_type`（llm/image/search）、`api_key`。
 - 封面相关：开启「自动生成资讯封面」后，资讯助手会为新增新闻调用启用的文生图模型生成封面；关闭时随机抽取一张系统默认封面。封面统一保存到 `/images/cover/{新闻id}.png`。
 
 ## 统计接口

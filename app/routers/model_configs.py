@@ -1,21 +1,19 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.env_store import read_env_file, write_env_file
+from app.env_store import read_env_file
 from app.models import ModelConfig
 from app.services.model_configs import (
     CONFIG_TYPES,
-    PROVIDERS,
-    get_provider,
-    providers_for_type,
     set_enabled,
     set_disabled,
     config_to_dict,
     get_configs,
-    api_key_value,
+    encrypt_api_key,
 )
 
 router = APIRouter(prefix="/api/model-configs", tags=["model-configs"])
@@ -23,7 +21,6 @@ router = APIRouter(prefix="/api/model-configs", tags=["model-configs"])
 
 class ModelConfigCreate(BaseModel):
     provider: str
-    name: str = ""
     base_url: str = ""
     model_id: str = ""
     config_type: str
@@ -36,15 +33,6 @@ class ModelConfigUpdate(BaseModel):
     base_url: str | None = None
     model_id: str | None = None
     api_key: str | None = None
-
-
-@router.get("/providers")
-async def list_providers(config_type: str):
-    items = []
-    for p in providers_for_type(config_type):
-        key = api_key_value(p["env_key"])
-        items.append({**p, "has_key": bool(key), "api_key": key})
-    return {"items": items}
 
 
 @router.get("")
@@ -60,50 +48,29 @@ async def create_config(body: ModelConfigCreate, db: AsyncSession = Depends(get_
     if body.config_type not in CONFIG_TYPES:
         raise HTTPException(status_code=400, detail="不支持的配置类型")
 
-    provider = get_provider(body.provider)
-    env = read_env_file()
+    provider = body.provider.strip()
+    base_url = body.base_url.strip()
+    model_id = body.model_id.strip()
 
-    if provider:
-        env_key = provider["env_key"]
-        base_url = body.base_url.strip() or provider["base_url"]
-        provider_name = provider["name"]
-        name = body.name.strip() or body.model_id.strip() or provider["name"]
-        if body.api_key.strip():
-            env[env_key] = body.api_key.strip()
-            write_env_file(env)
-    else:
-        # 自定义配置
-        env_key = ""
-        base_url = body.base_url.strip()
-        provider_name = body.name.strip() or "自定义"
-        name = body.model_id.strip() or body.name.strip() or "自定义"
-        if not base_url:
-            raise HTTPException(status_code=400, detail="自定义配置必须填写 Base URL")
-        if body.api_key.strip():
-            from datetime import datetime
-
-            env_key = f"API_KEY_CUST_{datetime.now().strftime('%H%M%S')}"
-            env[env_key] = body.api_key.strip()
-            write_env_file(env)
-
+    if not provider:
+        raise HTTPException(status_code=400, detail="请填写服务商名称")
     if not base_url:
         raise HTTPException(status_code=400, detail="请填写 Base URL")
-    if not body.model_id.strip() and body.config_type != "search":
+    if not model_id and body.config_type != "search":
         raise HTTPException(status_code=400, detail="请填写模型 ID")
 
-    # 同一类型只允许一个启用；启用第一个时自动启用
     existing = await get_configs(db, body.config_type)
     will_enable = body.enabled or len(existing) == 0
 
     cfg = ModelConfig(
-        provider=body.provider,
-        provider_name=provider_name,
-        name=name,
+        provider=provider,
+        provider_name=provider,
+        name=model_id or provider,
         base_url=base_url,
-        model_id=body.model_id.strip(),
+        model_id=model_id,
         config_type=body.config_type,
         enabled=will_enable,
-        env_key=env_key,
+        api_key_enc=encrypt_api_key(body.api_key.strip()),
     )
     if will_enable:
         for old in existing:
@@ -127,15 +94,12 @@ async def update_config(config_id: int, body: ModelConfigUpdate, db: AsyncSessio
         cfg.base_url = body.base_url.strip()
     if body.model_id is not None:
         cfg.model_id = body.model_id.strip()
+        if cfg.name == cfg.model_id or not cfg.name:
+            cfg.name = body.model_id.strip()
 
+    # API Key 仅在传入非空时更新（留空表示不修改）
     if body.api_key is not None and body.api_key.strip():
-        env = read_env_file()
-        if not cfg.env_key:
-            from datetime import datetime
-
-            cfg.env_key = f"API_KEY_CUST_{datetime.now().strftime('%H%M%S')}"
-        env[cfg.env_key] = body.api_key.strip()
-        write_env_file(env)
+        cfg.api_key_enc = encrypt_api_key(body.api_key.strip())
 
     await db.flush()
     await db.refresh(cfg)
@@ -180,3 +144,80 @@ async def disable_config(config_id: int, db: AsyncSession = Depends(get_db)):
     await set_disabled(db, config_id)
     await db.refresh(cfg)
     return config_to_dict(cfg)
+
+
+class TestConnectionModel(BaseModel):
+    provider: str = ""
+    base_url: str = ""
+    model_id: str = ""
+    config_type: str
+    api_key: str = ""
+
+
+async def _probe(config_type: str, base_url: str, api_key: str, model_id: str) -> tuple[bool, str]:
+    if not base_url or not api_key:
+        return False, "Base URL 与 API Key 为必填项"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        if config_type == "search":
+            resp = await client.post(
+                f"{base_url}/search",
+                headers=headers,
+                json={"query": "test", "max_results": 1},
+            )
+            if resp.status_code < 400:
+                return True, "连接成功"
+            try:
+                detail = resp.json().get("error", {}).get("message", resp.text[:120])
+            except Exception:
+                detail = resp.text[:120]
+            return False, f"连接失败（{resp.status_code}）：{detail}"
+
+        if config_type == "image":
+            try:
+                resp = await client.get(f"{base_url}/models", headers=headers)
+                if resp.status_code < 400:
+                    return True, "连接成功"
+            except Exception:
+                pass
+            resp = await client.get(f"{base_url.rstrip('/')}", headers=headers)
+            if resp.status_code < 500:
+                return True, "连接成功（基础地址可达）"
+            return False, f"连接失败（{resp.status_code}）：{resp.text[:120]}"
+
+        # 大语言模型：轻量 chat completions
+        if not model_id:
+            return False, "请填写模型 ID"
+        resp = await client.post(
+            f"{base_url}/chat/completions",
+            headers=headers,
+            json={
+                "model": model_id,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 4,
+            },
+        )
+        if resp.status_code < 400:
+            return True, "连接成功"
+        try:
+            detail = resp.json().get("error", {}).get("message", resp.text[:120])
+        except Exception:
+            detail = resp.text[:120]
+        return False, f"连接失败（{resp.status_code}）：{detail}"
+
+
+@router.post("/test")
+async def test_connection(body: TestConnectionModel):
+    if body.config_type not in CONFIG_TYPES:
+        raise HTTPException(status_code=400, detail="不支持的配置类型")
+    try:
+        ok, message = await _probe(body.config_type, body.base_url.strip(), body.api_key.strip(), body.model_id.strip())
+    except httpx.HTTPError as e:
+        ok, message = False, f"网络错误：{e}"
+    except Exception as e:
+        ok, message = False, f"测试失败：{e}"
+    return {"ok": ok, "message": message}
