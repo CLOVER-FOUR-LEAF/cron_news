@@ -223,14 +223,19 @@ class Scheduler:
             try:
                 mode = self._work_mode()
                 if mode != "autonomous":
+                    # 非自主模式下定时任务不自动执行，但记录一次可见原因（辅助模式由外部 Agent 推送）
                     self._next_run = None
                     self._caught_up = False
+                    skip_reason = (
+                        "当前为辅助模式，定时任务不会自动执行（辅助模式下由外部 Agent 推送）；"
+                        "请在「工作模式」中切换为自主模式"
+                    )
                     if mode != last_mode:
-                        logger.info(
-                            "当前工作模式：%s，定时采集仅在「自主模式」下自动执行（辅助模式由外部 Agent 推送）",
-                            mode or "未设置",
-                        )
+                        logger.info("当前工作模式：%s，%s", mode or "未设置", skip_reason)
                         last_mode = mode
+                        if skip_reason != last_skip_reason:
+                            await self._record_skip(skip_reason)
+                            last_skip_reason = skip_reason
                     await asyncio.sleep(15)
                     continue
                 if last_mode != mode:
