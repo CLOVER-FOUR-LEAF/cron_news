@@ -51,10 +51,25 @@ async def lifespan(app: FastAPI):
     await seed_categories()
     await migrate_legacy_configs()
     ensure_default_nickname()
+    ensure_runtime_image_dirs()
     scheduler_service.start()
     yield
     scheduler_service.stop()
     print(f"Shutting down {settings.APP_NAME}")
+
+
+def ensure_runtime_image_dirs():
+    """确保运行时图片目录存在（images 挂载目录可能为空），避免 /images 静态挂载与封面功能失效。"""
+    images_dir = BASE_DIR / "images"
+    cover_dir = images_dir / "cover"
+    default_dir = cover_dir / "default"
+    for d in (images_dir, cover_dir, default_dir, images_dir / "avatar"):
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+    if not any(default_dir.iterdir()):
+        print("[Config] 提示：images/cover/default 目录为空，将无法使用默认封面，请确认默认图片资源已随代码部署")
 
 
 async def migrate_legacy_configs():

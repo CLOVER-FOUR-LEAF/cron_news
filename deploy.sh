@@ -49,6 +49,11 @@ ok "配置文件 .env 已存在"
 mkdir -p database logs images images/cover/default images/avatar
 ok "数据目录已就绪：database/  logs/  images/"
 
+# 检查默认图片资源是否齐全（默认封面 / 头像 / logo），缺失时警告
+if [ ! -f images/sign.png ] || [ ! -f images/avatar/default-avatar.png ] || [ -z "$(ls images/cover/default/*.png 2>/dev/null)" ]; then
+  warn "images 默认资源不完整（默认封面 / 头像 / logo），请确认已完整拉取代码（勿使用稀疏克隆或 LFS 跳过）。"
+fi
+
 # ---------- 4. 构建并启动 ----------
 info "构建镜像并启动容器（首次构建可能需要几分钟）..."
 "${COMPOSE[@]}" up -d --build

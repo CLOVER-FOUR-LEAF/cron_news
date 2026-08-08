@@ -42,6 +42,12 @@ Write-Host "[deploy] 配置文件 .env 已存在" -ForegroundColor $Green
 New-Item -ItemType Directory -Force -Path database, logs, images, "images\cover\default", "images\avatar" | Out-Null
 Write-Host "[deploy] 数据目录已就绪: database/  logs/  images/" -ForegroundColor $Green
 
+# 检查默认图片资源是否齐全（默认封面 / 头像 / logo）
+$MissingDefaultImages = -not (Test-Path images\sign.png) -or -not (Test-Path images\avatar\default-avatar.png) -or @(Get-ChildItem images\cover\default\*.png -ErrorAction SilentlyContinue).Count -eq 0
+if ($MissingDefaultImages) {
+    Write-Host "[deploy] 警告: images 默认资源不完整（默认封面 / 头像 / logo），请确认已完整拉取代码（勿用稀疏克隆或 LFS 跳过）。" -ForegroundColor $Yellow
+}
+
 # ---------- 4. 构建并启动 ----------
 Write-Host "[deploy] 构建镜像并启动容器（首次构建可能需要几分钟）..." -ForegroundColor $Cyan
 docker compose up -d --build

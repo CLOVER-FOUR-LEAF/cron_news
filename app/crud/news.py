@@ -146,15 +146,42 @@ async def create_news(db: AsyncSession, news_in: NewsCreate) -> News:
     await db.refresh(news)
 
     if news_in.cover_url:
-        old_path = BASE_DIR / news_in.cover_url.lstrip('/')
-        if old_path.exists():
-            COVER_DIR.mkdir(parents=True, exist_ok=True)
-            new_path = COVER_DIR / f"{news.id}.png"
-            shutil.move(str(old_path), str(new_path))
-            news.cover_url = f"/images/cover/{news.id}.png"
+        final = await finalize_cover(news, news_in.cover_url)
+        if final:
+            news.cover_url = final
             await db.flush()
 
     return news
+
+
+async def finalize_cover(news: News, cover_url: str) -> str | None:
+    """外部 Agent 提供的封面图落盘改名：把 images 目录下的图片改名保存到 cover/{新闻id}.{扩展名}。
+
+    - 仅接受 `/images/` 开头的本地路径（外部 Agent 已把图片放进挂载的 images 目录，容器内可读）；
+    - 校验路径位于 images 目录内，防止路径穿越；
+    - 文件不存在时返回 None（保留原链接，由前端兜底），并确保返回的新链接真实存在。
+    """
+    if not cover_url or not cover_url.startswith("/images/"):
+        return None
+    images_dir = IMAGES_DIR.resolve()
+    try:
+        old_path = (IMAGES_DIR / cover_url[len("/images/"):]).resolve()
+    except OSError:
+        return None
+    if not str(old_path).startswith(str(images_dir) + os.sep):
+        return None
+    if not old_path.is_file():
+        return None
+    try:
+        COVER_DIR.mkdir(parents=True, exist_ok=True)
+        suffix = (old_path.suffix or ".png").lower()
+        if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+            suffix = ".png"
+        new_path = COVER_DIR / f"{news.id}{suffix}"
+        shutil.move(str(old_path), str(new_path))
+        return f"/images/cover/{news.id}{suffix}"
+    except OSError:
+        return None
 
 
 async def mark_news_as_reading(db: AsyncSession, news_id: int) -> bool:

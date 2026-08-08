@@ -99,7 +99,13 @@ Content-Type: application/json
 
 成功返回 `201` 及完整新闻对象（含自增 `id`、最终 `category_name`、`cover_url`）。
 
-> **封面图约定**：若传 `cover_url`，请先把图片文件写入平台的 `images` 目录（容器内为 `/app/images/`，宿主机部署为项目根 `images/`），再传 `/images/xxx.png`（任意文件名）。平台会把该文件移动到 `/images/cover/{id}.png` 并改写 `cover_url` 字段。**不传** `cover_url` 时，平台在自主模式下按开关自动生成/选取默认封面；辅助模式下无封面时由前端兜底展示。
+> **封面图约定（辅助模式封面落盘 → 平台改名）**：
+>
+> 1. 外部 Agent 先把封面图**写入平台挂载的 `images` 目录**：宿主机部署为项目根 `images/`（容器内为 `/app/images/`），两者同步；最常用路径为 `images/cover/`（如 `/images/cover/外部生成_时间戳.png`），也可放在 `images/` 任意子目录。
+> 2. 推送新闻时在 `cover_url` 传对应的本地链接，如 `/images/cover/xxx.png`。
+> 3. 平台收到后会把该文件**改名**为 `/images/cover/{新闻id}.{原扩展名}`（如 `/images/cover/508.png`）并回写 `cover_url` 字段——**最终封面名称以新闻 id 命名**，返回的新闻对象里即为最终链接。
+> 4. 文件名请确保**唯一**（建议时间戳/随机串），避免与其它新闻的待处理文件冲突。
+> 5. **不传** `cover_url` 时：自主模式按开关自动生成/选取默认封面；辅助模式下无封面由前端兜底展示。请勿传外链 URL（平台不会拉取外链图片）。
 
 ### 查询新闻列表
 
@@ -257,7 +263,7 @@ POST /api/model-configs/test                             # 测试连接（body �
    - `source_url`：原文链接
    - `source`：来源媒体名称
    - `category`：所属分类名称
-   - `cover_url`：封面图。调用文生图模型生成图片后，**先保存到平台 `images` 目录**（容器内 `/app/images/`，宿主为项目根 `images/`，不带分类子目录，文件名任意），再传 `/images/xxx.png`；平台会自动移动到 `/images/cover/{id}.png` 并改写字段
+   - `cover_url`：封面图。调用文生图模型生成图片后，**先把图片文件写入平台挂载的 `images` 目录**（容器内 `/app/images/`，宿主为部署根目录 `images/`），建议直接放 `images/cover/` 并取唯一文件名（如 `cover_<时间戳>.png`），再传 `/images/cover/cover_<时间戳>.png`；平台会把该文件改名到 `/images/cover/{新闻id}.png`（保留原扩展名）并改写 `cover_url` 字段
    - `collected_at`：发现时间（ISO 8601）
 3. **写入**：逐条 `POST /api/news` 入库，记录返回的 `id` 以备追踪。
 4. **去重**：推送前用 `GET /api/news?keyword=标题` 检查是否已存在。
@@ -295,4 +301,4 @@ POST /api/model-configs/test                             # 测试连接（body �
 - **正文格式**：`content` 使用 Markdown，平台详情页会自动渲染。
 - **时间**：`collected_at` 建议使用 ISO 8601；列表默认按收录时间倒序、未读优先展示。
 - **批量**：逐条 `POST /api/news`；大批量时注意控制并发，避免压垮本地服务。
-- **封面**：图片需先落盘到平台 `images` 目录再传 `/images/xxx.png`；请勿传外链 URL（平台不会拉取外链图片）。
+- **封面**：图片需先落盘到平台挂载的 `images` 目录（宿主 `images/` 与容器 `/app/images/` 同步），再传 `/images/xxx.png`；平台会改名到 `/images/cover/{新闻id}.{扩展名}`。请勿传外链 URL（平台不会拉取外链图片）。
