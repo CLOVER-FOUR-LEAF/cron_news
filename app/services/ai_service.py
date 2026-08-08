@@ -46,17 +46,19 @@ async def generate_news_content(db, title: str, summary: str) -> str:
 
     system_prompt = await get_agent_prompt(db, "timed")
 
-    prompt = f"""请根据以下新闻标题和摘要，生成一篇完整的Markdown格式新闻正文。
+    prompt = f"""请根据以下新闻标题和摘要，用简体中文撰写一篇完整的新闻正文。
+
 要求：
-1. 内容详实，逻辑清晰
-2. 使用Markdown格式（标题、段落、列表等）
-3. 约500-800字
-4. 语言风格为新闻报道风格
+1. 直接输出新闻正文本身，作为最终展示内容
+2. 使用 Markdown 格式（标题、段落、列表等）
+3. 约 500-800 字，专业新闻报道风格，客观中立
+4. 不要输出思考过程、任务说明、约束规则或任何解释性文字
+5. 不要用 Markdown 代码块包裹正文
 
 标题：{title}
 摘要：{summary}
 
-请直接输出Markdown内容，不要添加其他说明。"""
+请直接输出正文。"""
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(

@@ -31,6 +31,33 @@
 
 **前置条件**：安装 Docker 与 Docker Compose。
 
+### 方式 A：一键部署脚本（推荐）
+
+1. 拉取代码并进入项目目录：
+
+   ```bash
+   git clone <你的仓库地址> cron_news
+   cd cron_news
+   ```
+
+2. 运行部署脚本（自动检查环境 → 生成 `.env` → 准备数据目录 → 构建镜像 → 启动容器 → 健康检查 → 打印定时任务状态）：
+
+   ```bash
+   bash deploy.sh
+   ```
+
+   脚本会自动生成 `.env`（首次运行会提示你编辑后再次运行）。Windows 用户可改用：
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File deploy.ps1
+   ```
+
+3. 访问平台：<http://localhost:8000>。
+
+> 脚本会挂载四个持久化目录：`database`（SQLite）、`logs`（运行日志，每天自动归档一份，保留 30 天）、`images`（封面/头像等资源）、`.env`（配置），容器重建不会丢失数据。若宿主机端口冲突，可用 `CRON_NEWS_PORT=8080 bash deploy.sh`（需同时修改 `docker-compose.yml` 的端口映射）。
+
+### 方式 B：手动执行 compose
+
 1. 拉取代码并进入项目目录：
 
    ```bash
@@ -54,7 +81,7 @@
 
 4. 访问平台：<http://localhost:8000>
 
-**数据持久化**：`database` 目录（SQLite）与 `.env` 配置文件已通过 `docker-compose.yml` 挂载到宿主机，容器重建不会丢失数据。
+**数据持久化**：`database`（SQLite）、`logs`（日志）、`images`（图片资源）与 `.env` 配置文件已通过 `docker-compose.yml` 挂载到宿主机，容器重建不会丢失数据。
 
 **其他 Docker 用法**：
 
@@ -62,8 +89,10 @@
 # 手动构建并运行
 docker build -t cron-news .
 docker run -d -p 8000:8000 \
-  -v $(pwd)/database:/app/database \
   -v $(pwd)/.env:/app/.env \
+  -v $(pwd)/database:/app/database \
+  -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/images:/app/images \
   --name cron-news cron-news
 
 # 查看日志 / 停止 / 移除

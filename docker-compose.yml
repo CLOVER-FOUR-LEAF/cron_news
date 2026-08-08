@@ -1,15 +1,17 @@
 services:
   cron-news:
     build: .
+    image: cron-news:latest
     container_name: cron-news
     ports:
       - "8000:8000"
     environment:
       - TZ=Asia/Shanghai
     volumes:
-      # 配置与数据库持久化到宿主机，避免容器重建后丢失
+      # 四个持久化目录：配置文件、数据库、运行日志、图片资源
+      # 均相对 compose 文件所在目录（仓库根目录）挂载，容器重建后数据不丢失
       - ./.env:/app/.env
       - ./database:/app/database
-      # 运行日志持久化（logs/app.log），便于排查定时任务
       - ./logs:/app/logs
+      - ./images:/app/images
     restart: unless-stopped
