@@ -39,11 +39,17 @@ ok "Docker 环境就绪"
 if [ ! -f .env ]; then
   [ -f .env.example ] || die "缺少 .env.example，无法生成配置"
   cp .env.example .env
-  warn "已根据 .env.example 生成 .env，请编辑其中配置后再次运行本脚本。"
-  warn "（SECRET_KEY 留空会自动生成；其余按需填写，之后在网页设置里维护模型配置即可）"
-  exit 0
+  warn "已根据 .env.example 生成 .env。默认配置可直接部署："
+  warn "  - SECRET_KEY 留空会自动生成；模型/搜索配置在网页「设置」中维护"
+  warn "  - 如需连接独立数据库等，请先编辑 .env 后再重新运行本脚本"
 fi
 ok "配置文件 .env 已存在"
+
+# 提示：检测到旧部署容器（同名）将被替换重建
+if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'cron-news'; then
+  warn "检测到已存在的 cron-news 容器（可能来自旧部署），本次构建后将自动替换重建。"
+  warn "若怀疑有残留进程占用 CPU，可先执行：docker rm -f cron-news"
+fi
 
 # ---------- 3. 准备持久化目录（四个挂载目录） ----------
 mkdir -p database logs images images/cover/default images/avatar

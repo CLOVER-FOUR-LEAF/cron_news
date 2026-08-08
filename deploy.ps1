@@ -33,10 +33,18 @@ if (-not (Test-Path .env)) {
         exit 1
     }
     Copy-Item .env.example .env
-    Write-Host "[deploy] 已根据 .env.example 生成 .env，请编辑其中配置后重新运行本脚本。" -ForegroundColor $Yellow
-    exit 0
+    Write-Host "[deploy] 已根据 .env.example 生成 .env。默认配置可直接部署：" -ForegroundColor $Yellow
+    Write-Host "[deploy]   - SECRET_KEY 留空会自动生成；模型/搜索配置在网页「设置」中维护" -ForegroundColor $Yellow
+    Write-Host "[deploy]   - 如需连接独立数据库等，请先编辑 .env 后再重新运行本脚本" -ForegroundColor $Yellow
 }
 Write-Host "[deploy] 配置文件 .env 已存在" -ForegroundColor $Green
+
+# 提示：检测到旧部署容器（同名）将被替换重建
+$OldContainer = docker ps -a --format "{{.Names}}" 2>$null
+if ($OldContainer -contains 'cron-news') {
+    Write-Host "[deploy] 警告: 检测到已存在的 cron-news 容器（可能来自旧部署），本次构建后将自动替换重建。" -ForegroundColor $Yellow
+    Write-Host "[deploy] 若怀疑有残留进程占用 CPU，可先执行: docker rm -f cron-news" -ForegroundColor $Yellow
+}
 
 # ---------- 3. 准备持久化目录 ----------
 New-Item -ItemType Directory -Force -Path database, logs, images, "images\cover\default", "images\avatar" | Out-Null
