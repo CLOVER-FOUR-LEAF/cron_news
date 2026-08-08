@@ -122,7 +122,44 @@ def is_busy() -> bool:
 TABLE_ORDER = ["categories", "news", "briefs", "agent_runs", "agent_prompts"]
 
 
-async def _copy_all(source_engine, target_engine) -> dict[str, int]:
+async def _drop_foreign_keys(engine):
+    """移除目标库中已存在的数据库外键。
+
+    历史版本可能用旧模型在 MySQL/MariaDB 上建过外键（news.category_id → categories.id），
+    本应用的表关系改由 ORM/代码维护，不再使用数据库外键，避免迁移/清空时被约束阻塞。
+    """
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        dialect = engine.dialect.name
+        if dialect == "sqlite":
+            return
+
+        def _collect(sync_conn):
+            insp = sa_inspect(sync_conn)
+            return {t: insp.get_foreign_keys(t) for t in TABLE_ORDER}
+
+        async with engine.begin() as conn:
+            fk_map = await conn.run_sync(_collect)
+            for table_name, fks in fk_map.items():
+                for fk in fks:
+                    name = fk.get("name")
+                    if not name:
+                        continue
+                    if dialect == "postgresql":
+                        sql = text(f'ALTER TABLE "{table_name}" DROP CONSTRAINT "{name}"')
+                    else:
+                        sql = text(f"ALTER TABLE `{table_name}` DROP FOREIGN KEY `{name}`")
+                    try:
+                        await conn.execute(sql)
+                    except Exception as e:
+                        print(f"[DB] 删除外键 {table_name}.{name} 失败（可忽略）: {e}")
+    except Exception as e:
+        print(f"[DB] 清理外键失败（可忽略）: {e}")
+
+
+async def _ensure_schema(engine):
+    """建表并补齐列（不删除任何数据）。"""
     from app.database import (
         _ensure_category_color_column,
         _ensure_news_related_ids_column,
@@ -131,13 +168,66 @@ async def _copy_all(source_engine, target_engine) -> dict[str, int]:
         _ensure_brief_columns,
     )
 
-    async with target_engine.begin() as conn:
+    async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_ensure_category_color_column)
         await conn.run_sync(_ensure_news_related_ids_column)
         await conn.run_sync(_ensure_news_read_at_column)
         await conn.run_sync(_ensure_news_user_action_columns)
         await conn.run_sync(_ensure_brief_columns)
+
+
+async def _table_names(engine) -> set[str]:
+    from sqlalchemy import inspect as sa_inspect
+
+    def _collect(sync_conn):
+        return set(sa_inspect(sync_conn).get_table_names())
+
+    async with engine.connect() as conn:
+        return await conn.run_sync(_collect)
+
+
+async def _target_has_data(engine) -> bool:
+    """目标库是否已有所需业务表且有数据（如重新部署指向同一库）。"""
+    try:
+        async with engine.connect() as conn:
+            tables = await _table_names(engine)
+            for table_name in ("news", "categories", "briefs"):
+                if table_name not in tables:
+                    continue
+                table = Base.metadata.tables[table_name]
+                count = (await conn.execute(select(func.count()).select_from(table))).scalar()
+                if count:
+                    return True
+        return False
+    except Exception as e:
+        print(f"[DB] 检测目标库数据失败（视为空库）: {e}")
+        return False
+
+
+async def _count_all(engine) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    async with engine.connect() as conn:
+        tables = await _table_names(engine)
+        for table_name in TABLE_ORDER:
+            if table_name not in tables:
+                counts[table_name] = 0
+                continue
+            table = Base.metadata.tables[table_name]
+            counts[table_name] = (await conn.execute(select(func.count()).select_from(table))).scalar()
+    return counts
+
+
+async def _copy_all(source_engine, target_engine) -> dict[str, int]:
+    """目标库为空时：建表 + 清理历史外键 + 清空目标 + 拷贝源库数据 + 校验。"""
+    await _ensure_schema(target_engine)
+    await _drop_foreign_keys(target_engine)
+
+    # 逆序清空目标表（外键/依赖顺序安全；目标库为空时此处为无操作）
+    async with target_engine.begin() as conn:
+        for table_name in reversed(TABLE_ORDER):
+            table = Base.metadata.tables[table_name]
+            await conn.execute(table.delete())
 
     counts = {}
     for table_name in TABLE_ORDER:
@@ -146,7 +236,6 @@ async def _copy_all(source_engine, target_engine) -> dict[str, int]:
             rows = (await src.execute(select(table))).mappings().all()
         data = [dict(r) for r in rows]
         async with target_engine.begin() as tgt:
-            await tgt.execute(table.delete())
             if data:
                 await tgt.execute(table.insert(), data)
         counts[table_name] = len(data)
@@ -161,8 +250,7 @@ async def _copy_all(source_engine, target_engine) -> dict[str, int]:
 
 
 async def run_switch(mode: str, keep_data: bool) -> dict:
-    MIGRATION.update(state="migrating", message="正在迁移数据，请勿操作…", detail="")
-    old_engine = None
+    MIGRATION.update(state="migrating", message="正在处理数据库切换，请勿操作…", detail="")
     try:
         state = get_db_state()
 
@@ -185,12 +273,19 @@ async def run_switch(mode: str, keep_data: bool) -> dict:
         )
 
         try:
-            counts = await _copy_all(source_engine, target_engine)
+            if await _target_has_data(target_engine):
+                # 目标库已有所需数据（可能是单纯重新部署指向同一库）：不覆盖、不删除，直接切换
+                await _ensure_schema(target_engine)
+                await _drop_foreign_keys(target_engine)
+                counts = await _count_all(target_engine)
+                direct_switch = True
+            else:
+                counts = await _copy_all(source_engine, target_engine)
+                direct_switch = False
         except Exception:
             await target_engine.dispose()
             raise
 
-        old_engine = source_engine
         activate_engine(target_url)
 
         env = read_env_file()
@@ -199,18 +294,25 @@ async def run_switch(mode: str, keep_data: bool) -> dict:
 
         detail = "、".join(f"{k} {v} 条" for k, v in counts.items())
 
-        if not keep_data:
-            if mode == "standalone":
-                await old_engine.dispose()
-                db_file = Path(settings.DB_PATH)
-                if db_file.exists():
-                    os.remove(db_file)
-            else:
-                async with old_engine.begin() as conn:
-                    await conn.run_sync(Base.metadata.drop_all)
-                await old_engine.dispose()
+        if direct_switch:
+            message = "目标库已存在数据，直接切换（未做任何删除或覆盖）"
+        else:
+            message = "迁移完成"
+            if not keep_data:
+                if mode == "standalone":
+                    db_file = Path(settings.DB_PATH)
+                    if db_file.exists():
+                        os.remove(db_file)
+                else:
+                    async with source_engine.begin() as conn:
+                        await conn.run_sync(Base.metadata.drop_all)
 
-        MIGRATION.update(state="done", message="迁移完成", detail=detail)
+        try:
+            await source_engine.dispose()
+        except Exception:
+            pass
+
+        MIGRATION.update(state="done", message=message, detail=detail)
         return MIGRATION
     except Exception as e:
         MIGRATION.update(state="error", message="迁移失败，已回滚，原数据库未受影响", detail=str(e))

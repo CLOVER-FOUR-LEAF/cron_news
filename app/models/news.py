@@ -1,7 +1,7 @@
 from datetime import datetime
 import json
 
-from sqlalchemy import String, Text, DateTime, SmallInteger, Integer, ForeignKey
+from sqlalchemy import String, Text, DateTime, SmallInteger, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -16,7 +16,8 @@ class News(Base):
     content: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Markdown正文")
     source_url: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="原文链接")
     source: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="来源")
-    category_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("categories.id"), nullable=True, comment="分类ID")
+    # 分类关系仅由 ORM/代码维护，不使用数据库外键约束，避免迁移/删除时被约束阻塞
+    category_id: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="分类ID")
     cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="封面图URL")
     collected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="收录时间")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, comment="创建时间")
@@ -32,7 +33,13 @@ class News(Base):
     later_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="稍后再读标记时间")
     related_ids: Mapped[str | None] = mapped_column(Text, nullable=True, comment="智能推荐相关新闻ID集合(JSON)")
 
-    category = relationship("Category", backref="news_items", lazy="joined")
+    category = relationship(
+        "Category",
+        backref="news_items",
+        lazy="joined",
+        primaryjoin="News.category_id == Category.id",
+        foreign_keys="News.category_id",
+    )
 
     @property
     def category_name(self) -> str | None:

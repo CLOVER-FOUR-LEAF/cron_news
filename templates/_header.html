@@ -1234,7 +1234,7 @@
             }
         });
         btn.addEventListener('mouseleave', hideDbTip);
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             if (state.dbMode === mode) return;
             if (mode === 'standalone' && !state.dbComplete) {
                 showDbTip('无完整独立数据库配置，请先点击齿轮完成配置并通过连接测试');
@@ -1242,12 +1242,30 @@
                 return;
             }
             pendingDbMode = mode;
-            if (mode === 'standalone') {
-                $('dbSwitchText').textContent = '将系统数据库（SQLite）切换到独立数据库？确认后会把当前全部数据迁移到你配置的独立数据库。';
-                $('dbKeepHint').textContent = '勾选则保留源 SQLite 文件；不勾选则迁移完成后删除 SQLite 数据库文件。';
-            } else {
-                $('dbSwitchText').textContent = '从独立数据库切换回系统数据库（SQLite）？确认后会把独立数据库中的全部数据迁移回 SQLite。';
-                $('dbKeepHint').textContent = '勾选则保留独立数据库中的数据；不勾选则迁移完成后清空独立数据库的表。';
+            $('dbSwitchText').textContent = '正在检测目标数据库…';
+            const base = '切换后将以目标数据库内容为准；两种数据库只能保证读取到其中一个的数据。';
+            try {
+                const resp = await fetch('/api/db/precheck', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode })
+                });
+                const data = await resp.json();
+                const targetHasData = !!(data && data.ok && data.has_data);
+                if (mode === 'standalone') {
+                    $('dbSwitchText').textContent = base + (targetHasData
+                        ? ' 目标独立数据库已存在数据，将【直接切换】，不会覆盖或删除目标库中的数据。'
+                        : ' 目标独立数据库为空，将把当前 SQLite 数据迁移过去。') + ' 当前数据库已有数据时，切换后将展示目标数据库的内容。';
+                    $('dbKeepHint').textContent = '勾选则保留源 SQLite 文件；不勾选则仅在发生数据迁移时删除源 SQLite 数据库文件。';
+                } else {
+                    $('dbSwitchText').textContent = base + (targetHasData
+                        ? ' 系统数据库（SQLite）已存在数据，将【直接切换】，不会覆盖或删除。'
+                        : ' 系统数据库为空，将把独立数据库数据迁移过去。') + ' 当前独立数据库已有数据时，切换后将展示系统数据库的内容。';
+                    $('dbKeepHint').textContent = '勾选则保留独立数据库中的数据；不勾选则仅在发生数据迁移时清空独立数据库的表。';
+                }
+            } catch (e) {
+                $('dbSwitchText').textContent = base + ' 切换后以目标数据库内容为准。';
+                $('dbKeepHint').textContent = '勾选则保留源数据库数据；不勾选则仅在发生数据迁移时删除源数据。';
             }
             $('dbKeepCheck').checked = true;
             hidePanel();
@@ -1296,7 +1314,7 @@
                 clearInterval(timer);
                 $('migrateOverlay').style.display = 'none';
                 if (st.state === 'done') {
-                    showToast(`迁移完成（${st.detail}），页面即将刷新`, 'success');
+                    showToast(`${st.message || '完成'}（${st.detail}），页面即将刷新`, 'success');
                     setTimeout(() => location.reload(), 1200);
                 } else {
                     fail(st.detail);

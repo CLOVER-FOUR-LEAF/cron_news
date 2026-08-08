@@ -36,6 +36,44 @@ async def save_db(config: DBConfigModel):
     return {"ok": True}
 
 
+class PrecheckModel(BaseModel):
+    mode: str = "standalone"
+
+
+@router.post("/precheck")
+async def precheck_db(body: PrecheckModel):
+    """切换前预检：目标库是否已存在业务数据（决定「直接切换」还是「迁移」）。"""
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    from app.config import settings
+
+    state = db_service.get_db_state()
+    try:
+        if body.mode == "standalone":
+            if not state["complete"]:
+                return {"ok": False, "has_data": False, "message": "独立数据库配置不完整"}
+            ok, msg = await db_service.test_connection(state["config"])
+            if not ok:
+                return {"ok": False, "has_data": False, "message": msg}
+            url = db_service.build_url(state["config"])
+        elif body.mode == "system":
+            url = settings.DATABASE_URL
+        else:
+            return {"ok": False, "has_data": False, "message": "无效的目标模式"}
+
+        engine = create_async_engine(
+            url,
+            connect_args={"check_same_thread": False} if url.startswith("sqlite") else {},
+        )
+        try:
+            has_data = await db_service._target_has_data(engine)
+        finally:
+            await engine.dispose()
+        return {"ok": True, "has_data": has_data, "message": ""}
+    except Exception as e:
+        return {"ok": False, "has_data": False, "message": str(e)}
+
+
 @router.post("/switch")
 async def switch_db(body: SwitchModel):
     if db_service.is_busy():
