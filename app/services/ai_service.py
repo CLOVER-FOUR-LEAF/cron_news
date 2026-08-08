@@ -16,6 +16,7 @@ from app.crud.category import get_default_category
 from app.env_store import read_env_file, write_env_file
 from app.services.agent_prompts import get_agent_prompt
 from app.services.model_configs import get_active_endpoint
+from app.services.search_providers import run_search
 
 EmitFn = Callable[..., Awaitable[None]]
 
@@ -28,28 +29,14 @@ async def search_news(db: AsyncSession, query: str, max_results: int = 10, hours
     if not endpoint or not endpoint["api_key"]:
         raise ValueError("搜索服务未配置")
 
-    payload: dict[str, Any] = {
-        "query": query,
-        "max_results": max_results,
-    }
-
-    if hours:
-        now = datetime.now()
-        payload["hours"] = hours
-        payload["from"] = (now - timedelta(hours=hours)).isoformat()
-        payload["to"] = now.isoformat()
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{endpoint['base_url']}/search",
-            headers={
-                "Authorization": f"Bearer {endpoint['api_key']}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
-        response.raise_for_status()
-        return response.json().get("results", [])
+    return await run_search(
+        provider=endpoint.get("provider", ""),
+        base_url=endpoint["base_url"],
+        api_key=endpoint["api_key"],
+        query=query,
+        max_results=max_results,
+        hours=hours,
+    )
 
 
 async def generate_news_content(db, title: str, summary: str) -> str:

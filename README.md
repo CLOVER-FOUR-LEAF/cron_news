@@ -133,3 +133,21 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 | Tavily | 搜索 | `https://api.tavily.com` | <https://app.tavily.com/> |
 
 > 以上 Base URL 为 OpenAI 兼容接口地址；文生图模型请使用各厂商文档中提供的文生图模型 ID（如阿里云百炼 `wanx2.1-t2i-turbo`、字节方舟 `seedream-3-0-t2i` 等）。其他厂商可按相同格式自定义配置。
+
+### 搜索服务厂商模板
+
+不同搜索厂商的接口、鉴权方式与返回结构各不相同，平台为每个厂商提供**独立适配层**（`app/services/search_providers.py`），新增「搜索服务」配置时会提供厂商模板下拉，自动填充 Base URL，并在保存/测试时使用对应的调用方式。无法识别的厂商按「自定义」处理（兼容 `POST {base_url}/search` 的 Tavily 风格接口）。
+
+| 模板 | Base URL | 鉴权 | 说明 |
+|------|----------|------|------|
+| Tavily | `https://api.tavily.com` | Bearer | 官方搜索 API，需在 <https://app.tavily.com/> 申请 Key |
+| 博查 Bocha | `https://api.bochaai.com` | Bearer | 国内可直连，Key 在 <https://key.bochaai.com/> 获取，单次请求上限 10 条 |
+| SearXNG | 自建实例地址 | 一般无需 | 自建元搜索（如 `http://host:8080`），返回 `format=json` |
+| Exa | `https://api.exa.ai` | Bearer | 语义搜索，<https://exa.ai/> 申请 Key |
+| 自定义 | 任意 | Bearer | 兼容 `POST /search`（请求体含 `query`/`max_results`，返回 `{"results":[...]}`） |
+
+### 运行日志与定时任务
+
+- 服务启动后会将运行日志同时输出到 **stdout**（`docker logs` 可见）与 **`logs/app.log`**（按大小轮转，可挂载到宿主机持久化）。
+- 定时任务（自主模式下）每次执行、或因「搜索服务未配置 / 非自主模式」等原因**跳过**时，都会写入**运行日志**（界面「设置 → Agent 管理 → 运行日志」可见）并说明原因，不再静默失效。
+- 启动时若距上次采集超过一个采集周期，会自动**补跑一次**，避免刚部署/重启后长时间没有新内容。

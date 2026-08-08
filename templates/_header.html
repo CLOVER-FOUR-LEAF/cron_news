@@ -621,6 +621,11 @@
             <button class="modal-close" data-close>&times;</button>
         </div>
         <div class="modal-body">
+            <div class="form-group" id="configProviderTemplateGroup" style="display:none">
+                <label>厂商模板</label>
+                <select id="configProviderSelect"></select>
+                <span class="input-hint" id="configTemplateHint"></span>
+            </div>
             <div class="form-group">
                 <label>服务商名称</label>
                 <input type="text" id="configProviderInput" maxlength="50">
@@ -692,6 +697,10 @@
                 <div class="task-status-item">
                     <span class="task-status-label">下次执行</span>
                     <span class="task-status-value" id="taskStatusNextRun">-</span>
+                </div>
+                <div class="task-status-item task-status-item-wide">
+                    <span class="task-status-label">未执行原因</span>
+                    <span class="task-status-value task-status-skip" id="taskStatusSkip">-</span>
                 </div>
             </div>
 
@@ -1686,6 +1695,65 @@
         if (el) { el.style.display = 'none'; el.textContent = ''; }
     }
 
+    let searchTemplates = [];
+
+    async function loadSearchTemplates() {
+        try {
+            const resp = await fetch('/api/model-configs/providers');
+            const data = await resp.json();
+            searchTemplates = (data && data.items) || [];
+        } catch (e) {
+            searchTemplates = [];
+        }
+    }
+
+    function detectSearchTemplate(provider, base_url) {
+        const text = ((provider || '') + ' ' + (base_url || '')).toLowerCase();
+        const rules = [
+            [/tavily/, 'tavily'],
+            [/bocha/, 'bocha'],
+            [/博查/, 'bocha'],
+            [/searxng/, 'searxng'],
+            [/searx/, 'searxng'],
+            [/\bexa\b/, 'exa'],
+        ];
+        for (const [re, key] of rules) {
+            if (re.test(text)) return key;
+        }
+        return 'custom';
+    }
+
+    function applySearchTemplate(key, fillFields) {
+        const t = searchTemplates.find(x => x.key === key);
+        if (!t) return;
+        $('configTemplateHint').textContent = t.hint || '';
+        if (fillFields && t.key !== 'custom') {
+            if (t.default_base_url && !$('configUrlInput').value.trim()) {
+                $('configUrlInput').value = t.default_base_url;
+            }
+            if (!$('configProviderInput').value.trim()) {
+                $('configProviderInput').value = t.label;
+            }
+        }
+    }
+
+    function initSearchTemplateSelect(provider, base_url) {
+        const group = $('configProviderTemplateGroup');
+        const sel = $('configProviderSelect');
+        if (!sel || !group) return;
+        if (!searchTemplates.length) {
+            group.style.display = 'none';
+            return;
+        }
+        sel.innerHTML = searchTemplates
+            .map(t => `<option value="${t.key}">${t.label}</option>`)
+            .join('');
+        const detected = detectSearchTemplate(provider, base_url);
+        sel.value = detected;
+        applySearchTemplate(detected, false);
+        group.style.display = '';
+    }
+
     function openConfigEdit(config_type, configId) {
         state.editingConfigType = config_type;
         state.editingConfig = configId ? state.configs[config_type].find(c => String(c.id) === String(configId)) : null;
@@ -1693,6 +1761,9 @@
         $('configEditTitle').textContent = state.editingConfig ? '编辑配置' : '新增配置';
         const modelGroup = $('configModelGroup');
         if (modelGroup) modelGroup.style.display = config_type === 'search' ? 'none' : '';
+
+        const templateGroup = $('configProviderTemplateGroup');
+        if (templateGroup) templateGroup.style.display = config_type === 'search' ? '' : 'none';
 
         const cfg = state.editingConfig;
         $('configProviderInput').value = cfg ? (cfg.provider_name || cfg.provider || '') : '';
@@ -1702,9 +1773,18 @@
         $('configApiKeyInput').type = 'password';
         $('configKeyHint').textContent = cfg && cfg.has_api_key ? '已配置 API Key，留空表示不修改' : '';
         $('configApiKeyInput').placeholder = cfg && cfg.has_api_key ? '已配置，留空不修改' : '输入 API Key';
+
+        if (config_type === 'search') {
+            initSearchTemplateSelect(cfg ? (cfg.provider_name || cfg.provider || '') : '', cfg ? (cfg.base_url || '') : '');
+        }
+
         resetConfigTestResult();
         openModal('configEditModal');
     }
+
+    $('configProviderSelect').addEventListener('change', () => {
+        applySearchTemplate($('configProviderSelect').value, true);
+    });
 
     async function testConfigNow() {
         const config_type = state.editingConfigType;
@@ -2218,6 +2298,14 @@
             runningEl.classList.toggle('on', data.running);
             $('taskStatusLastRun').textContent = data.last_run ? new Date(data.last_run).toLocaleString() : '-';
             $('taskStatusNextRun').textContent = data.next_run ? new Date(data.next_run).toLocaleString() : '-';
+            const skipEl = $('taskStatusSkip');
+            if (data.last_skip && data.last_skip.reason) {
+                skipEl.textContent = data.last_skip.reason;
+                skipEl.title = data.last_skip.time ? new Date(data.last_skip.time).toLocaleString() : '';
+            } else {
+                skipEl.textContent = '-';
+                skipEl.title = '';
+            }
         } catch (e) {
             console.error('Failed to load scheduler status:', e);
         }
@@ -2403,6 +2491,7 @@
     $('searchBtn').addEventListener('click', doSearch);
 
     /* ===== 初始化 ===== */
+    loadSearchTemplates();
     refreshConfig();
     loadCategories();
     setInterval(() => {

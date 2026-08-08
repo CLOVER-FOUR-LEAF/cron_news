@@ -10,4 +10,6 @@ services:
       # 配置与数据库持久化到宿主机，避免容器重建后丢失
       - ./.env:/app/.env
       - ./database:/app/database
+      # 运行日志持久化（logs/app.log），便于排查定时任务
+      - ./logs:/app/logs
     restart: unless-stopped

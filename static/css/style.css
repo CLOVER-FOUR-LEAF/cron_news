@@ -2200,6 +2200,17 @@ button.header-icon-btn {
     color: #6bc96b;
 }
 
+.task-status-item-wide {
+    grid-column: 1 / -1;
+}
+
+.task-status-skip {
+    color: #d4a853;
+    font-weight: 500;
+    word-break: break-all;
+    white-space: normal;
+}
+
 .cron-presets {
     display: flex;
     flex-wrap: wrap;

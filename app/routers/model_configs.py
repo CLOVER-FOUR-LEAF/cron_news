@@ -154,8 +154,36 @@ class TestConnectionModel(BaseModel):
     api_key: str = ""
 
 
-async def _probe(config_type: str, base_url: str, api_key: str, model_id: str) -> tuple[bool, str]:
-    if not base_url or not api_key:
+@router.get("/providers")
+async def list_providers():
+    """返回搜索服务厂商模板列表（供前端选择，自动填充 Base URL 等）。"""
+    from app.services.search_providers import provider_options
+
+    return {"items": provider_options()}
+
+
+async def _probe(config_type: str, base_url: str, api_key: str, model_id: str, provider: str = "") -> tuple[bool, str]:
+    if not base_url:
+        return False, "Base URL 为必填项"
+
+    if config_type == "search":
+        from app.services.search_providers import run_search
+
+        try:
+            results = await run_search(
+                provider=provider,
+                base_url=base_url,
+                api_key=api_key or "",
+                query="test",
+                max_results=1,
+            )
+            return True, f"连接成功（返回 {len(results)} 条结果）"
+        except httpx.HTTPError as e:
+            return False, f"连接失败（{type(e).__name__}）：{e}"
+        except Exception as e:
+            return False, f"连接失败：{e}"
+
+    if not api_key:
         return False, "Base URL 与 API Key 为必填项"
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -163,20 +191,6 @@ async def _probe(config_type: str, base_url: str, api_key: str, model_id: str) -
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
-        if config_type == "search":
-            resp = await client.post(
-                f"{base_url}/search",
-                headers=headers,
-                json={"query": "test", "max_results": 1},
-            )
-            if resp.status_code < 400:
-                return True, "连接成功"
-            try:
-                detail = resp.json().get("error", {}).get("message", resp.text[:120])
-            except Exception:
-                detail = resp.text[:120]
-            return False, f"连接失败（{resp.status_code}）：{detail}"
-
         if config_type == "image":
             try:
                 resp = await client.get(f"{base_url}/models", headers=headers)
@@ -215,7 +229,13 @@ async def test_connection(body: TestConnectionModel):
     if body.config_type not in CONFIG_TYPES:
         raise HTTPException(status_code=400, detail="不支持的配置类型")
     try:
-        ok, message = await _probe(body.config_type, body.base_url.strip(), body.api_key.strip(), body.model_id.strip())
+        ok, message = await _probe(
+            body.config_type,
+            body.base_url.strip(),
+            body.api_key.strip(),
+            body.model_id.strip(),
+            body.provider.strip(),
+        )
     except httpx.HTTPError as e:
         ok, message = False, f"网络错误：{e}"
     except Exception as e:
