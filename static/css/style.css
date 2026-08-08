@@ -1135,6 +1135,12 @@ a {
     background: var(--text-dim);
 }
 
+/* Firefox 滚动条跟随主题，避免默认白色 */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-accent) transparent;
+}
+
 /* ========== ANIMATIONS ========== */
 @keyframes fade-in-up {
     from {
@@ -2110,6 +2116,30 @@ button.header-icon-btn {
     overflow-y: auto;
     max-height: 520px;
     min-height: 200px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-accent) transparent;
+}
+
+/* 模型服务配置弹窗滚动条：细窄、贴合主题，避免突兀的白色默认滚动条 */
+.config-col-body::-webkit-scrollbar,
+.config-3col-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.config-col-body::-webkit-scrollbar-track,
+.config-3col-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.config-col-body::-webkit-scrollbar-thumb,
+.config-3col-body::-webkit-scrollbar-thumb {
+    background: var(--border-accent);
+    border-radius: 3px;
+}
+
+.config-col-body::-webkit-scrollbar-thumb:hover,
+.config-3col-body::-webkit-scrollbar-thumb:hover {
+    background: var(--text-dim);
 }
 
 .config-key-hint {
@@ -2198,17 +2228,6 @@ button.header-icon-btn {
 
 .task-status-value.on {
     color: #6bc96b;
-}
-
-.task-status-item-wide {
-    grid-column: 1 / -1;
-}
-
-.task-status-skip {
-    color: #d4a853;
-    font-weight: 500;
-    word-break: break-all;
-    white-space: normal;
 }
 
 .cron-presets {

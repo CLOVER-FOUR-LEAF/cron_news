@@ -172,7 +172,7 @@
                                     <path d="M6.5 2v2.5M9.5 2v2.5M6.5 11.5V14M9.5 11.5V14M2 6.5h2.5M2 9.5h2.5M11.5 6.5H14M11.5 9.5H14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                                 </svg>
                             </span>
-                            大模型配置
+                            模型服务配置
                             <span class="panel-item-badge badge-red" id="llmBadge" style="display:none">
                                 <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
                                     <path d="M8 1.8L14.5 13.5H1.5L8 1.8z" fill="currentColor"/>
@@ -697,10 +697,6 @@
                 <div class="task-status-item">
                     <span class="task-status-label">下次执行</span>
                     <span class="task-status-value" id="taskStatusNextRun">-</span>
-                </div>
-                <div class="task-status-item task-status-item-wide">
-                    <span class="task-status-label">未执行原因</span>
-                    <span class="task-status-value task-status-skip" id="taskStatusSkip">-</span>
                 </div>
             </div>
 
@@ -1927,7 +1923,7 @@
         cw.setAttribute('aria-checked', String(state.agentCover && canCover));
         cw.title = canCover
             ? '自动生成资讯封面'
-            : '请先在大模型配置中启用一个文生图模型（并填写 API Key）';
+            : '请先在模型服务配置中启用一个文生图模型（并填写 API Key）';
     }
 
     $('recommendSwitch').addEventListener('click', () => {
@@ -1937,7 +1933,7 @@
 
     $('coverSwitch').addEventListener('click', () => {
         if (!state.agentCover && !imageConfigReady()) {
-            showToast('请先在大模型配置中启用一个文生图模型', 'error');
+            showToast('请先在模型服务配置中启用一个文生图模型', 'error');
             renderAgentForm();
             return;
         }
@@ -2298,14 +2294,6 @@
             runningEl.classList.toggle('on', data.running);
             $('taskStatusLastRun').textContent = data.last_run ? new Date(data.last_run).toLocaleString() : '-';
             $('taskStatusNextRun').textContent = data.next_run ? new Date(data.next_run).toLocaleString() : '-';
-            const skipEl = $('taskStatusSkip');
-            if (data.last_skip && data.last_skip.reason) {
-                skipEl.textContent = data.last_skip.reason;
-                skipEl.title = data.last_skip.time ? new Date(data.last_skip.time).toLocaleString() : '';
-            } else {
-                skipEl.textContent = '-';
-                skipEl.title = '';
-            }
         } catch (e) {
             console.error('Failed to load scheduler status:', e);
         }
