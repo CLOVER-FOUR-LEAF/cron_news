@@ -302,6 +302,68 @@ def _raise_for_status(response: httpx.Response, label: str):
     raise ValueError(f"{label} 请求失败（{response.status_code}）：{msg}")
 
 
+# 逐个尝试的适配器顺序：
+#   Generic 覆盖 Tavily / Exa / 自定义（POST {base_url}/search）
+#   Bocha（POST {base_url}/v1/web-search）、SearXNG（GET {base_url}/search?format=json）
+_TRY_ORDER: list[SearchProvider] = [
+    GenericSearchProvider(),
+    BochaProvider(),
+    SearXNGProvider(),
+    ExaProvider(),
+]
+
+# base_url -> 上次成功适配器 key（避免每次重复尝试所有厂商）
+_ADAPTER_CACHE: dict[str, str] = {}
+
+
+def _pick_base_url(provider: str, base_url: str) -> str:
+    base_url = (base_url or "").strip().rstrip("/")
+    if base_url:
+        return base_url
+    return resolve_provider(provider, "").default_base_url
+
+
+async def _try_adapters(
+    ordered: list[SearchProvider],
+    base_url: str,
+    api_key: str,
+    query: str,
+    max_results: int,
+    hours: int | None,
+    timeout: float,
+) -> tuple[list[SearchHit], SearchProvider]:
+    errors: list[str] = []
+    for adapter in ordered:
+        if adapter.auth == AUTH_BEARER and not api_key:
+            errors.append(f"{adapter.label}: 需要 API Key")
+            continue
+        headers = {"Content-Type": "application/json"}
+        if adapter.auth == AUTH_BEARER:
+            headers["Authorization"] = f"Bearer {api_key}"
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                hits = await adapter.search(client, base_url, api_key, query, max_results, hours)
+            return hits, adapter
+        except Exception as e:
+            errors.append(f"{adapter.label}: {e}")
+    raise ValueError("搜索服务连接失败：" + "；".join(errors[:5]))
+
+
+async def probe_providers(
+    base_url: str, api_key: str = "", query: str = "test", max_results: int = 1, timeout: float = 20.0
+) -> tuple[bool, str]:
+    """测试连接：逐个尝试厂商适配器，返回 (是否成功, 说明)。"""
+    base_url = (base_url or "").strip().rstrip("/")
+    if not base_url:
+        return False, "Base URL 未填写"
+    try:
+        hits, adapter = await _try_adapters(_TRY_ORDER, base_url, api_key, query, max_results, None, timeout)
+    except ValueError as e:
+        return False, str(e)
+    _ADAPTER_CACHE[base_url] = adapter.key
+    return True, f"连接成功（{adapter.label}，返回 {len(hits)} 条）"
+
+
 async def run_search(
     provider: str,
     base_url: str,
@@ -309,22 +371,16 @@ async def run_search(
     query: str,
     max_results: int = 10,
     hours: int | None = None,
+    timeout: float = 40.0,
 ) -> list[dict]:
-    """按厂商适配器执行搜索，返回统一结构的字典列表。"""
-    adapter = resolve_provider(provider, base_url)
-    base_url = (base_url or "").strip().rstrip("/")
-    if not base_url:
-        base_url = adapter.default_base_url
+    """执行搜索：不要求用户指定厂商模板，逐个尝试适配器，首个成功的即被采用（并按 base_url 缓存）。"""
+    base_url = _pick_base_url(provider, base_url)
     if not base_url:
         raise ValueError("搜索服务 Base URL 未填写")
 
-    if adapter.auth == AUTH_BEARER and not api_key:
-        raise ValueError(f"{adapter.label} 需要 API Key")
+    cached_key = _ADAPTER_CACHE.get(base_url)
+    ordered = [p for p in _TRY_ORDER if p.key == cached_key] + [p for p in _TRY_ORDER if p.key != cached_key]
 
-    headers = {"Content-Type": "application/json"}
-    if adapter.auth == AUTH_BEARER:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    async with httpx.AsyncClient(timeout=40.0) as client:
-        hits = await adapter.search(client, base_url, api_key, query, max_results, hours)
+    hits, adapter = await _try_adapters(ordered, base_url, api_key, query, max_results, hours, timeout)
+    _ADAPTER_CACHE[base_url] = adapter.key
     return [h.to_dict() for h in hits]

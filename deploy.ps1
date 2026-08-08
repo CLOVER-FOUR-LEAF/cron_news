@@ -3,13 +3,26 @@
 # 用法：git clone 项目后，在仓库根目录执行：
 #     powershell -ExecutionPolicy Bypass -File deploy.ps1
 #
-# 流程：检查环境 -> 生成 .env -> 准备数据目录 -> 构建镜像 -> 启动容器 -> 健康检查 -> 状态报告
+# 流程：检查环境 -> 生成 .env -> 检测同名容器/镜像 -> 准备数据目录 -> 构建/启动 -> 健康检查 -> 状态报告
 $ErrorActionPreference = 'Stop'
 
 $Red = [ConsoleColor]::Red
 $Green = [ConsoleColor]::Green
 $Yellow = [ConsoleColor]::Yellow
 $Cyan = [ConsoleColor]::Cyan
+
+$Container = 'cron_news'
+$Image = 'cron_news:latest'
+$Port = if ($env:CRON_NEWS_PORT) { $env:CRON_NEWS_PORT } else { 18080 }
+
+function Confirm-YesNo([string]$Prompt) {
+    while ($true) {
+        $Answer = Read-Host "[deploy] $Prompt [y/N]"
+        if ($Answer -match '^(y|yes)$') { return $true }
+        if ($Answer -match '^(n|no)$' -or [string]::IsNullOrWhiteSpace($Answer)) { return $false }
+        Write-Host "[deploy] 请输入 y 或 n" -ForegroundColor $Yellow
+    }
+}
 
 # ---------- 0. 目录定位 ----------
 Set-Location -LiteralPath $PSScriptRoot
@@ -39,14 +52,31 @@ if (-not (Test-Path .env)) {
 }
 Write-Host "[deploy] 配置文件 .env 已存在" -ForegroundColor $Green
 
-# 提示：检测到旧部署容器（同名）将被替换重建
-$OldContainer = docker ps -a --format "{{.Names}}" 2>$null
-if ($OldContainer -contains 'cron-news') {
-    Write-Host "[deploy] 警告: 检测到已存在的 cron-news 容器（可能来自旧部署），本次构建后将自动替换重建。" -ForegroundColor $Yellow
-    Write-Host "[deploy] 若怀疑有残留进程占用 CPU，可先执行: docker rm -f cron-news" -ForegroundColor $Yellow
+# ---------- 3. 检测同名容器 / 镜像 ----------
+$ExistingContainers = docker ps -a --format "{{.Names}}" 2>$null
+if ($ExistingContainers -contains $Container) {
+    Write-Host "[deploy] 警告: 检测到已存在的容器 $Container —— 可能是「升级」，也可能是你自己别的同名项目。" -ForegroundColor $Yellow
+    if (-not (Confirm-YesNo "是否继续？继续将替换重建该容器（数据保存在挂载目录 database/ logs/ images/ .env）")) {
+        Write-Host "[deploy] 已取消部署" -ForegroundColor $Red
+        exit 1
+    }
+    Write-Host "[deploy] 确认继续，将替换重建容器 $Container" -ForegroundColor $Green
 }
 
-# ---------- 3. 准备持久化目录 ----------
+$Rebuild = $false
+$ExistingImages = docker images --format "{{.Repository}}:{{.Tag}}" 2>$null
+if ($ExistingImages -contains $Image) {
+    Write-Host "[deploy] 警告: 检测到已存在的镜像 $Image —— 可能是「升级」，也可能是你自己的同名项目。" -ForegroundColor $Yellow
+    if (Confirm-YesNo "是否重新构建镜像？选择 n 将直接使用现有镜像启动") {
+        $Rebuild = $true
+    } else {
+        Write-Host "[deploy] 使用现有镜像启动（不重新构建）" -ForegroundColor $Yellow
+    }
+} else {
+    $Rebuild = $true
+}
+
+# ---------- 4. 准备持久化目录 ----------
 New-Item -ItemType Directory -Force -Path database, logs, images, "images\cover\default", "images\avatar" | Out-Null
 Write-Host "[deploy] 数据目录已就绪: database/  logs/  images/" -ForegroundColor $Green
 
@@ -56,17 +86,21 @@ if ($MissingDefaultImages) {
     Write-Host "[deploy] 警告: images 默认资源不完整（默认封面 / 头像 / logo），请确认已完整拉取代码（勿用稀疏克隆或 LFS 跳过）。" -ForegroundColor $Yellow
 }
 
-# ---------- 4. 构建并启动 ----------
-Write-Host "[deploy] 构建镜像并启动容器（首次构建可能需要几分钟）..." -ForegroundColor $Cyan
-docker compose up -d --build
+# ---------- 5. 构建并启动 ----------
+Write-Host "[deploy] 启动容器（端口 $Port）..." -ForegroundColor $Cyan
+if ($Rebuild) {
+    Write-Host "[deploy] 构建镜像并启动容器（首次构建可能需要几分钟）..." -ForegroundColor $Cyan
+    docker compose up -d --build
+} else {
+    docker compose up -d
+}
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[deploy] 错误: docker compose 启动失败" -ForegroundColor $Red
     exit 1
 }
 Write-Host "[deploy] 容器已启动" -ForegroundColor $Green
 
-# ---------- 5. 等待健康检查 ----------
-$Port = if ($env:CRON_NEWS_PORT) { $env:CRON_NEWS_PORT } else { 8000 }
+# ---------- 6. 等待健康检查 ----------
 Write-Host "[deploy] 等待服务就绪 (http://127.0.0.1:$Port/health)..."
 $Ready = $false
 for ($i = 0; $i -lt 60; $i++) {
@@ -79,16 +113,16 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 if (-not $Ready) {
     Write-Host "[deploy] 健康检查超时，最近日志:" -ForegroundColor $Yellow
-    docker compose logs --tail=40 cron-news 2>$null
+    docker compose logs --tail=40 $Container 2>$null
     Write-Host "[deploy] 错误: 服务未能正常启动" -ForegroundColor $Red
     exit 1
 }
 Write-Host "[deploy] 服务已就绪 ✔  http://localhost:$Port" -ForegroundColor $Green
 
-# ---------- 6. 状态报告 ----------
+# ---------- 7. 状态报告 ----------
 Write-Host ""
 Write-Host "[deploy] 容器状态:" -ForegroundColor $Cyan
-docker inspect --format "状态={{.State.Status}}  健康={{if .State.Health}}{{.State.Health.Status}}{{else}}未启用{{end}}" cron-news 2>$null
+docker inspect --format "状态={{.State.Status}}  健康={{if .State.Health}}{{.State.Health.Status}}{{else}}未启用{{end}}" $Container 2>$null
 Write-Host ""
 Write-Host "[deploy] 定时任务状态 (/api/scheduler/status):" -ForegroundColor $Cyan
 try {
@@ -99,4 +133,4 @@ try {
 }
 Write-Host ""
 Write-Host "[deploy] 部署完成。请在浏览器访问  http://localhost:$Port" -ForegroundColor $Green
-Write-Host "[deploy] 查看运行日志: docker logs -f cron-news    停止: docker compose down    升级: 重新运行本脚本" -ForegroundColor $Cyan
+Write-Host "[deploy] 查看运行日志: docker logs -f $Container    停止: docker compose down    升级: 重新运行本脚本" -ForegroundColor $Cyan

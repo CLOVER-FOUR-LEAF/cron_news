@@ -52,9 +52,9 @@
    powershell -ExecutionPolicy Bypass -File deploy.ps1
    ```
 
-3. 访问平台：<http://localhost:8000>。
+3. 访问平台：<http://localhost:18080>。
 
-> 脚本会挂载四个持久化目录：`database`（SQLite）、`logs`（运行日志，每天自动归档一份，保留 30 天）、`images`（封面/头像等资源）、`.env`（配置），容器重建不会丢失数据。若宿主机端口冲突，可用 `CRON_NEWS_PORT=8080 bash deploy.sh`（需同时修改 `docker-compose.yml` 的端口映射）。
+> 脚本会挂载四个持久化目录：`database`（SQLite）、`logs`（运行日志，每天自动归档一份，保留 30 天）、`images`（封面/头像等资源）、`.env`（配置），容器重建不会丢失数据。宿主端口默认使用不常用的五位端口 `18080`（容器内为 8000）；若冲突，可用 `CRON_NEWS_PORT=18090 bash deploy.sh`（需同时修改 `docker-compose.yml` 的端口映射）。执行脚本前若检测到同名容器 `cron_news` 或镜像，会要求确认（可能是升级或你自己的同名项目）。
 
 ### 方式 B：手动执行 compose
 
@@ -79,7 +79,7 @@
    docker compose up -d --build
    ```
 
-4. 访问平台：<http://localhost:8000>
+4. 访问平台：<http://localhost:18080>
 
 **数据持久化**：`database`（SQLite）、`logs`（日志）、`images`（图片资源）与 `.env` 配置文件已通过 `docker-compose.yml` 挂载到宿主机，容器重建不会丢失数据。
 
@@ -87,13 +87,13 @@
 
 ```bash
 # 手动构建并运行
-docker build -t cron-news .
-docker run -d -p 8000:8000 \
+docker build -t cron_news .
+docker run -d -p 18080:8000 \
   -v $(pwd)/.env:/app/.env \
   -v $(pwd)/database:/app/database \
   -v $(pwd)/logs:/app/logs \
   -v $(pwd)/images:/app/images \
-  --name cron-news cron-news
+  --name cron_news cron_news
 
 # 查看日志 / 停止 / 移除
 docker compose logs -f
@@ -127,7 +127,7 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## 快速上手
 
-1. 打开 <http://localhost:8000>，首次进入选择工作模式（辅助 / 自主）。
+1. 打开 <http://localhost:18080>（Docker 部署默认端口，直接启动为 8000），首次进入选择工作模式（辅助 / 自主）。
 2. 在右上角 **设置** 中完成配置：
    - **模型与服务配置**：新增并启用一个大语言模型、一个搜索服务（自主模式必需）；如需自动生成封面，再启用一个文生图模型。
    - **分类管理**：维护导航栏分类。

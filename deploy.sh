@@ -5,9 +5,9 @@
 # 用法：git clone 项目后，在仓库根目录执行：
 #     bash deploy.sh
 #
-# 流程：检查环境 → 生成 .env → 准备数据目录 → 构建镜像 → 启动容器 → 健康检查 → 状态报告
+# 流程：检查环境 → 生成 .env → 检测同名容器/镜像 → 准备数据目录 → 构建/启动 → 健康检查 → 状态报告
 # 可配置项：
-#     CRON_NEWS_PORT=<宿主机端口> bash deploy.sh   # 默认 8000，需与 docker-compose.yml 的端口映射一致
+#     CRON_NEWS_PORT=<宿主机端口> bash deploy.sh   # 默认 18080，需与 docker-compose.yml 的端口映射一致
 #
 set -euo pipefail
 
@@ -16,6 +16,23 @@ info() { echo -e "${CYAN}[deploy]${NC} $*"; }
 ok()   { echo -e "${GREEN}[deploy]${NC} $*"; }
 warn() { echo -e "${YELLOW}[deploy]${NC} $*"; }
 die()  { echo -e "${RED}[deploy] 错误：$*${NC}" >&2; exit 1; }
+
+# 交互式确认：返回 0=是 / 1=否
+confirm() {
+  local answer
+  while true; do
+    read -r -p "[deploy] $1 [y/N]: " answer
+    case "${answer,,}" in
+      y|yes) return 0 ;;
+      ""|n|no) return 1 ;;
+      *) echo "[deploy] 请输入 y 或 n" ;;
+    esac
+  done
+}
+
+CONTAINER=cron_news
+IMAGE=cron_news:latest
+PORT="${CRON_NEWS_PORT:-18080}"
 
 # ---------- 0. 目录定位：必须在仓库根目录运行 ----------
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,13 +62,29 @@ if [ ! -f .env ]; then
 fi
 ok "配置文件 .env 已存在"
 
-# 提示：检测到旧部署容器（同名）将被替换重建
-if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'cron-news'; then
-  warn "检测到已存在的 cron-news 容器（可能来自旧部署），本次构建后将自动替换重建。"
-  warn "若怀疑有残留进程占用 CPU，可先执行：docker rm -f cron-news"
+# ---------- 3. 检测同名容器 / 镜像 ----------
+if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$CONTAINER"; then
+  warn "检测到已存在的容器 $CONTAINER —— 可能是「升级」，也可能是你自己别的同名项目。"
+  if confirm "是否继续？继续将替换重建该容器（数据保存在挂载目录 database/ logs/ images/ .env）"; then
+    ok "确认继续，将替换重建容器 $CONTAINER"
+  else
+    die "已取消部署"
+  fi
 fi
 
-# ---------- 3. 准备持久化目录（四个挂载目录） ----------
+REBUILD=0
+if docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -qx "$IMAGE"; then
+  warn "检测到已存在的镜像 $IMAGE —— 可能是「升级」，也可能是你自己的同名项目。"
+  if confirm "是否重新构建镜像？选择 n 将直接使用现有镜像启动"; then
+    REBUILD=1
+  else
+    warn "使用现有镜像启动（不重新构建）"
+  fi
+else
+  REBUILD=1
+fi
+
+# ---------- 4. 准备持久化目录（四个挂载目录） ----------
 mkdir -p database logs images images/cover/default images/avatar
 ok "数据目录已就绪：database/  logs/  images/"
 
@@ -60,14 +93,17 @@ if [ ! -f images/sign.png ] || [ ! -f images/avatar/default-avatar.png ] || [ -z
   warn "images 默认资源不完整（默认封面 / 头像 / logo），请确认已完整拉取代码（勿使用稀疏克隆或 LFS 跳过）。"
 fi
 
-# ---------- 4. 构建并启动 ----------
-info "构建镜像并启动容器（首次构建可能需要几分钟）..."
-"${COMPOSE[@]}" up -d --build
+# ---------- 5. 构建并启动 ----------
+info "启动容器（端口 $PORT）..."
+if [ "$REBUILD" = "1" ]; then
+  info "构建镜像并启动容器（首次构建可能需要几分钟）..."
+  "${COMPOSE[@]}" up -d --build
+else
+  "${COMPOSE[@]}" up -d
+fi
 ok "容器已启动"
 
-# ---------- 5. 等待健康检查 ----------
-CONTAINER=cron-news
-PORT="${CRON_NEWS_PORT:-8000}"
+# ---------- 6. 等待健康检查 ----------
 info "等待服务就绪（http://127.0.0.1:$PORT/health）..."
 READY=0
 for i in $(seq 1 60); do
@@ -84,7 +120,7 @@ if [ "$READY" != "1" ]; then
 fi
 ok "服务已就绪 ✔  http://localhost:$PORT"
 
-# ---------- 6. 容器与调度状态报告 ----------
+# ---------- 7. 容器与调度状态报告 ----------
 echo
 info "容器状态："
 docker inspect -f '状态={{.State.Status}}  健康={{if .State.Health}}{{.State.Health.Status}}{{else}}未启用{{end}}' "$CONTAINER" 2>/dev/null \

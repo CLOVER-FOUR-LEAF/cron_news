@@ -46,7 +46,7 @@ async def get_news_list(
             relevance = sum(case((News.title.contains(t), 1), else_=0) for t in terms)
 
     if category:
-        query = query.join(Category).where(Category.name == category)
+        query = query.join(Category, News.category_id == Category.id).where(Category.name == category)
 
     if is_read is not None:
         query = query.where(News.is_read == is_read)

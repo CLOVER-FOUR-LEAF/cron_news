@@ -154,34 +154,14 @@ class TestConnectionModel(BaseModel):
     api_key: str = ""
 
 
-@router.get("/providers")
-async def list_providers():
-    """返回搜索服务厂商模板列表（供前端选择，自动填充 Base URL 等）。"""
-    from app.services.search_providers import provider_options
-
-    return {"items": provider_options()}
-
-
 async def _probe(config_type: str, base_url: str, api_key: str, model_id: str, provider: str = "") -> tuple[bool, str]:
     if not base_url:
         return False, "Base URL 为必填项"
 
     if config_type == "search":
-        from app.services.search_providers import run_search
+        from app.services.search_providers import probe_providers
 
-        try:
-            results = await run_search(
-                provider=provider,
-                base_url=base_url,
-                api_key=api_key or "",
-                query="test",
-                max_results=1,
-            )
-            return True, f"连接成功（返回 {len(results)} 条结果）"
-        except httpx.HTTPError as e:
-            return False, f"连接失败（{type(e).__name__}）：{e}"
-        except Exception as e:
-            return False, f"连接失败：{e}"
+        return await probe_providers(base_url=base_url, api_key=api_key or "")
 
     if not api_key:
         return False, "Base URL 与 API Key 为必填项"

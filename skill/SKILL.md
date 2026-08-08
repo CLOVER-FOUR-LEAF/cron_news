@@ -13,7 +13,7 @@ description: 与「定时资讯」新闻聚合平台对接。当需要向该平�
 ## 基础信息
 
 - **协议**：HTTP + JSON，所有接口无需鉴权（本地/内网部署）。
-- **Base URL**：默认 `http://localhost:8000`，以实际部署地址为准。
+- **Base URL**：默认 `http://localhost:18080`（Docker 部署宿主端口，容器内为 8000），以实际部署地址为准。
 - **字符编码**：UTF-8，请求体需带 `Content-Type: application/json`。
 - **在线文档**：`{Base URL}/docs`（Swagger UI）、`{Base URL}/openapi.json`（OpenAPI 规范）。
 - **健康检查**：`GET /health` → `{"status":"ok", ...}`，可用于探活。

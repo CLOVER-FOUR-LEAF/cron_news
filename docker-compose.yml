@@ -1,10 +1,11 @@
 services:
-  cron-news:
+  cron_news:
     build: .
-    image: cron-news:latest
-    container_name: cron-news
+    image: cron_news:latest
+    container_name: cron_news
     ports:
-      - "8000:8000"
+      # 宿主使用不常用五位端口，避免与常见 8000 冲突
+      - "18080:8000"
     environment:
       - TZ=Asia/Shanghai
     volumes:
