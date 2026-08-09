@@ -266,6 +266,7 @@ class Scheduler:
                         catch_up = True
 
                 self._next_run = target.timestamp()
+                logger.info("定时任务下次执行：%s（目标时间）", target.strftime("%Y-%m-%d %H:%M:%S"))
 
                 while datetime.now() < target:
                     if self._work_mode() != "autonomous":
@@ -278,6 +279,7 @@ class Scheduler:
                         if refreshed != target:
                             target = refreshed
                             self._next_run = target.timestamp()
+                            logger.info("任务配置变化，下次执行调整为：%s", target.strftime("%Y-%m-%d %H:%M:%S"))
 
                 if self._work_mode() != "autonomous":
                     self._next_run = None

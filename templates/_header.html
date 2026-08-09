@@ -582,7 +582,7 @@
         <div class="modal-body config-3col-body">
             <div class="config-col">
                 <div class="config-col-head">
-                    <span class="config-col-title">大语言模型</span>
+                    <span class="config-col-title">大语言模型<span class="config-col-badge" id="llmColBadge" style="display:none">!</span></span>
                     <button type="button" class="btn-primary btn-compact config-add-btn" data-type="llm">
                         <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                         新增
@@ -602,7 +602,7 @@
             </div>
             <div class="config-col">
                 <div class="config-col-head">
-                    <span class="config-col-title">搜索服务</span>
+                    <span class="config-col-title">搜索服务<span class="config-col-badge" id="searchColBadge" style="display:none">!</span></span>
                     <button type="button" class="btn-primary btn-compact config-add-btn" data-type="search">
                         <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                         新增
@@ -1014,25 +1014,31 @@
 
     function renderWarnings() {
         const w = computeWarnings();
+        const set = (id, on) => { const el = $(id); if (el) el.style.display = on ? '' : 'none'; };
 
-        const llmBadge = $('llmBadge');
-        if (llmBadge) llmBadge.style.display = w.llm ? '' : 'none';
-        $('categoryBadge').style.display = w.category ? '' : 'none';
+        // 模型服务配置入口徽标：大语言模型 或 搜索服务 任一缺失都亮红
+        set('llmBadge', w.llm || w.search);
+        set('categoryBadge', w.category);
 
-        const llmTitleWarn = $('llmTitleWarn');
-        if (llmTitleWarn) llmTitleWarn.style.display = w.llm ? '' : 'none';
-        $('categoryTitleHint').style.display = w.category ? '' : 'none';
+        set('llmTitleWarn', w.llm);
+        set('categoryTitleHint', w.category);
+
+        // 配置弹窗内各列徽标
+        set('llmColBadge', w.llm);
+        set('searchColBadge', w.search);
 
         const badge = $('entryBadge');
-        badge.classList.remove('badge-red', 'badge-yellow');
-        if (w.llm || w.search) {
-            badge.classList.add('badge-red');
-            badge.style.display = '';
-        } else if (w.category) {
-            badge.classList.add('badge-yellow');
-            badge.style.display = '';
-        } else {
-            badge.style.display = 'none';
+        if (badge) {
+            badge.classList.remove('badge-red', 'badge-yellow');
+            if (w.llm || w.search) {
+                badge.classList.add('badge-red');
+                badge.style.display = '';
+            } else if (w.category) {
+                badge.classList.add('badge-yellow');
+                badge.style.display = '';
+            } else {
+                badge.style.display = 'none';
+            }
         }
     }
 
@@ -1792,8 +1798,22 @@
             }
             if (resp.ok) {
                 closeModal('configEditModal');
-                await refreshConfig();
+                // 乐观更新本地状态，保证即时反馈（不依赖刷新接口是否成功）
+                let saved = null;
+                try { saved = await resp.json(); } catch (e) {}
+                if (saved && saved.id) {
+                    if (!state.configs[config_type]) state.configs[config_type] = [];
+                    const list = state.configs[config_type];
+                    const idx = list.findIndex(c => String(c.id) === String(saved.id));
+                    if (idx >= 0) list[idx] = { ...list[idx], ...saved };
+                    else list.push(saved);
+                    if (saved.enabled) state.activeConfig[config_type] = String(saved.id);
+                }
                 renderAllConfigs();
+                renderWarnings();
+                try { await refreshConfig(); } catch (e) {}
+                renderAllConfigs();
+                renderWarnings();
             } else {
                 const data = await resp.json();
                 showToast(data.detail || '保存失败', 'error');
@@ -1809,7 +1829,15 @@
         try {
             const resp = await fetch(`/api/model-configs/${id}/${turningOff ? 'disable' : 'enable'}`, { method: 'POST' });
             if (resp.ok) {
-                await refreshConfig();
+                // 乐观更新
+                if (cfg) {
+                    cfg.enabled = !turningOff;
+                    if (!turningOff) state.activeConfig[config_type] = String(id);
+                    else if (String(state.activeConfig[config_type]) === String(id)) state.activeConfig[config_type] = '';
+                }
+                renderAllConfigs();
+                renderWarnings();
+                try { await refreshConfig(); } catch (e) {}
                 renderAllConfigs();
                 renderWarnings();
             } else {
@@ -1829,7 +1857,14 @@
             if (resp.ok) {
                 closeModal('configDeleteModal');
                 state.deletingConfig = null;
-                await refreshConfig();
+                // 乐观移除
+                const list = state.configs[target.type] || [];
+                const idx = list.findIndex(c => String(c.id) === String(target.id));
+                if (idx >= 0) list.splice(idx, 1);
+                if (String(state.activeConfig[target.type]) === String(target.id)) state.activeConfig[target.type] = '';
+                renderAllConfigs();
+                renderWarnings();
+                try { await refreshConfig(); } catch (e) {}
                 renderAllConfigs();
                 renderWarnings();
             } else {
@@ -2241,6 +2276,12 @@
             console.error('Failed to load scheduler status:', e);
         }
     }
+
+    // 任务弹窗打开期间定时刷新状态，让「下次执行」保持最新
+    setInterval(() => {
+        const modal = document.getElementById('taskModal');
+        if (modal && modal.classList.contains('show')) refreshTaskStatus();
+    }, 15000);
 
     $('saveTaskBtn').addEventListener('click', async () => {
         const form = state.taskForm;
