@@ -9,10 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import BASE_DIR
 from app.database import get_db
 from app.env_store import read_env_file, write_env_file
+from app.logging_setup import get_logger
 from app.services.prompts import build_base_prompt, DEFAULT_EXT_PROMPT
 from app.services.model_configs import get_configs, get_enabled_config, config_to_dict, decrypt_api_key
 
 router = APIRouter(prefix="/api/config", tags=["config"])
+
+logger = get_logger("config")
 
 IMAGES_DIR = BASE_DIR / "images"
 ALLOWED_AVATAR_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
@@ -146,6 +149,25 @@ async def get_config(db: AsyncSession = Depends(get_db)):
 async def update_config(config: ConfigUpdate):
     env_vars = read_env_file()
 
+    # 详细日志：记录收到的配置项（便于排查自动任务设置是否真正生效）
+    task_changed = any(v is not None for v in (
+        config.task_interval_hours, config.task_start_hour, config.task_selected_categories,
+    ))
+    if task_changed:
+        logger.info(
+            "收到自动任务配置保存请求：时间间隔=%s，每日开始=%s，分类=%s",
+            config.task_interval_hours,
+            config.task_start_hour,
+            (config.task_selected_categories or []) if config.task_selected_categories is not None else "（未修改）",
+        )
+    if config.work_mode is not None:
+        logger.info("收到工作模式修改：%s", config.work_mode)
+    if config.agent_brief_enabled is not None or config.agent_recommend_enabled is not None or config.agent_cover_enabled is not None:
+        logger.info(
+            "收到 Agent 开关修改：简报=%s，推荐=%s，封面=%s",
+            config.agent_brief_enabled, config.agent_recommend_enabled, config.agent_cover_enabled,
+        )
+
     if config.task_interval_hours is not None:
         env_vars["TASK_INTERVAL_HOURS"] = str(max(1, config.task_interval_hours))
     if config.task_start_hour is not None:
@@ -182,6 +204,14 @@ async def update_config(config: ConfigUpdate):
         env_vars["SEARCH_API_KEY"] = config.search_api_key
 
     write_env_file(env_vars)
+
+    if task_changed:
+        logger.info(
+            "自动任务配置已保存生效：间隔=%s 小时，每日开始=%s 点，分类=%s",
+            env_vars.get("TASK_INTERVAL_HOURS"),
+            env_vars.get("TASK_START_HOUR"),
+            env_vars.get("TASK_SELECTED_CATEGORIES"),
+        )
 
     return {"message": "ok"}
 

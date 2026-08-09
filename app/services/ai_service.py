@@ -14,9 +14,12 @@ from app.models.news import News
 from app.models.category import Category
 from app.crud.category import get_default_category
 from app.env_store import read_env_file, write_env_file
+from app.logging_setup import get_logger
 from app.services.agent_prompts import get_agent_prompt
 from app.services.model_configs import get_active_endpoint
 from app.services.search_providers import run_search
+
+logger = get_logger("ai_service")
 
 EmitFn = Callable[..., Awaitable[None]]
 
@@ -298,24 +301,29 @@ async def run_search_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[
 
     for cat in categories:
         query = f"{cat.name}新闻 最近{interval_hours}小时"
+        logger.info("分类「%s」开始搜索：query=%r，max_results=15，hours=%s", cat.name, query, interval_hours)
         await _emit("thinking", f"分析「{cat.name}」领域最近 {interval_hours} 小时的热点…")
         await _emit("tool", f'search("{query}") → 调用搜索服务')
         try:
             search_results = await search_news(db, query, max_results=15, hours=interval_hours)
         except Exception as e:
+            logger.error("分类「%s」搜索失败：%s", cat.name, e)
             await _emit("error", f"「{cat.name}」搜索失败: {e}")
             results[cat.name] = f"错误: {str(e)}"
             continue
 
+        logger.info("分类「%s」搜索返回 %s 条候选", cat.name, len(search_results))
         await _emit("result", f"「{cat.name}」获取 {len(search_results)} 条候选结果")
         count = await process_search_results(db, cat.name, search_results, emit)
         results[cat.name] = count
         total_count += count
+        logger.info("分类「%s」入库完成，新增 %s 条", cat.name, count)
         await _emit("result", f"「{cat.name}」入库完成，新增 {count} 条")
 
     env_vars["LAST_SEARCH_TIME"] = datetime.now().isoformat()
     write_env_file(env_vars)
 
+    logger.info("采集任务结束：共新增 %s 条新闻，时间窗口 %s 小时", total_count, interval_hours)
     await _emit("success", f"采集任务完成，共新增 {total_count} 条新闻", total_new=total_count)
 
     return {

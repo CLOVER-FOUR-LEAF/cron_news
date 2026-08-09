@@ -7,8 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import News, Category, Brief
+from app.logging_setup import get_logger
 from app.services.agent_prompts import get_agent_prompt
 from app.services.model_configs import get_active_endpoint
+
+logger = get_logger("brief")
 
 EmitFn = Callable[..., Awaitable[None]]
 
@@ -49,6 +52,7 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
 
     if not await _llm_endpoint(db):
         await _emit("error", "大语言模型未配置，无法生成每日简报")
+        logger.warning("每日简报未执行：大语言模型未配置")
         return {"generated": 0}
 
     system_prompt = await get_agent_prompt(db, "brief")
@@ -57,6 +61,7 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
 
     today = date.today()
     today_start = datetime.combine(today, datetime.min.time())
+    logger.info("每日简报开始：日期=%s", today.isoformat())
 
     result = await db.execute(select(Category).order_by(Category.sort_order.desc(), Category.id))
     categories = result.scalars().all()
@@ -71,6 +76,7 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
         )
         items = result.scalars().all()
         if not items:
+            logger.info("分类「%s」今日无新闻，跳过简报", cat.name)
             continue
 
         news_lines = "\n".join(
@@ -90,6 +96,7 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
         try:
             content = await _ask_llm(db, system_prompt, prompt)
         except Exception as e:
+            logger.error("分类「%s」简报生成失败：%s", cat.name, e)
             await _emit("error", f"[{cat.name}] 简报生成失败: {e}")
             continue
 
@@ -100,9 +107,11 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
             await db.delete(old)
         db.add(Brief(category_name=cat.name, brief_date=today.isoformat(), content=content, source="自主"))
         generated += 1
+        logger.info("分类「%s」简报已生成", cat.name)
         await _emit("save", f"✓ [{cat.name}] 简报已生成")
 
     await db.flush()
+    logger.info("每日简报结束：生成 %s 个分类", generated)
     await _emit("success", f"每日简报完成，生成 {generated} 个分类", generated=generated)
     return {"generated": generated}
 

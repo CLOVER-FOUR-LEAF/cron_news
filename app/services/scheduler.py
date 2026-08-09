@@ -128,26 +128,39 @@ class Scheduler:
         logger.warning("定时任务跳过执行：%s", reason)
         await self._save_run([], "skipped", reason=reason)
 
-    async def _run_search(self):
+    async def _run_search(self, source: str = "定时"):
         lines: list = []
         status = "finished"
+        started = datetime.now()
+        logger.info("任务开始执行（触发来源=%s）", source)
         try:
             self._running = True
             async with get_session() as session:
+                logger.info("—— 阶段：新闻采集（搜索 + 撰稿）开始")
                 result = await run_search_task(session, emit=self._make_collector(lines, "定时资讯"))
+                logger.info("—— 阶段：新闻采集完成，新增 %s 条新闻", result.get("total_new"))
                 if self._recommend_enabled():
+                    logger.info("—— 阶段：智能推荐开始")
                     await run_recommend_task(session, emit=self._make_collector(lines, "智能推荐"))
+                    logger.info("—— 阶段：智能推荐完成")
                 if self._brief_enabled():
+                    logger.info("—— 阶段：每日简报开始")
                     await run_brief_task(session, emit=self._make_collector(lines, "每日简报"))
+                    logger.info("—— 阶段：每日简报完成")
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()
-                logger.info("搜索任务完成：新增 %s 条新闻", result.get("total_new"))
+                logger.info(
+                    "任务执行完成（触发来源=%s），耗时 %s 秒，新增 %s 条新闻",
+                    source,
+                    (datetime.now() - started).total_seconds(),
+                    result.get("total_new"),
+                )
         except Exception as e:
             status = "failed"
             lines.append({"t": "error", "x": f"任务异常: {e}", "ts": datetime.now().strftime("%H:%M:%S"), "agent": "定时资讯"})
             self._last_result = {"error": str(e)}
-            logger.exception("搜索任务失败：%s", e)
+            logger.exception("任务执行失败（触发来源=%s）：%s", source, e)
         finally:
             self._running = False
             await self._save_run(lines, status)
@@ -275,7 +288,7 @@ class Scheduler:
 
                 ready, _ = await self._search_ready()
                 if ready:
-                    await self._run_search()
+                    await self._run_search("定时")
                 else:
                     logger.warning("搜索服务未配置，跳过本次执行")
             except asyncio.CancelledError:
@@ -297,6 +310,8 @@ class Scheduler:
 
     async def run_with_emit(self, emit):
         lines: list = []
+        started = datetime.now()
+        logger.info("任务开始执行（触发来源=手动/页面流式）")
 
         def make_both(agent: str):
             collector = self._make_collector(lines, agent)
@@ -311,14 +326,21 @@ class Scheduler:
         try:
             self._running = True
             async with get_session() as session:
+                logger.info("—— 阶段：新闻采集（搜索 + 撰稿）开始")
                 result = await run_search_task(session, emit=make_both("定时资讯"))
+                logger.info("—— 阶段：新闻采集完成，新增 %s 条新闻", result.get("total_new"))
                 if self._recommend_enabled():
+                    logger.info("—— 阶段：智能推荐开始")
                     await run_recommend_task(session, emit=make_both("智能推荐"))
+                    logger.info("—— 阶段：智能推荐完成")
                 if self._brief_enabled():
+                    logger.info("—— 阶段：每日简报开始")
                     await run_brief_task(session, emit=make_both("每日简报"))
+                    logger.info("—— 阶段：每日简报完成")
                 await session.commit()
                 self._last_result = result
                 self._last_run = datetime.now()
+                logger.info("任务执行完成，耗时 %s 秒", (datetime.now() - started).total_seconds())
                 return result
         except Exception as e:
             status = "failed"
@@ -330,7 +352,8 @@ class Scheduler:
             await self._save_run(lines, status)
 
     async def trigger_now(self):
-        await self._run_search()
+        logger.info("手动触发「立即执行」按钮")
+        await self._run_search("手动")
         return self._last_result
 
 

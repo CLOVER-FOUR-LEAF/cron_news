@@ -8,8 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.news import News
+from app.logging_setup import get_logger
 from app.services.agent_prompts import get_agent_prompt
 from app.services.model_configs import get_active_endpoint
+
+logger = get_logger("recommend")
 
 EmitFn = Callable[..., Awaitable[None]]
 
@@ -65,11 +68,13 @@ async def run_recommend_task(db: AsyncSession, emit: EmitFn | None = None) -> di
 
     if not await get_active_endpoint(db, "llm"):
         await _emit("error", "大语言模型未配置，无法执行智能推荐")
+        logger.warning("智能推荐未执行：大语言模型未配置")
         return {"updated": 0}
 
     system_prompt = await get_agent_prompt(db, "recommend")
 
     await _emit("thinking", "智能推荐 Agent 启动，分析新闻相关性…")
+    logger.info("智能推荐开始")
 
     pool_result = await db.execute(
         select(News).where(News.is_deleted == 0).order_by(News.collected_at.desc()).limit(CANDIDATE_POOL)
@@ -78,6 +83,7 @@ async def run_recommend_task(db: AsyncSession, emit: EmitFn | None = None) -> di
 
     if len(pool) < 2:
         await _emit("info", "新闻数量不足，跳过推荐计算")
+        logger.info("智能推荐跳过：新闻数量不足（%s 条）", len(pool))
         return {"updated": 0}
 
     valid_ids = {n.id for n in pool}
@@ -94,9 +100,11 @@ async def run_recommend_task(db: AsyncSession, emit: EmitFn | None = None) -> di
 
     if not targets:
         await _emit("info", "所有新闻均已计算推荐，本次无需更新")
+        logger.info("智能推荐跳过：所有新闻均已计算推荐")
         return {"updated": 0}
 
     await _emit("info", f"候选新闻池 {len(pool)} 条，待计算 {len(targets)} 条")
+    logger.info("智能推荐：候选池 %s 条，待计算 %s 条", len(pool), len(targets))
 
     updated = 0
     for news in targets:
@@ -116,10 +124,13 @@ async def run_recommend_task(db: AsyncSession, emit: EmitFn | None = None) -> di
             related = _parse_ids(answer, valid_ids, news.id)
             news.related_ids = json.dumps(related)
             updated += 1
+            logger.info("新闻[%s] 关联 %s 条 → %s", news.id, len(related), related)
             await _emit("save", f"✓ [{news.id}] 关联 {len(related)} 条 → {related}")
         except Exception as e:
+            logger.error("新闻[%s] 推荐计算失败：%s", news.id, e)
             await _emit("error", f"[{news.id}] 推荐计算失败: {e}")
 
     await db.flush()
+    logger.info("智能推荐结束：更新 %s 条新闻", updated)
     await _emit("success", f"智能推荐完成，更新 {updated} 条新闻的相关性", updated=updated)
     return {"updated": updated}
