@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
@@ -181,12 +182,34 @@ class Scheduler:
             return True
         return (datetime.now() - last) > timedelta(hours=interval_hours)
 
+    def _next_run_human(self) -> str:
+        if not self._next_run:
+            return "无（未就绪/非自主模式）"
+        try:
+            return datetime.fromtimestamp(self._next_run).strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError):
+            return "未知"
+
     async def _loop(self):
         last_mode: str | None = None
         last_skip_reason: str | None = None
+        last_heartbeat = 0.0
         while True:
             try:
                 mode = self._work_mode()
+
+                # 心跳日志：每 5 分钟输出一次当前状态，便于排查「为什么没执行」
+                if time.time() - last_heartbeat >= 300:
+                    last_heartbeat = time.time()
+                    ready, _ = await self._search_ready()
+                    logger.info(
+                        "调度器心跳：工作模式=%s，搜索就绪=%s，下次执行=%s，运行中=%s",
+                        mode or "未设置",
+                        "是" if ready else "否",
+                        self._next_run_human(),
+                        self._running,
+                    )
+
                 if mode != "autonomous":
                     # 非自主模式下定时任务不自动执行，但记录一次可见原因（辅助模式由外部 Agent 推送）
                     self._next_run = None
