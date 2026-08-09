@@ -2109,22 +2109,19 @@ button.header-icon-btn {
     color: var(--text-primary);
 }
 
-/* 大语言模型 / 搜索服务列「未启用有效配置」红色感叹号 */
+/* 大语言模型 / 搜索服务列「未启用有效配置」红色三角感叹号图标 */
 .config-col-badge {
-    display: inline-block;
-    min-width: 15px;
-    height: 15px;
-    line-height: 15px;
-    padding: 0 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-left: 6px;
-    border-radius: 8px;
-    text-align: center;
-    font-size: 0.72rem;
-    font-weight: 800;
-    color: #fff;
-    background: #e86b6b;
+    color: #e86b6b;
     vertical-align: middle;
     animation: badge-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.config-col-badge svg {
+    display: block;
 }
 
 .config-col-body {
