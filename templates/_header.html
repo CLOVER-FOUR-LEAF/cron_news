@@ -697,7 +697,7 @@
 
             <div class="task-field">
                 <div class="task-field-head">
-                    <label class="task-label">触发频率</label>
+                    <label class="task-label">时间间隔</label>
                 </div>
                 <p class="task-hint">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -707,24 +707,6 @@
                     </svg>
                     采集频率越高消耗的 AI Token 越多，请按需设置合理间隔
                 </p>
-                <div class="segmented">
-                    <button type="button" class="segmented-btn" id="taskModePresetBtn">预设</button>
-                    <button type="button" class="segmented-btn" id="taskModeCustomBtn">自定义</button>
-                </div>
-            </div>
-
-            <div class="task-field task-sub-section" id="taskCustomSection" style="display:none">
-                <div class="task-field-head">
-                    <label class="task-label">Cron 表达式</label>
-                </div>
-                <input type="text" id="taskCronInput" class="task-cron-input">
-                <span class="input-hint">例：0 */6 * * * 表示每 6 小时执行一次</span>
-            </div>
-
-            <div class="task-field task-sub-section" id="taskIntervalSection">
-                <div class="task-field-head">
-                    <label class="task-label">时间间隔</label>
-                </div>
                 <div class="cron-presets" id="intervalChips">
                     <button type="button" class="cron-chip" data-hours="1">每 1 小时</button>
                     <button type="button" class="cron-chip" data-hours="3">每 3 小时</button>
@@ -735,14 +717,24 @@
                 </div>
             </div>
 
-            <div class="task-field task-sub-section" id="taskStartSection">
+            <div class="task-field">
                 <div class="task-field-head">
                     <label class="task-label">每日开始时间</label>
                 </div>
                 <div class="cron-presets" id="startHourChips">
                     <button type="button" class="cron-chip" data-hour="0">每日 0 点</button>
                     <button type="button" class="cron-chip" data-hour="4">每日 4 点</button>
+                    <button type="button" class="cron-chip" data-hour="8">每日 8 点</button>
+                    <button type="button" class="cron-chip" data-hour="12">每日 12 点</button>
                 </div>
+            </div>
+
+            <div class="task-field">
+                <div class="task-field-head">
+                    <label class="task-label">每日触发时间点</label>
+                    <span class="input-hint">由「时间间隔 + 每日开始时间」固定生成，到点自动执行</span>
+                </div>
+                <div class="task-slots" id="taskSlots"></div>
             </div>
 
             <div class="task-field">
@@ -2139,20 +2131,65 @@
     $('agentLogAgentSel').addEventListener('change', renderAgentLogs);
 
     /* ===== 自动任务配置 ===== */
-    state.taskForm = { mode: 'preset', intervalHours: 8, startHour: 0, customCron: '', selectedCategories: [] };
+    state.taskForm = { intervalHours: 8, startHour: 0, selectedCategories: [] };
 
     function selectableCatNames() {
         return state.categories.filter(c => !c.is_default).map(c => c.name);
+    }
+
+    // 由「时间间隔 + 每日开始时间」固定生成每日触发时间点（写死逻辑，与后端一致）
+    function taskSlotsFor(intervalHours, startHour) {
+        const slots = [];
+        const seen = {};
+        let h = startHour % 24;
+        for (let k = 0; k < 48; k++) {
+            if (seen[h]) break;
+            seen[h] = true;
+            slots.push(h);
+            h = (h + intervalHours) % 24;
+        }
+        return slots.sort((a, b) => a - b);
+    }
+
+    function nextRunFromSlots(slots, now) {
+        const base = now || new Date();
+        for (let day = 0; day < 3; day++) {
+            const d = new Date(base);
+            d.setDate(d.getDate() + day);
+            d.setMinutes(0, 0, 0);
+            for (const h of slots) {
+                const t = new Date(d);
+                t.setHours(h, 0, 0, 0);
+                if (t > base) return t;
+            }
+        }
+        return null;
+    }
+
+    function fmtHour(h) {
+        return String(h).padStart(2, '0') + ':00';
+    }
+
+    function renderTaskSlots() {
+        const form = state.taskForm;
+        const slots = taskSlotsFor(form.intervalHours, form.startHour);
+        const next = nextRunFromSlots(slots);
+        const nextHour = next ? next.getHours() : null;
+
+        $('taskSlots').innerHTML = slots.map(h =>
+            `<span class="task-slot-chip ${h === nextHour ? 'active' : ''}">${fmtHour(h)}</span>`
+        ).join('');
+
+        // 下次执行 = 按当前选中配置即时推算（不再依赖后端已保存状态）
+        $('taskStatusNextRun').textContent = next ? next.toLocaleString() : '-';
     }
 
     function loadTaskForm() {
         const data = state.searchConfig || {};
         const cats = selectableCatNames();
 
-        state.taskForm.mode = data.task_mode === 'custom' ? 'custom' : 'preset';
         state.taskForm.intervalHours = data.task_interval_hours || 8;
         state.taskForm.startHour = data.task_start_hour || 0;
-        state.taskForm.customCron = data.task_custom_cron || '';
 
         const saved = data.task_selected_categories;
         if (Array.isArray(saved) && saved.length) {
@@ -2167,15 +2204,6 @@
 
     function renderTaskForm() {
         const form = state.taskForm;
-        const isPreset = form.mode === 'preset';
-
-        $('taskModePresetBtn').classList.toggle('active', isPreset);
-        $('taskModeCustomBtn').classList.toggle('active', !isPreset);
-        $('taskCustomSection').style.display = isPreset ? 'none' : '';
-        $('taskIntervalSection').style.display = isPreset ? '' : 'none';
-        $('taskStartSection').style.display = isPreset ? '' : 'none';
-
-        $('taskCronInput').value = form.customCron;
 
         document.querySelectorAll('#intervalChips .cron-chip').forEach(chip => {
             chip.classList.toggle('active', parseInt(chip.dataset.hours) === form.intervalHours);
@@ -2184,6 +2212,7 @@
             chip.classList.toggle('active', parseInt(chip.dataset.hour) === form.startHour);
         });
 
+        renderTaskSlots();
         renderTaskCatChips();
     }
 
@@ -2239,27 +2268,18 @@
         renderTaskCatChips();
     });
 
-    $('taskModePresetBtn').addEventListener('click', () => {
-        state.taskForm.mode = 'preset';
-        renderTaskForm();
-    });
-
-    $('taskModeCustomBtn').addEventListener('click', () => {
-        state.taskForm.mode = 'custom';
-        renderTaskForm();
-    });
-
+    // 切换间隔 / 开始时间后立即重算「每日触发时间点」与「下次执行」
     document.querySelectorAll('#intervalChips .cron-chip').forEach(chip => {
         chip.addEventListener('click', () => {
             state.taskForm.intervalHours = parseInt(chip.dataset.hours);
-            document.querySelectorAll('#intervalChips .cron-chip').forEach(c => c.classList.toggle('active', c === chip));
+            renderTaskForm();
         });
     });
 
     document.querySelectorAll('#startHourChips .cron-chip').forEach(chip => {
         chip.addEventListener('click', () => {
             state.taskForm.startHour = parseInt(chip.dataset.hour);
-            document.querySelectorAll('#startHourChips .cron-chip').forEach(c => c.classList.toggle('active', c === chip));
+            renderTaskForm();
         });
     });
 
@@ -2271,13 +2291,12 @@
             runningEl.textContent = data.running ? '运行中' : '等待中';
             runningEl.classList.toggle('on', data.running);
             $('taskStatusLastRun').textContent = data.last_run ? new Date(data.last_run).toLocaleString() : '-';
-            $('taskStatusNextRun').textContent = data.next_run ? new Date(data.next_run).toLocaleString() : '-';
         } catch (e) {
             console.error('Failed to load scheduler status:', e);
         }
     }
 
-    // 任务弹窗打开期间定时刷新状态，让「下次执行」保持最新
+    // 任务弹窗打开期间定时刷新运行状态
     setInterval(() => {
         const modal = document.getElementById('taskModal');
         if (modal && modal.classList.contains('show')) refreshTaskStatus();
@@ -2285,18 +2304,16 @@
 
     $('saveTaskBtn').addEventListener('click', async () => {
         const form = state.taskForm;
-        const payload = {
-            task_mode: form.mode,
-            task_interval_hours: form.intervalHours,
-            task_start_hour: form.startHour,
-            task_custom_cron: $('taskCronInput').value.trim(),
-            task_selected_categories: form.selectedCategories
-        };
-
-        if (form.mode === 'custom' && !payload.task_custom_cron) {
-            showToast('请输入 Cron 表达式', 'error');
+        if (!form.selectedCategories.length) {
+            showToast('请至少选择一个分类', 'error');
             return;
         }
+
+        const payload = {
+            task_interval_hours: form.intervalHours,
+            task_start_hour: form.startHour,
+            task_selected_categories: form.selectedCategories
+        };
 
         try {
             const resp = await fetch('/api/config', {
@@ -2306,10 +2323,12 @@
             });
             if (resp.ok) {
                 closeModal('taskModal');
+                showToast('自动任务配置已保存', 'success');
                 await refreshConfig();
                 refreshTaskStatus();
             } else {
-                showToast('保存失败', 'error');
+                const data = await resp.json();
+                showToast(data.detail || '保存失败', 'error');
             }
         } catch (e) {
             showToast('保存失败', 'error');

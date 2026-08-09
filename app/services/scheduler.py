@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import json
 from datetime import datetime, timedelta
 
@@ -44,31 +44,31 @@ class Scheduler:
 
         return {
             "running": self._running,
-            "cron": settings.SEARCH_CRON,
+            "schedule": self._schedule_desc(),
             "last_run": self._last_run.isoformat() if self._last_run else None,
             "next_run": next_run_dt,
             "last_result": self._last_result,
             "last_skip": self._last_skip,
         }
 
-    def _read_task_settings(self) -> tuple[str, int, int, str]:
+    def _schedule_desc(self) -> str:
+        interval, start = self._read_task_settings()
+        return f"每 {interval} 小时 · 每日 {start} 点起"
+
+    def _read_task_settings(self) -> tuple[int, int]:
         env = read_env_file()
-        mode = env.get("TASK_MODE", "preset")
         interval = _parse_int(env.get("TASK_INTERVAL_HOURS", ""), 8)
         start = _parse_int(env.get("TASK_START_HOUR", ""), 0)
-        cron = env.get("SEARCH_CRON", "")
-        return mode, max(1, interval), start % 24, cron
+        return max(1, interval), start % 24
 
     def _task_interval_hours(self) -> int:
-        return self._read_task_settings()[1]
+        return self._read_task_settings()[0]
 
     def _next_run_datetime(self) -> datetime:
-        mode, interval, start, cron = self._read_task_settings()
+        """固定触发时间点：每日从 start 点开始，每隔 interval 小时触发一次（24 小时内取最近的下一次）。"""
+        interval, start = self._read_task_settings()
         now = datetime.now()
-
-        if mode == "preset":
-            return self._next_from_preset(now, interval, start)
-        return self._next_from_cron(cron, now)
+        return self._next_from_preset(now, interval, start)
 
     def _next_from_preset(self, now: datetime, interval: int, start: int) -> datetime:
         best: datetime | None = None
@@ -81,41 +81,6 @@ class Scheduler:
                 if t > now and (best is None or t < best):
                     best = t
         return best or (now + timedelta(hours=interval))
-
-    def _next_from_cron(self, cron: str, now: datetime) -> datetime:
-        parts = cron.split()
-        if len(parts) >= 2:
-            m_part, h_part = parts[0], parts[1]
-            minute = _parse_int(m_part, 0) % 60
-
-            if h_part.startswith("*/"):
-                step = max(1, _parse_int(h_part[2:], 6))
-                return self._next_step(now, 0, minute, step)
-
-            if "/" in h_part:
-                head, _, tail = h_part.partition("/")
-                start = _parse_int(head, 0) % 24
-                step = max(1, _parse_int(tail, 6))
-                return self._next_step(now, start, minute, step)
-
-            if h_part.isdigit():
-                t = now.replace(hour=int(h_part) % 24, minute=minute, second=0, microsecond=0)
-                if t <= now:
-                    t += timedelta(days=1)
-                return t
-
-        return now + timedelta(hours=6)
-
-    def _next_step(self, now: datetime, start: int, minute: int, step: int) -> datetime:
-        for day_offset in range(0, 3):
-            base = (now + timedelta(days=day_offset)).replace(
-                hour=start, minute=minute, second=0, microsecond=0
-            )
-            for k in range(0, 49):
-                t = base + timedelta(hours=k * step)
-                if t > now:
-                    return t
-        return now + timedelta(hours=step)
 
     def _recommend_enabled(self) -> bool:
         return read_env_file().get("AGENT_RECOMMEND_ENABLED", "") == "true"
@@ -300,7 +265,7 @@ class Scheduler:
         if self._task and not self._task.done():
             return
         self._task = asyncio.create_task(self._loop())
-        logger.info("定时任务调度器已启动，cron: %s", settings.SEARCH_CRON)
+        logger.info("定时任务调度器已启动，%s", self._schedule_desc())
 
     def stop(self):
         if self._task and not self._task.done():

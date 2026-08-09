@@ -1,4 +1,4 @@
-﻿import json
+import json
 import random
 import shutil
 from datetime import datetime, timedelta

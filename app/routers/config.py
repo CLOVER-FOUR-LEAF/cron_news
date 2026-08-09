@@ -1,4 +1,4 @@
-﻿import json
+import json
 import time
 from pathlib import Path
 
@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings, BASE_DIR
+from app.config import BASE_DIR
 from app.database import get_db
 from app.env_store import read_env_file, write_env_file
 from app.services.prompts import build_base_prompt, DEFAULT_EXT_PROMPT
@@ -30,11 +30,8 @@ class ConfigUpdate(BaseModel):
     llm_model: str | None = None
     search_base_url: str | None = None
     search_api_key: str | None = None
-    search_cron: str | None = None
-    task_mode: str | None = None
     task_interval_hours: int | None = None
     task_start_hour: int | None = None
-    task_custom_cron: str | None = None
     task_selected_categories: list | None = None
     agent_ext_mode: str | None = None
     agent_ext_prompt: str | None = None
@@ -56,13 +53,10 @@ class ConfigResponse(BaseModel):
     llm_base_url: str = ""
     llm_model: str = ""
     search_base_url: str = ""
-    search_cron: str = ""
     has_llm_key: bool = False
     has_search_key: bool = False
-    task_mode: str = "preset"
     task_interval_hours: int = 8
     task_start_hour: int = 0
-    task_custom_cron: str = ""
     task_selected_categories: list = []
     agent_base_prompt: str = ""
     agent_ext_preset: str = ""
@@ -98,17 +92,6 @@ def _parse_int(raw: str, default: int) -> int:
         return default
 
 
-def derive_task_cron(mode: str, interval_hours: int, start_hour: int, custom_cron: str) -> str:
-    if mode == "custom":
-        return custom_cron.strip() or "0 */6 * * *"
-    interval_hours = max(1, interval_hours)
-    if interval_hours == 1:
-        return "0 * * * *"
-    if start_hour <= 0:
-        return f"0 */{interval_hours} * * *"
-    return f"0 {start_hour}/{interval_hours} * * *"
-
-
 @router.get("", response_model=ConfigResponse)
 async def get_config(db: AsyncSession = Depends(get_db)):
     from app.services import db_service
@@ -140,13 +123,10 @@ async def get_config(db: AsyncSession = Depends(get_db)):
         llm_base_url=llm_enabled.base_url if llm_enabled else "",
         llm_model=llm_enabled.model_id if llm_enabled else "",
         search_base_url=search_enabled.base_url if search_enabled else "",
-        search_cron=env_vars.get("SEARCH_CRON", "0 */6 * * *"),
         has_llm_key=bool(llm_enabled and decrypt_api_key(llm_enabled.api_key_enc)),
         has_search_key=bool(search_enabled and decrypt_api_key(search_enabled.api_key_enc)),
-        task_mode=env_vars.get("TASK_MODE", "preset"),
         task_interval_hours=interval_hours,
         task_start_hour=_parse_int(env_vars.get("TASK_START_HOUR", ""), 0),
-        task_custom_cron=env_vars.get("TASK_CUSTOM_CRON", ""),
         task_selected_categories=selected_categories,
         agent_base_prompt=build_base_prompt(interval_hours, selected_categories),
         agent_ext_preset=DEFAULT_EXT_PROMPT,
@@ -166,19 +146,10 @@ async def get_config(db: AsyncSession = Depends(get_db)):
 async def update_config(config: ConfigUpdate):
     env_vars = read_env_file()
 
-    task_touched = any(v is not None for v in (
-        config.task_mode, config.task_interval_hours, config.task_start_hour,
-        config.task_custom_cron, config.task_selected_categories,
-    ))
-
-    if config.task_mode is not None:
-        env_vars["TASK_MODE"] = config.task_mode
     if config.task_interval_hours is not None:
-        env_vars["TASK_INTERVAL_HOURS"] = str(config.task_interval_hours)
+        env_vars["TASK_INTERVAL_HOURS"] = str(max(1, config.task_interval_hours))
     if config.task_start_hour is not None:
-        env_vars["TASK_START_HOUR"] = str(config.task_start_hour)
-    if config.task_custom_cron is not None:
-        env_vars["TASK_CUSTOM_CRON"] = config.task_custom_cron
+        env_vars["TASK_START_HOUR"] = str(config.task_start_hour % 24)
     if config.task_selected_categories is not None:
         env_vars["TASK_SELECTED_CATEGORIES"] = json.dumps(config.task_selected_categories, ensure_ascii=False)
 
@@ -195,14 +166,6 @@ async def update_config(config: ConfigUpdate):
     if config.work_mode is not None:
         env_vars["WORK_MODE"] = config.work_mode
 
-    if task_touched:
-        env_vars["SEARCH_CRON"] = derive_task_cron(
-            env_vars.get("TASK_MODE", "preset"),
-            _parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 8),
-            _parse_int(env_vars.get("TASK_START_HOUR", ""), 0),
-            env_vars.get("TASK_CUSTOM_CRON", ""),
-        )
-
     if config.nickname is not None:
         env_vars["NICKNAME"] = config.nickname
     if config.avatar_url is not None:
@@ -217,12 +180,8 @@ async def update_config(config: ConfigUpdate):
         env_vars["SEARCH_BASE_URL"] = config.search_base_url
     if config.search_api_key is not None:
         env_vars["SEARCH_API_KEY"] = config.search_api_key
-    if config.search_cron is not None:
-        env_vars["SEARCH_CRON"] = config.search_cron
 
     write_env_file(env_vars)
-
-    settings.SEARCH_CRON = env_vars.get("SEARCH_CRON", "0 */6 * * *")
 
     return {"message": "ok"}
 

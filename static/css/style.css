@@ -2275,6 +2275,31 @@ button.header-icon-btn {
     color: var(--accent-gold);
 }
 
+/* 每日触发时间点展示 */
+.task-slots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.task-slot-chip {
+    padding: 5px 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.task-slot-chip.active {
+    background: rgba(200, 168, 82, 0.14);
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
+    font-weight: 600;
+}
+
 /* ========== TASK FORM ========== */
 .task-field {
     margin-bottom: 22px;
