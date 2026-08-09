@@ -724,17 +724,7 @@
                 <div class="cron-presets" id="startHourChips">
                     <button type="button" class="cron-chip" data-hour="0">每日 0 点</button>
                     <button type="button" class="cron-chip" data-hour="4">每日 4 点</button>
-                    <button type="button" class="cron-chip" data-hour="8">每日 8 点</button>
-                    <button type="button" class="cron-chip" data-hour="12">每日 12 点</button>
                 </div>
-            </div>
-
-            <div class="task-field">
-                <div class="task-field-head">
-                    <label class="task-label">每日触发时间点</label>
-                    <span class="input-hint">由「时间间隔 + 每日开始时间」固定生成，到点自动执行</span>
-                </div>
-                <div class="task-slots" id="taskSlots"></div>
             </div>
 
             <div class="task-field">
@@ -2137,7 +2127,7 @@
         return state.categories.filter(c => !c.is_default).map(c => c.name);
     }
 
-    // 由「时间间隔 + 每日开始时间」固定生成每日触发时间点（写死逻辑，与后端一致）
+    // 由「时间间隔 + 每日开始时间」固定生成每日触发点（写死逻辑，与后端一致）
     function taskSlotsFor(intervalHours, startHour) {
         const slots = [];
         const seen = {};
@@ -2166,21 +2156,11 @@
         return null;
     }
 
-    function fmtHour(h) {
-        return String(h).padStart(2, '0') + ':00';
-    }
-
-    function renderTaskSlots() {
+    // 切换间隔/开始时间后按当前选中配置即时推算「下次执行」
+    function updateTaskNextRun() {
         const form = state.taskForm;
         const slots = taskSlotsFor(form.intervalHours, form.startHour);
         const next = nextRunFromSlots(slots);
-        const nextHour = next ? next.getHours() : null;
-
-        $('taskSlots').innerHTML = slots.map(h =>
-            `<span class="task-slot-chip ${h === nextHour ? 'active' : ''}">${fmtHour(h)}</span>`
-        ).join('');
-
-        // 下次执行 = 按当前选中配置即时推算（不再依赖后端已保存状态）
         $('taskStatusNextRun').textContent = next ? next.toLocaleString() : '-';
     }
 
@@ -2212,7 +2192,7 @@
             chip.classList.toggle('active', parseInt(chip.dataset.hour) === form.startHour);
         });
 
-        renderTaskSlots();
+        updateTaskNextRun();
         renderTaskCatChips();
     }
 
@@ -2268,7 +2248,7 @@
         renderTaskCatChips();
     });
 
-    // 切换间隔 / 开始时间后立即重算「每日触发时间点」与「下次执行」
+    // 切换间隔 / 开始时间后立即重算「下次执行」
     document.querySelectorAll('#intervalChips .cron-chip').forEach(chip => {
         chip.addEventListener('click', () => {
             state.taskForm.intervalHours = parseInt(chip.dataset.hours);
