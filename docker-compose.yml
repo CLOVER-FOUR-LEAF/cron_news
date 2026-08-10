@@ -3,6 +3,8 @@ services:
     build: .
     image: cron_news:latest
     container_name: cron_news
+    # 使用 Docker 默认 bridge 网络，不创建 compose 专属网络
+    network_mode: bridge
     ports:
       # 宿主使用不常用五位端口，避免与常见 8000 冲突
       - "18080:8000"
