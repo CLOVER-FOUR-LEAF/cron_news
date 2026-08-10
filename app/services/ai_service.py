@@ -1,3 +1,4 @@
+import asyncio
 import json
 import random
 import shutil
@@ -25,6 +26,9 @@ EmitFn = Callable[..., Awaitable[None]]
 
 COVER_DIR = BASE_DIR / "images" / "cover"
 DEFAULT_COVER_DIR = COVER_DIR / "default"
+
+# 正文生成的并发数：大模型单次调用较慢（实测可达数十秒），并发可显著缩短整轮采集耗时
+CONTENT_CONCURRENCY = 4
 
 
 async def search_news(db: AsyncSession, query: str, max_results: int = 10, hours: int | None = None) -> list[dict[str, Any]]:
@@ -192,6 +196,9 @@ async def process_search_results(
 
     count = 0
     skipped = 0
+
+    # 阶段1：去重并收集候选（不调用大模型）
+    candidates: list[dict[str, Any]] = []
     for result in search_results:
         title = result.get("title", "").strip()
         if not title:
@@ -216,25 +223,44 @@ async def process_search_results(
             except (ValueError, AttributeError):
                 pass
 
-        content = ""
-        if llm_ready:
-            await _emit("tool", f'llm.generate("{_short(title)}") → 生成正文')
-            try:
-                content = await generate_news_content(db, title, summary)
-            except Exception as e:
-                await _emit("error", f"正文生成失败，回退为摘要: {e}")
-                content = summary or ""
-        else:
-            content = summary or ""
+        candidates.append({
+            "title": title,
+            "summary": summary,
+            "url": url,
+            "source": source,
+            "collected_at": collected_at,
+        })
 
+    # 阶段2：并行生成正文（限制并发，避免打爆大模型 API）
+    logger.info("分类「%s」候选 %s 条，开始并行生成正文（并发 %s）", category_name, len(candidates), CONTENT_CONCURRENCY)
+    if llm_ready and candidates:
+        sem = asyncio.Semaphore(CONTENT_CONCURRENCY)
+
+        async def gen(cand: dict) -> str:
+            title = cand["title"]
+            summary = cand["summary"]
+            async with sem:
+                await _emit("tool", f'llm.generate("{_short(title)}") → 生成正文')
+                try:
+                    return await generate_news_content(db, title, summary)
+                except Exception as e:
+                    await _emit("error", f"正文生成失败，回退为摘要: {e}")
+                    return summary or ""
+
+        contents: list[str] = await asyncio.gather(*[gen(c) for c in candidates])
+    else:
+        contents = [(c["summary"] or "") for c in candidates]
+
+    # 阶段3：顺序入库 + 封面
+    for cand, content in zip(candidates, contents):
         news = News(
-            title=title,
-            summary=summary[:500] if summary else None,
+            title=cand["title"],
+            summary=(cand["summary"] or "")[:500] if cand["summary"] else None,
             content=content,
-            source_url=url[:500] if url else None,
-            source=source[:100] if source else None,
+            source_url=(cand["url"] or "")[:500] if cand["url"] else None,
+            source=(cand["source"] or "")[:100] if cand["source"] else None,
             category_id=category_id,
-            collected_at=collected_at,
+            collected_at=cand["collected_at"],
         )
         db.add(news)
         await db.flush()
@@ -244,7 +270,7 @@ async def process_search_results(
                 await assign_news_cover(db, news, emit)
             except Exception as e:
                 await _emit("error", f"封面处理失败: {e}")
-        await _emit("save", f"✓ {_short(title, 42)}")
+        await _emit("save", f"✓ {_short(cand['title'], 42)}")
 
     if skipped:
         await _emit("info", f"过滤重复新闻 {skipped} 条")

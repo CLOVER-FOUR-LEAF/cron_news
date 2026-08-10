@@ -254,8 +254,8 @@ class Scheduler:
                     continue
 
                 last_skip_reason = None
-                interval = self._task_interval_hours()
-                target = self._next_run_datetime()
+                interval, start = self._read_task_settings()
+                target = self._next_from_preset(datetime.now(), interval, start)
                 catch_up = False
 
                 # 启动补跑：若距上次采集超过一个周期，立即补跑一次，避免刚部署/重启后干等半天
@@ -275,10 +275,12 @@ class Scheduler:
                     remaining = (target - datetime.now()).total_seconds()
                     await asyncio.sleep(min(30, max(1, remaining)))
                     if not catch_up:
-                        # 仅对「定时槽位」目标做配置变更兜底，补跑目标不可被覆盖
-                        refreshed = self._next_run_datetime()
-                        if refreshed != target:
-                            target = refreshed
+                        # 仅当「时间间隔/开始时间」真实变化时才重算目标，避免到点瞬间被
+                        # _next_run_datetime()（严格大于当前时刻的下一个槽位）误覆盖而跳过一次执行
+                        cur_interval, cur_start = self._read_task_settings()
+                        if (cur_interval, cur_start) != (interval, start):
+                            interval, start = cur_interval, cur_start
+                            target = self._next_from_preset(datetime.now(), interval, start)
                             self._next_run = target.timestamp()
                             logger.info("任务配置变化，下次执行调整为：%s", target.strftime("%Y-%m-%d %H:%M:%S"))
 
