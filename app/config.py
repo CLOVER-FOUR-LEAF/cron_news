@@ -1,3 +1,5 @@
+import os
+import time
 from pathlib import Path
 
 from pydantic_settings import BaseSettings
@@ -13,6 +15,10 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     DB_PATH: str = str(DB_DIR / "cron_news.db")
+
+    # 时区：定时任务的“几点执行”依赖进程本地时间，显式固定避免
+    # systemd / nohup / docker 启动方式不同导致槽位漂移
+    APP_TIMEZONE: str = "Asia/Shanghai"
 
     LLM_BASE_URL: str = ""
     LLM_API_KEY: str = ""
@@ -35,3 +41,19 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def _apply_timezone():
+    """在进程启动时固定时区，保证定时槽位与日志时间一致。"""
+    tz = (os.environ.get("TZ") or settings.APP_TIMEZONE or "").strip()
+    if not tz:
+        return
+    os.environ["TZ"] = tz
+    if hasattr(time, "tzset"):
+        try:
+            time.tzset()
+        except OSError:
+            pass
+
+
+_apply_timezone()

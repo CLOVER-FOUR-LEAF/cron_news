@@ -219,7 +219,8 @@
                     tool: '正在检索新闻库…',
                     answering: '正在整理回答…'
                 };
-                setStatusText(bubble, labels[data.stage] || '处理中…');
+                // 委派类任务会带上具体进度文本（如「采集 Agent 正在搜索…」）
+                setStatusText(bubble, data.text || labels[data.stage] || '处理中…');
                 break;
             }
             case 'tool_call':

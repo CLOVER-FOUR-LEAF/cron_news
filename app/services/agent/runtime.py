@@ -168,7 +168,13 @@ async def _build_system_prompt(db: AsyncSession) -> str:
     raw = await get_agent_prompt(db, "chat")
     nickname = read_env_file().get("NICKNAME") or "用户"
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    return raw.replace("{now}", now).replace("{nickname}", nickname)
+    prompt = raw.replace("{now}", now).replace("{nickname}", nickname)
+    # 协作约定固定追加：即使管理员改过提示词，委派能力也不会丢失
+    return prompt + (
+        "\n\n【团队协作】用户要求采集新闻、生成简报、更新相关推荐时，"
+        "分别调用 delegate_collect / delegate_brief / delegate_recommend，"
+        "完成后基于工具返回的真实结果汇报，不要回答「这不是我的工作」。"
+    )
 
 
 def _json_instruction() -> str:
@@ -432,10 +438,36 @@ async def run_turn(
 
                 await _safe_emit(emit, "status", {"stage": "tool"})
                 messages.append(_assistant_tool_message(response, calls))
-                results = await asyncio.gather(
-                    *[tool_registry.execute_tool(call.name, call.arguments) for call in calls],
-                    return_exceptions=True,
-                )
+
+                # 先发 tool_call，再执行：委派类工具可能跑几分钟，用户需要立即看到进度
+                for call in calls:
+                    await _safe_emit(
+                        emit,
+                        "tool_call",
+                        {"id": call.id, "name": call.name, "arguments": call.arguments},
+                    )
+
+                async def run_tool(call):
+                    async def progress(text: str):
+                        await _safe_emit(emit, "status", {"stage": "tool", "text": text})
+
+                    return await tool_registry.execute_tool(
+                        call.name, call.arguments, emit=progress
+                    )
+
+                # 委派任务（采集/简报）耗时很长，串行执行；其它只读工具保持并发
+                if any(tool_registry.is_delegate(call.name) for call in calls):
+                    results = []
+                    for call in calls:
+                        try:
+                            results.append(await run_tool(call))
+                        except Exception as exc:  # 保持与 gather(return_exceptions) 一致
+                            results.append(exc)
+                else:
+                    results = await asyncio.gather(
+                        *[run_tool(call) for call in calls],
+                        return_exceptions=True,
+                    )
 
                 for call, result in zip(calls, results):
                     if isinstance(result, Exception):
@@ -444,11 +476,6 @@ async def run_turn(
                         )
                         result = error_result
                     tool_calls_used += 1
-                    await _safe_emit(
-                        emit,
-                        "tool_call",
-                        {"id": call.id, "name": call.name, "arguments": call.arguments},
-                    )
                     await _safe_emit(
                         emit,
                         "tool_result",
@@ -500,16 +527,21 @@ async def run_turn(
                         force_answer = True
                         break
                     await _safe_emit(emit, "status", {"stage": "tool"})
-                    result = await tool_registry.execute_tool(name, arguments)
-                    tool_calls_used += 1
+                    call_id = f"json_{tool_calls_used + 1}"
                     await _safe_emit(
-                        emit, "tool_call", {"id": f"json_{tool_calls_used}", "name": name, "arguments": arguments}
+                        emit, "tool_call", {"id": call_id, "name": name, "arguments": arguments}
                     )
+
+                    async def progress(text: str):
+                        await _safe_emit(emit, "status", {"stage": "tool", "text": text})
+
+                    result = await tool_registry.execute_tool(name, arguments, emit=progress)
+                    tool_calls_used += 1
                     await _safe_emit(
                         emit,
                         "tool_result",
                         {
-                            "id": f"json_{tool_calls_used}",
+                            "id": call_id,
                             "name": name,
                             "ok": result.ok,
                             "summary": result.summary or result.error,

@@ -147,37 +147,50 @@ class Scheduler:
         await self._save_run([], "skipped", reason=reason)
 
     async def _run_search(self, source: str = "定时"):
+        from app.services.agent_jobs import JobBusy, job_slot
+
         lines: list = []
         status = "finished"
         started = datetime.now()
         logger.info("任务开始执行（触发来源=%s）", source)
         try:
             self._running = True
-            async with get_session() as session:
-                logger.info("—— 阶段：新闻采集（搜索 + 撰稿）开始")
-                result = await run_search_task(session, emit=self._make_collector(lines, "定时资讯"))
-                await session.commit()
-                logger.info("—— 阶段：新闻采集完成，新增 %s 条新闻", result.get("total_new"))
-                await self._embed_new_news(lines)
-                if self._recommend_enabled():
-                    logger.info("—— 阶段：智能推荐开始")
-                    await run_recommend_task(session, emit=self._make_collector(lines, "智能推荐"))
+            # 与对话助手的委派任务共用一把锁，避免同时采集/重复调用模型
+            async with job_slot("定时采集"):
+                async with get_session() as session:
+                    logger.info("—— 阶段：新闻采集（搜索 + 撰稿）开始")
+                    result = await run_search_task(session, emit=self._make_collector(lines, "定时资讯"))
                     await session.commit()
-                    logger.info("—— 阶段：智能推荐完成")
-                if self._brief_enabled():
-                    logger.info("—— 阶段：每日简报开始")
-                    await run_brief_task(session, emit=self._make_collector(lines, "每日简报"))
+                    logger.info("—— 阶段：新闻采集完成，新增 %s 条新闻", result.get("total_new"))
+                    await self._embed_new_news(lines)
+                    if self._recommend_enabled():
+                        logger.info("—— 阶段：智能推荐开始")
+                        await run_recommend_task(session, emit=self._make_collector(lines, "智能推荐"))
+                        await session.commit()
+                        logger.info("—— 阶段：智能推荐完成")
+                    if self._brief_enabled():
+                        logger.info("—— 阶段：每日简报开始")
+                        await run_brief_task(session, emit=self._make_collector(lines, "每日简报"))
+                        await session.commit()
+                        logger.info("—— 阶段：每日简报完成")
                     await session.commit()
-                    logger.info("—— 阶段：每日简报完成")
-                await session.commit()
-                self._last_result = result
-                self._last_run = datetime.now()
-                logger.info(
-                    "任务执行完成（触发来源=%s），耗时 %s 秒，新增 %s 条新闻",
-                    source,
-                    (datetime.now() - started).total_seconds(),
-                    result.get("total_new"),
-                )
+                    self._last_result = result
+                    self._last_run = datetime.now()
+                    logger.info(
+                        "任务执行完成（触发来源=%s），耗时 %s 秒，新增 %s 条新闻",
+                        source,
+                        (datetime.now() - started).total_seconds(),
+                        result.get("total_new"),
+                    )
+        except JobBusy as e:
+            status = "skipped"
+            reason = f"另一个 Agent 任务正在执行，跳过本次：{e}"
+            self._last_skip = {"time": datetime.now().isoformat(), "reason": reason}
+            logger.warning(reason)
+            lines.append({
+                "t": "info", "x": reason,
+                "ts": datetime.now().strftime("%H:%M:%S"), "agent": "定时资讯",
+            })
         except Exception as e:
             status = "failed"
             lines.append({"t": "error", "x": f"任务异常: {e}", "ts": datetime.now().strftime("%H:%M:%S"), "agent": "定时资讯"})
@@ -347,29 +360,38 @@ class Scheduler:
             return both
 
         status = "finished"
+        from app.services.agent_jobs import JobBusy, job_slot
+
         try:
             self._running = True
-            async with get_session() as session:
-                logger.info("—— 阶段：新闻采集（搜索 + 撰稿）开始")
-                result = await run_search_task(session, emit=make_both("定时资讯"))
-                await session.commit()
-                logger.info("—— 阶段：新闻采集完成，新增 %s 条新闻", result.get("total_new"))
-                await self._embed_new_news(lines)
-                if self._recommend_enabled():
-                    logger.info("—— 阶段：智能推荐开始")
-                    await run_recommend_task(session, emit=make_both("智能推荐"))
+            async with job_slot("手动采集"):
+                async with get_session() as session:
+                    logger.info("—— 阶段：新闻采集（搜索 + 撰稿）开始")
+                    result = await run_search_task(session, emit=make_both("定时资讯"))
                     await session.commit()
-                    logger.info("—— 阶段：智能推荐完成")
-                if self._brief_enabled():
-                    logger.info("—— 阶段：每日简报开始")
-                    await run_brief_task(session, emit=make_both("每日简报"))
+                    logger.info("—— 阶段：新闻采集完成，新增 %s 条新闻", result.get("total_new"))
+                    await self._embed_new_news(lines)
+                    if self._recommend_enabled():
+                        logger.info("—— 阶段：智能推荐开始")
+                        await run_recommend_task(session, emit=make_both("智能推荐"))
+                        await session.commit()
+                        logger.info("—— 阶段：智能推荐完成")
+                    if self._brief_enabled():
+                        logger.info("—— 阶段：每日简报开始")
+                        await run_brief_task(session, emit=make_both("每日简报"))
+                        await session.commit()
+                        logger.info("—— 阶段：每日简报完成")
                     await session.commit()
-                    logger.info("—— 阶段：每日简报完成")
-                await session.commit()
-                self._last_result = result
-                self._last_run = datetime.now()
-                logger.info("任务执行完成，耗时 %s 秒", (datetime.now() - started).total_seconds())
-                return result
+                    self._last_result = result
+                    self._last_run = datetime.now()
+                    logger.info("任务执行完成，耗时 %s 秒", (datetime.now() - started).total_seconds())
+                    return result
+        except JobBusy as e:
+            status = "skipped"
+            self._last_skip = {"time": datetime.now().isoformat(), "reason": str(e)}
+            logger.warning("手动采集跳过：%s", e)
+            await emit("info", f"另一个 Agent 任务正在执行，已跳过：{e}")
+            return None
         except Exception as e:
             status = "failed"
             self._last_result = {"error": str(e)}

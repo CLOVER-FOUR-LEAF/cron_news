@@ -1,7 +1,10 @@
 """Agent 工具注册表。
 
-Phase 1 全部为只读工具。工具结果统一为 {ok, summary, count, data}，异常一律转成
-{ok:false, error} 回传给模型，绝不让异常冒泡中断对话。
+- 只读工具：检索、读新闻/简报、统计、收藏等
+- 委派工具：把采集/简报/推荐任务交给对应的专职 Agent（见 agent_jobs）
+
+工具结果统一为 {ok, summary, count, data}，异常一律转成 {ok:false, error}
+回传给模型，绝不让异常冒泡中断对话。
 """
 
 from __future__ import annotations
@@ -52,8 +55,18 @@ class ToolSpec:
     description: str
     parameters: dict[str, Any]
     handler: Callable[..., Awaitable[ToolResult]]
-    read_only: bool = True
+    # read=只读；write=修改用户数据（需显式开启）；delegate=委派给其它 Agent
+    kind: str = "read"
     timeout: float = 20.0
+
+    @property
+    def read_only(self) -> bool:
+        return self.kind == "read"
+
+
+def _delegation_enabled() -> bool:
+    raw = (read_env_file().get("AGENT_ALLOW_DELEGATION", "") or "true").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
 
 
 def _error(message: str) -> ToolResult:
@@ -290,6 +303,87 @@ async def _search_web(db: AsyncSession, query: str, hours: int = 24, max_results
     )
 
 
+async def _delegate_collect(
+    db: AsyncSession,
+    categories: list[str] | None = None,
+    hours: int | None = None,
+    __emit=None,
+) -> ToolResult:
+    """把采集任务委派给采集 Agent。"""
+    from app.services import agent_jobs
+
+    names = None
+    if categories:
+        if isinstance(categories, str):
+            categories = [categories]
+        names = [str(item).strip() for item in categories if str(item).strip()]
+
+    result = await agent_jobs.run_collection(
+        emit=(__emit if __emit else None), categories=names, interval_hours=hours
+    )
+    if not result.get("ok"):
+        if result.get("busy"):
+            return ToolResult(
+                ok=False,
+                error=result.get("message") or "采集 Agent 正忙",
+                summary="采集 Agent 正忙",
+            )
+        return ToolResult(ok=False, error=result.get("error") or "采集失败", summary="采集失败")
+
+    data = result.get("result") or {}
+    total = int(data.get("total_new") or 0)
+    details = data.get("details") or {}
+    parts = [f"{name} {count} 条" for name, count in details.items() if isinstance(count, int)]
+    detail_text = "；".join(parts) if parts else "无分类明细"
+    elapsed = result.get("elapsed_seconds")
+    return ToolResult(
+        ok=True,
+        data={"total_new": total, "details": details, "elapsed_seconds": elapsed},
+        summary=f"采集 Agent 完成：新增 {total} 条新闻（{detail_text}）",
+        count=total,
+    )
+
+
+async def _delegate_brief(db: AsyncSession, categories: list[str] | None = None, __emit=None) -> ToolResult:
+    """把简报生成任务委派给简报 Agent。"""
+    from app.services import agent_jobs
+
+    result = await agent_jobs.run_brief(emit=(__emit if __emit else None))
+    if not result.get("ok"):
+        if result.get("busy"):
+            return ToolResult(ok=False, error=result.get("message") or "简报 Agent 正忙", summary="简报 Agent 正忙")
+        return ToolResult(ok=False, error=result.get("error") or "简报生成失败", summary="简报生成失败")
+
+    data = result.get("result") or {}
+    generated = int(data.get("generated") or 0)
+    return ToolResult(
+        ok=True,
+        data={"generated": generated, "elapsed_seconds": result.get("elapsed_seconds")},
+        summary=f"简报 Agent 完成：生成 {generated} 个分类的简报",
+        count=generated,
+    )
+
+
+async def _delegate_recommend(db: AsyncSession, __emit=None) -> ToolResult:
+    """把相关性计算任务委派给推荐 Agent。"""
+    from app.services import agent_jobs
+
+    result = await agent_jobs.run_recommend(emit=(__emit if __emit else None))
+    if not result.get("ok"):
+        if result.get("busy"):
+            return ToolResult(ok=False, error=result.get("message") or "推荐 Agent 正忙", summary="推荐 Agent 正忙")
+        return ToolResult(ok=False, error=result.get("error") or "推荐计算失败", summary="推荐计算失败")
+
+    data = result.get("result") or {}
+    updated = int(data.get("updated") or 0)
+    return ToolResult(
+        ok=True,
+        data={"updated": updated, "elapsed_seconds": result.get("elapsed_seconds")},
+        summary=f"推荐 Agent 完成：更新 {updated} 条新闻的相关性",
+        count=updated,
+    )
+
+
 TOOLS: dict[str, ToolSpec] = {
     "search_news": ToolSpec(
         name="search_news",
@@ -402,6 +496,54 @@ TOOLS: dict[str, ToolSpec] = {
         },
         handler=_search_web,
     ),
+    "delegate_collect": ToolSpec(
+        name="delegate_collect",
+        description=(
+            "把「采集新闻」任务委派给采集 Agent。用户说“帮我采集一下新闻/抓取最新资讯/更新新闻库”时调用。"
+            "采集 Agent 会联网搜索、撰写正文、生成封面并建立向量索引，可能需要一到数分钟。"
+            "完成后把新增条数汇报给用户，不要自己编造采集结果。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "可选，只采集这些分类；不传则沿用「自动任务配置」里选中的分类",
+                },
+                "hours": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 72,
+                    "description": "可选，回溯多少小时；不传则沿用任务配置",
+                },
+            },
+        },
+        handler=_delegate_collect,
+        kind="delegate",
+        timeout=900.0,
+    ),
+    "delegate_brief": ToolSpec(
+        name="delegate_brief",
+        description=(
+            "把「生成每日简报」任务委派给简报 Agent。用户说“给我一份简报/总结今天的新闻/出一份日报”时调用。"
+            "简报 Agent 会按分类汇总当日新闻并写入简报页。完成后告知生成了哪些分类，并可用 get_daily_brief 读取正文。"
+        ),
+        parameters={"type": "object", "properties": {}},
+        handler=_delegate_brief,
+        kind="delegate",
+        timeout=600.0,
+    ),
+    "delegate_recommend": ToolSpec(
+        name="delegate_recommend",
+        description=(
+            "把「计算相关新闻」任务委派给推荐 Agent。用户要求“更新相关推荐/重新计算新闻关联”时调用。"
+        ),
+        parameters={"type": "object", "properties": {}},
+        handler=_delegate_recommend,
+        kind="delegate",
+        timeout=600.0,
+    ),
 }
 
 
@@ -439,21 +581,45 @@ def _prepare_args(spec: ToolSpec, arguments: Any) -> tuple[dict[str, Any], str |
     return cleaned, None
 
 
-async def execute_tool(name: str, arguments: Any) -> ToolResult:
+async def execute_tool(name: str, arguments: Any, emit=None) -> ToolResult:
+    """执行工具。
+
+    emit 可选，用于委派类工具上报长任务进度（如“采集 Agent 正在搜索…”）。
+    """
     spec = TOOLS.get(name)
     if not spec:
         return _error(f"未知工具：{name}")
-    if not spec.read_only and read_env_file().get("AGENT_ALLOW_WRITE_TOOLS", "") != "true":
+    if spec.kind == "write" and read_env_file().get("AGENT_ALLOW_WRITE_TOOLS", "") != "true":
         return _error(f"工具 {name} 当前未启用（写操作需先开启 AGENT_ALLOW_WRITE_TOOLS）")
+    if spec.kind == "delegate" and not _delegation_enabled():
+        return _error(f"工具 {name} 当前未启用（Agent 委派需开启 AGENT_ALLOW_DELEGATION）")
 
     args, problem = _prepare_args(spec, arguments)
     if problem:
         return _error(problem)
 
     try:
+        if spec.kind == "delegate":
+            # 委派任务自己会开 session，不要在这里额外占一个
+            if emit is not None:
+                async def forward(event_type: str, text: str, **extra: Any):
+                    await emit(text)
+
+                return await asyncio.wait_for(
+                    spec.handler(None, __emit=forward, **args), timeout=spec.timeout
+                )
+            return await asyncio.wait_for(
+                spec.handler(None, **args), timeout=spec.timeout
+            )
+
         async with get_session() as db:
             return await asyncio.wait_for(spec.handler(db, **args), timeout=spec.timeout)
     except asyncio.TimeoutError:
         return _error(f"工具 {name} 执行超时")
     except Exception as exc:  # 工具异常必须转成数据，不能中断对话
         return _error(f"{type(exc).__name__}: {exc}")
+
+
+def is_delegate(name: str) -> bool:
+    spec = TOOLS.get(name)
+    return bool(spec and spec.kind == "delegate")

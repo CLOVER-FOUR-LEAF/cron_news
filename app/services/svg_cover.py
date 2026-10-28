@@ -19,8 +19,11 @@ logger = get_logger("svg_cover")
 
 SVG_NS = "http://www.w3.org/2000/svg"
 XLINK_NS = "http://www.w3.org/1999/xlink"
-MAX_SVG_CHARS = 300_000
+MAX_SVG_CHARS = 400_000
 VIEWBOX = "0 0 1600 900"
+# SVG 元素多、单次要几千 token；给足上限，避免被 max_tokens 截断成不闭合的 XML
+SVG_MAX_TOKENS = 8000
+SVG_TIMEOUT = 120.0
 
 # 只保留纯矢量绘图元素；script / foreignObject / image / iframe 等一律移除
 ALLOWED_TAGS = {
@@ -56,6 +59,7 @@ DEFAULT_SVG_PROMPT = (
     "6. 不要使用 <script>、<foreignObject>、<image>、<use href=\"http...\">。\n\n"
     "输出规范：\n"
     "- 只输出一个完整的 <svg> 元素，根元素包含 xmlns、viewBox=\"0 0 1600 900\"；\n"
+    "- 图形元素控制在 40 个以内，保持精简，确保能在输出上限内闭合；\n"
     "- 不要输出 Markdown 代码块、解释或任何多余文字。"
 )
 
@@ -72,6 +76,37 @@ def _strip_code_fence(raw: str) -> str:
     text = re.sub(r"\s*```$", "", text)
     match = re.search(r"<svg\b.*?</svg>", text, flags=re.S | re.I)
     return match.group(0) if match else text
+
+
+_TAG_RE = re.compile(r"<(/?)([A-Za-z][\w:.-]*)((?:\s+[^<>]*?)?)(/?)>", re.S)
+
+
+def _close_truncated_svg(text: str) -> str:
+    """模型输出被 max_tokens 截断时，尽量闭合未完成的标签，保住已有图形。"""
+    start = re.search(r"<svg\b", text, flags=re.I)
+    if not start:
+        return text
+    body = text[start.start():]
+    last = body.rfind(">")
+    if last < 0:
+        return text
+    body = body[: last + 1]
+
+    stack: list[str] = []
+    for match in _TAG_RE.finditer(body):
+        closing, name, _attrs, self_closing = match.groups()
+        name = name.split(":")[-1]
+        if self_closing:
+            continue
+        if closing:
+            if stack and stack[-1] == name:
+                stack.pop()
+        else:
+            stack.append(name)
+
+    if stack:
+        body += "".join(f"</{name}>" for name in reversed(stack))
+    return body
 
 
 def _safe_attribute(name: str, value: str) -> bool:
@@ -122,9 +157,18 @@ def sanitize_svg(raw: str) -> str | None:
         return None
     try:
         root = ET.fromstring(text)
-    except ET.ParseError as exc:
-        logger.debug("SVG 解析失败：%s", exc)
-        return None
+    except ET.ParseError as first_error:
+        # 常见原因：max_tokens 截断导致标签未闭合。尝试补齐后再解析一次。
+        repaired = _close_truncated_svg(text)
+        if repaired == text:
+            logger.info("SVG 解析失败：%s", first_error)
+            return None
+        try:
+            root = ET.fromstring(repaired)
+            logger.info("SVG 输出被截断，已自动闭合后继续")
+        except ET.ParseError as second_error:
+            logger.info("SVG 解析失败（补齐后仍失败）：%s", second_error)
+            return None
 
     if _local_name(root.tag) != "svg":
         return None
@@ -223,12 +267,15 @@ async def generate_svg_cover(
             ],
             purpose="cover_svg",
             temperature=0.85,
-            max_tokens=4000,
-            timeout=90.0,
+            max_tokens=SVG_MAX_TOKENS,
+            timeout=SVG_TIMEOUT,
         )
     except Exception as exc:
         logger.warning("SVG 封面生成失败：%s", exc)
         return None
+
+    if response.finish_reason == "length":
+        logger.info("SVG 生成触达 max_tokens（%s），尝试自动闭合", SVG_MAX_TOKENS)
 
     svg = sanitize_svg(response.content)
     if not svg:

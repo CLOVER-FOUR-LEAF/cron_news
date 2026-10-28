@@ -227,29 +227,45 @@ async def process_search_results(
     return count
 
 
-async def run_search_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[str, Any]:
+async def run_search_task(
+    db: AsyncSession,
+    emit: EmitFn | None = None,
+    *,
+    categories: list[str] | None = None,
+    interval_hours: int | None = None,
+) -> dict[str, Any]:
+    """采集任务。
+
+    categories / interval_hours 供 Agent 委派时覆盖默认配置（None 表示沿用 .env）。
+    """
     async def _emit(event_type: str, text: str, **extra: Any):
         if emit:
             await emit(event_type, text, **extra)
 
     env_vars = read_env_file()
 
-    try:
-        interval_hours = max(1, int(env_vars.get("TASK_INTERVAL_HOURS", "8")))
-    except (ValueError, TypeError):
-        interval_hours = 6
+    if interval_hours is None:
+        try:
+            interval_hours = max(1, int(env_vars.get("TASK_INTERVAL_HOURS", "8")))
+        except (ValueError, TypeError):
+            interval_hours = 6
+    else:
+        interval_hours = max(1, min(int(interval_hours), 72))
 
     mode = env_vars.get("TASK_MODE", "preset")
 
     selected: list[str] = []
-    raw_selected = env_vars.get("TASK_SELECTED_CATEGORIES", "")
-    if raw_selected:
-        try:
-            parsed = json.loads(raw_selected)
-            if isinstance(parsed, list):
-                selected = [str(x) for x in parsed]
-        except json.JSONDecodeError:
-            pass
+    if categories:
+        selected = [str(name).strip() for name in categories if str(name).strip()]
+    else:
+        raw_selected = env_vars.get("TASK_SELECTED_CATEGORIES", "")
+        if raw_selected:
+            try:
+                parsed = json.loads(raw_selected)
+                if isinstance(parsed, list):
+                    selected = [str(x) for x in parsed]
+            except json.JSONDecodeError:
+                pass
 
     await _emit("thinking", "初始化采集任务，读取任务配置…")
     await _emit(
