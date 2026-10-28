@@ -32,6 +32,19 @@ QUERY_VECTOR_CACHE_SIZE = 128
 _query_cache: "OrderedDict[tuple[str, str], tuple[float, list[float]]]" = OrderedDict()
 
 
+def active_engine():
+    """运行时读取当前引擎：切库后 database.engine 会被替换，模块级导入会拿到旧对象。"""
+    import app.database as database
+
+    return database.engine
+
+
+def current_backend() -> str:
+    from app.services.vector_store import get_vector_store
+
+    return get_vector_store(active_engine()).backend
+
+
 def to_item(news: News, match: str, score: float | None = None) -> dict[str, Any]:
     item = {
         "ref": f"news:{news.id}",
@@ -271,9 +284,7 @@ async def search_news(
             try:
                 from app.services.vector_store import get_vector_store
 
-                import app.database as database
-
-                store = get_vector_store(database.engine)
+                store = get_vector_store(active_engine())
                 hits = await store.search(
                     vector,
                     model=model,
@@ -367,10 +378,8 @@ async def status(db: AsyncSession) -> dict[str, Any]:
     from app.services.embeddings import pending_count
     from app.services.vector_store import get_vector_store
 
-    import app.database as database
-
     total = int(await db.scalar(select(func.count()).where(News.is_deleted == 0)) or 0)
-    store = get_vector_store(database.engine)
+    store = get_vector_store(active_engine())
     try:
         vector_stats = await store.stats()
     except Exception as exc:

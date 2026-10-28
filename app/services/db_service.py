@@ -240,6 +240,8 @@ async def _copy_all(source_engine, target_engine) -> dict[str, int]:
                 await tgt.execute(table.insert(), data)
         counts[table_name] = len(data)
 
+    await _reset_sequences(target_engine, counts)
+
     async with source_engine.connect() as src:
         for table_name, count in counts.items():
             table = Base.metadata.tables[table_name]
@@ -247,6 +249,39 @@ async def _copy_all(source_engine, target_engine) -> dict[str, int]:
             if src_count != count:
                 raise RuntimeError(f"迁移校验失败：{table_name} 源库 {src_count} 条，目标库 {count} 条")
     return counts
+
+
+async def _reset_sequences(target_engine, counts: dict[str, int]) -> None:
+    """整行拷贝会带上显式自增 id，PostgreSQL 的序列不会随之推进。
+
+    不同步的话，下一次 INSERT 会从 1 开始并撞主键（UniqueViolation）。
+    MySQL/MariaDB 会依据插入的最大 id 自动推进，无需处理。
+    """
+    dialect = target_engine.dialect.name
+    if dialect != "postgresql":
+        return
+
+    async with target_engine.begin() as conn:
+        tables = set(await _table_names(target_engine))
+        for table_name, count in counts.items():
+            if not count or table_name not in tables:
+                continue
+            table = Base.metadata.tables[table_name]
+            pk = list(table.primary_key.columns)
+            if len(pk) != 1:
+                continue
+            pk_name = pk[0].name
+            if "Integer" not in type(pk[0].type).__name__:
+                continue
+            # pg_get_serial_sequence 对普通整数主键返回 NULL（无序列），用 COALESCE 兜底
+            await conn.execute(
+                text(
+                    f'SELECT setval('
+                    f'pg_get_serial_sequence(\'"{table_name}"\', \'{pk_name}\'), '
+                    f'COALESCE((SELECT MAX("{pk_name}") FROM "{table_name}"), 1), '
+                    f'true)'
+                )
+            )
 
 
 async def run_switch(mode: str, keep_data: bool) -> dict:

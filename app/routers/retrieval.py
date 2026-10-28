@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import engine, get_db
+from app.database import get_db
 from app.services import retrieval
 from app.services.vector_store import get_vector_store
 
@@ -30,8 +30,7 @@ async def search(
 @router.get("/status")
 async def status(db: AsyncSession = Depends(get_db)):
     data = await retrieval.status(db)
-    store = get_vector_store(engine)
-    data["vector_backend"] = store.backend
+    data["vector_backend"] = retrieval.current_backend()
     return data
 
 
@@ -64,7 +63,7 @@ async def probe(body: ProbeModel, db: AsyncSession = Depends(get_db)):
 
 @router.post("/vector/rebuild")
 async def rebuild_vector_index():
-    store = get_vector_store(engine)
+    store = get_vector_store(retrieval.active_engine())
     try:
         return await store.rebuild_index()
     except Exception as exc:
@@ -73,7 +72,7 @@ async def rebuild_vector_index():
 
 @router.post("/vector/ann-index")
 async def build_ann_index(dim: int = Query(..., ge=1, le=4096)):
-    store = get_vector_store(engine)
+    store = get_vector_store(retrieval.active_engine())
     if not hasattr(store, "create_ann_index"):
         raise HTTPException(status_code=400, detail="当前向量后端不支持 ANN 索引")
     return await store.create_ann_index(dim)

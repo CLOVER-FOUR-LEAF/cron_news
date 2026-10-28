@@ -36,6 +36,15 @@ def activate_engine(url: str):
     global engine, async_session
     engine = _build_engine(url)
     async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    # 数据库方言可能变了（SQLite <-> PostgreSQL），向量后端必须跟着重建，
+    # 否则 pgvector / BLOB 会继续沿用旧引擎的会话工厂
+    try:
+        from app.services.vector_store import reset_vector_store
+
+        reset_vector_store()
+    except Exception:
+        pass
     return engine
 
 
