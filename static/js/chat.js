@@ -26,6 +26,7 @@
         bubble: null,
         citations: [],
         trace: [],
+        reasoning: '',
         answer: ''
     };
 
@@ -103,6 +104,12 @@
         trace.appendChild(traceSummary);
         const traceBody = document.createElement('div');
         traceBody.className = 'chat-trace-body';
+        const reasoningEl = document.createElement('div');
+        reasoningEl.className = 'chat-reasoning';
+        reasoningEl.hidden = true;
+        const rowsEl = document.createElement('div');
+        rowsEl.className = 'chat-trace-rows';
+        traceBody.append(reasoningEl, rowsEl);
         trace.appendChild(traceBody);
 
         const sources = document.createElement('div');
@@ -111,12 +118,15 @@
         const meta = document.createElement('div');
         meta.className = 'chat-bubble-meta';
 
-        bubble.append(status, content, trace, sources, meta);
+        bubble.append(status, trace, content, sources, meta);
         row.appendChild(bubble);
         messagesEl.appendChild(row);
         scrollToBottom();
 
-        return { row, bubble, status, content, trace, traceSummary, traceBody, sources, meta };
+        return {
+            row, bubble, status, content, trace, traceSummary, traceBody,
+            reasoningEl, rowsEl, sources, meta
+        };
     }
 
     function renderMarkdown(text, citations) {
@@ -129,7 +139,8 @@
                 const url = citation.kind === 'news'
                     ? `/news/${citation.news_id}`
                     : (citation.source_url || '#');
-                return `[${n}](${url})`;
+                // 链接文字写成 \\[n\\]，渲染后才是 [n] 而不是裸数字
+                return `[\\[${n}\\]](${url})`;
             });
         }
         const html = window.marked
@@ -170,14 +181,17 @@
     }
 
     function renderTrace(bubble, trace) {
-        if (!trace || !trace.length) {
+        const hasReasoning = !bubble.reasoningEl.hidden;
+        if ((!trace || !trace.length) && !hasReasoning) {
             bubble.trace.hidden = true;
             return;
         }
         bubble.trace.hidden = false;
-        bubble.traceSummary.textContent = `工具调用 ${trace.length} 次 · 查看过程`;
-        bubble.traceBody.innerHTML = '';
-        trace.forEach((item) => {
+        bubble.traceSummary.textContent = trace && trace.length
+            ? `思考与工具过程 · ${trace.length} 次`
+            : '思考过程';
+        bubble.rowsEl.innerHTML = '';
+        (trace || []).forEach((item) => {
             const row = document.createElement('div');
             row.className = 'chat-trace-row';
 
@@ -190,8 +204,25 @@
             summary.textContent = `${item.ok ? '✓' : '✗'} ${item.summary || ''}`;
 
             row.append(name, summary);
-            bubble.traceBody.appendChild(row);
+            bubble.rowsEl.appendChild(row);
         });
+    }
+
+    function appendReasoning(bubble, text) {
+        if (!text) return;
+        state.reasoning = (state.reasoning || '') + text;
+        bubble.reasoningEl.hidden = false;
+        bubble.reasoningEl.textContent = state.reasoning;
+        bubble.trace.hidden = false;
+        bubble.trace.open = true;
+        if (!bubble.rowsEl.children.length) {
+            bubble.traceSummary.textContent = '思考过程';
+        }
+        // 只保留最近 4000 字，避免超长思考撑爆气泡
+        if (bubble.reasoningEl.textContent.length > 4000) {
+            bubble.reasoningEl.textContent = '…' + bubble.reasoningEl.textContent.slice(-4000);
+        }
+        scrollToBottom();
     }
 
     function setStatusText(bubble, text) {
@@ -231,6 +262,7 @@
                     ok: true,
                     summary: '执行中…'
                 });
+                bubble.trace.open = true;
                 renderTrace(bubble, state.trace);
                 break;
             case 'tool_result': {
@@ -244,6 +276,13 @@
                 renderTrace(bubble, state.trace);
                 break;
             }
+            case 'reasoning':
+                appendReasoning(bubble, data.text || '');
+                break;
+            case 'reset':
+                state.answer = '';
+                bubble.content.innerHTML = '';
+                break;
             case 'token':
                 state.answer = (state.answer || '') + (data.text || '');
                 setAssistantContent(bubble, state.answer, state.citations);
@@ -274,6 +313,9 @@
                 if (data.tool_trace) {
                     state.trace = data.tool_trace;
                     renderTrace(bubble, state.trace);
+                }
+                if (bubble.trace) {
+                    bubble.trace.open = state.trace.length > 0;
                 }
                 if (data.conversation_id) state.conversationId = data.conversation_id;
                 break;
@@ -312,25 +354,11 @@
         inputEl.value = '';
         autoGrow();
 
-        if (embedded) {
-            // 首页嵌入模式：发起提问即切到对话全屏，避免用户错过回答
-            const layout = document.getElementById('homeLayout');
-            if (layout && layout.dataset.mode === 'split') {
-                layout.dataset.mode = 'agent';
-                const feed = document.getElementById('homeFeed');
-                const toggle = document.getElementById('homeFeedToggle');
-                const expand = document.getElementById('homeAgentExpand');
-                if (feed) feed.style.display = 'none';
-                if (toggle) toggle.style.display = '';
-                if (expand) expand.title = '恢复分栏';
-                try { localStorage.setItem('cronnews.homeLayout', 'agent'); } catch (e) { /* ignore */ }
-            }
-        }
-
         const bubble = assistantBubble();
         state.bubble = bubble;
         state.citations = [];
         state.trace = [];
+        state.reasoning = '';
         state.answer = '';
         state.streaming = true;
         sendBtn.disabled = true;

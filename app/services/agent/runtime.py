@@ -27,7 +27,9 @@ OUTPUT_RESERVE = 2000
 
 _daily_usage = {"date": "", "tokens": 0}
 
-CITATION_RE = re.compile(r"\[\[?\s*(news|web)\s*[:#]\s*([A-Za-z0-9_\-]+)\s*\]\]?")
+CITATION_RE = re.compile(r"\[\[?\s*(news|web)\s*[:#]\s*([^\]\n]{1,60}?)\s*\]\]?")
+# 流式场景只认完整的双括号标记，避免单括号被切分时提前替换
+STREAM_CITATION_RE = re.compile(r"\[\[\s*(news|web)\s*[:#]\s*([^\]\n]{1,60}?)\s*\]\]")
 
 
 def _env_int(name: str, default: int, low: int, high: int) -> int:
@@ -271,6 +273,118 @@ async def _safe_emit(emit: EmitFn | None, event: str, data: dict[str, Any]) -> N
         logger.debug("SSE 发送失败（客户端可能已断开）：%s", event)
 
 
+class _CitationStreamer:
+    """流式输出时增量重写引用：[[news:12]] -> [1]。
+
+    对可能被切分的未闭合标记做保守缓冲，避免把 `[[news:` 直接吐给前端。
+    """
+
+    def __init__(self, known_refs: dict[str, dict[str, Any]]):
+        self.refs = known_refs
+        self.buf = ""
+        self.order: list[str] = []
+        self.seen: set[str] = set()
+
+    def _replace(self, text: str) -> str:
+        def repl(match: re.Match) -> str:
+            key = f"{match.group(1)}:{match.group(2)}"
+            if key not in self.refs:
+                return ""
+            if key not in self.seen:
+                self.seen.add(key)
+                self.order.append(key)
+            return f"[{self.order.index(key) + 1}]"
+
+        return STREAM_CITATION_RE.sub(repl, text)
+
+    def feed(self, text: str) -> str:
+        self.buf += text
+        cut = len(self.buf)
+        open2 = self.buf.rfind("[[")
+        if open2 != -1 and "]]" not in self.buf[open2:]:
+            # 标记不完整（可能被切分），从 `[[` 起全部缓冲
+            cut = open2
+        elif self.buf.endswith("["):
+            # 可能是 `[[` 的前半个字符
+            cut = len(self.buf) - 1
+        head, self.buf = self.buf[:cut], self.buf[cut:]
+        return self._replace(head)
+
+    def finish(self) -> str:
+        tail, self.buf = self.buf, ""
+        return self._replace(tail)
+
+
+async def _invoke_model(
+    endpoint: dict,
+    messages: list[dict[str, Any]],
+    *,
+    config: dict[str, Any],
+    emit: EmitFn | None,
+    known_refs: dict[str, dict[str, Any]],
+    tools: list[dict] | None = None,
+    stream: bool = True,
+    purpose: str = "chat",
+) -> tuple[llm_client.LLMResponse, int]:
+    """调用模型并实时推送增量。返回 (响应, 已流式输出的字符数)。
+
+    字符数为 0 表示没有流式输出（JSON 协议/回退），调用方需要整段输出答案。
+    """
+    streamer = _CitationStreamer(known_refs)
+    emitted = 0
+    any_output = False
+
+    async def on_reasoning(text: str):
+        nonlocal any_output
+        any_output = True
+        await _safe_emit(emit, "reasoning", {"text": text})
+
+    async def on_delta(text: str):
+        nonlocal emitted, any_output
+        any_output = True
+        chunk = streamer.feed(text)
+        if chunk:
+            emitted += len(chunk)
+            await _safe_emit(emit, "token", {"text": chunk})
+
+    kwargs: dict[str, Any] = {
+        "temperature": 0.3,
+        "max_tokens": MAX_TOKENS_PER_TURN,
+        "timeout": config["llm_timeout"],
+        "purpose": purpose,
+    }
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
+
+    if not stream:
+        return await llm_client.chat_endpoint(endpoint, messages, **kwargs), 0
+
+    try:
+        response = await llm_client.chat_endpoint(
+            endpoint,
+            messages,
+            stream=True,
+            on_delta=on_delta,
+            on_reasoning=on_reasoning,
+            **kwargs,
+        )
+    except llm_client.ToolsUnsupported:
+        raise
+    except llm_client.LLMError as exc:
+        # 还没吐出任何内容时回退为整段返回；已输出则保持原样，避免重复
+        if any_output:
+            raise
+        logger.info("流式调用失败，回退非流式：%s", exc)
+        return await llm_client.chat_endpoint(endpoint, messages, **kwargs), 0
+
+    tail = streamer.finish()
+    if tail:
+        emitted += len(tail)
+        await _safe_emit(emit, "token", {"text": tail})
+    return response, emitted
+
+
 async def _pre_retrieve(db: AsyncSession, query: str) -> str:
     result = await retrieval.search_news(db, query, limit=6)
     items = result.get("items") or []
@@ -380,13 +494,13 @@ async def run_turn(
                 ),
             }
         )
-        response = await llm_client.chat_endpoint(
+        response, answer_streamed = await _invoke_model(
             endpoint,
             messages,
-            temperature=0.3,
-            max_tokens=MAX_TOKENS_PER_TURN,
-            timeout=config["llm_timeout"],
-            purpose="chat",
+            config=config,
+            emit=emit,
+            known_refs=known_refs,
+            stream=True,
         )
         _add_usage(usage_total, response.usage)
         _record_usage(response.usage)
@@ -395,21 +509,21 @@ async def run_turn(
         tool_calls_used = 0
         consecutive_errors = 0
         force_answer = False
+        answer_streamed = False
 
         for step in range(config["max_iterations"]):
             _fit_messages(messages, config["context_tokens"] - OUTPUT_RESERVE)
 
             if protocol == "native":
                 try:
-                    response = await llm_client.chat_endpoint(
+                    response, streamed = await _invoke_model(
                         endpoint,
                         messages,
+                        config=config,
+                        emit=emit,
+                        known_refs=known_refs,
                         tools=tool_registry.tool_schemas(),
-                        tool_choice="auto",
-                        temperature=0.3,
-                        max_tokens=MAX_TOKENS_PER_TURN,
-                        timeout=config["llm_timeout"],
-                        purpose="chat",
+                        stream=True,
                     )
                 except llm_client.ToolsUnsupported:
                     logger.info("端点不支持原生 tools，切换 JSON 协议")
@@ -417,13 +531,13 @@ async def run_turn(
                     messages[0]["content"] = str(messages[0].get("content") or "") + _json_instruction()
                     continue
             else:
-                response = await llm_client.chat_endpoint(
+                response, streamed = await _invoke_model(
                     endpoint,
                     messages,
-                    temperature=0.3,
-                    max_tokens=MAX_TOKENS_PER_TURN,
-                    timeout=config["llm_timeout"],
-                    purpose="chat",
+                    config=config,
+                    emit=emit,
+                    known_refs=known_refs,
+                    stream=False,
                 )
 
             _add_usage(usage_total, response.usage)
@@ -435,6 +549,10 @@ async def run_turn(
                 if not calls:
                     force_answer = True
                     break
+
+                # 模型可能先吐了半段文字再决定调工具，清掉这段草稿
+                if streamed:
+                    await _safe_emit(emit, "reset", {"reason": "tool_call"})
 
                 await _safe_emit(emit, "status", {"stage": "tool"})
                 messages.append(_assistant_tool_message(response, calls))
@@ -518,8 +636,9 @@ async def run_turn(
             if protocol == "json":
                 obj = _parse_json_object(response.content)
                 if obj is None:
-                    # 模型直接给了自然语言答案
+                    # 模型直接给了自然语言答案（JSON 协议不走流式）
                     answer = response.content
+                    answer_streamed = False
                     break
                 name, arguments = _json_tool_call(obj)
                 if name:
@@ -574,9 +693,11 @@ async def run_turn(
                         break
                     continue
                 answer = str(obj.get("answer") or obj.get("content") or "")
+                answer_streamed = False
                 break
 
             answer = response.content
+            answer_streamed = bool(streamed)
             break
 
         if not answer and not force_answer:
@@ -590,13 +711,13 @@ async def run_turn(
                 }
             )
             _fit_messages(messages, config["context_tokens"] - OUTPUT_RESERVE)
-            response = await llm_client.chat_endpoint(
+            response, answer_streamed = await _invoke_model(
                 endpoint,
                 messages,
-                temperature=0.3,
-                max_tokens=MAX_TOKENS_PER_TURN,
-                timeout=config["llm_timeout"],
-                purpose="chat",
+                config=config,
+                emit=emit,
+                known_refs=known_refs,
+                stream=True,
             )
             _add_usage(usage_total, response.usage)
             _record_usage(response.usage)
@@ -605,6 +726,7 @@ async def run_turn(
     answer, citations = finalize_citations(answer or "", known_refs)
     if not answer.strip():
         answer = "抱歉，我暂时没能生成回答，请稍后再试。"
+        answer_streamed = False
     await _safe_emit(emit, "status", {"stage": "answering"})
 
     async with get_session() as db:
@@ -620,7 +742,8 @@ async def run_turn(
         await db.commit()
         assistant_message_id = saved.id
 
-    await _safe_emit(emit, "token", {"text": answer})
+    if not answer_streamed:
+        await _safe_emit(emit, "token", {"text": answer})
     for citation in citations:
         await _safe_emit(emit, "citation", citation)
     await _safe_emit(emit, "usage", usage_total)

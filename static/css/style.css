@@ -4925,3 +4925,19 @@ body.home-split { overflow-x: hidden; }
 
 /* hidden 属性应始终生效（部分组件用 display 覆盖了它） */
 .chat-stop-btn[hidden] { display: none !important; }
+
+/* ========== AI 流式输出：思考与工具过程 ========== */
+.chat-trace[open] .chat-trace-body { max-height: 260px; overflow-y: auto; }
+
+.chat-reasoning {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.74rem;
+    line-height: 1.75;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border-accent);
+    padding: 2px 0 6px 9px;
+    margin-bottom: 6px;
+}
+
+.chat-trace-rows { display: flex; flex-direction: column; gap: 4px; }

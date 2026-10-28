@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,6 +56,7 @@ class ToolCall:
 @dataclass
 class LLMResponse:
     content: str = ""
+    reasoning: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
     usage: dict[str, int] = field(default_factory=dict)
     finish_reason: str = ""
@@ -178,8 +179,14 @@ async def chat_endpoint(
     response_format: dict | None = None,
     purpose: str = "chat",
     retries: int = DEFAULT_RETRIES,
+    stream: bool = False,
+    on_delta: Callable[[str], Awaitable[None]] | None = None,
+    on_reasoning: Callable[[str], Awaitable[None]] | None = None,
 ) -> LLMResponse:
-    """调用一个已解析的 LLM 端点。endpoint 来自 get_active_endpoint(db, "llm")。"""
+    """调用一个已解析的 LLM 端点。endpoint 来自 get_active_endpoint(db, "llm")。
+
+    stream=True 时通过 on_delta（正文增量）与 on_reasoning（推理增量）实时回调。
+    """
     base_url = normalize_base_url(endpoint.get("base_url", ""))
     api_key = endpoint.get("api_key") or ""
     model_id = endpoint.get("model_id") or ""
@@ -201,6 +208,21 @@ async def chat_endpoint(
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     url = f"{base_url}/chat/completions"
+
+    if stream:
+        return await _chat_stream(
+            url,
+            headers,
+            payload,
+            endpoint=endpoint,
+            model_id=model_id,
+            timeout=timeout,
+            purpose=purpose,
+            retries=retries,
+            on_delta=on_delta,
+            on_reasoning=on_reasoning,
+        )
+
     last_error: Exception | None = None
 
     for attempt in range(retries + 1):
@@ -262,6 +284,154 @@ async def chat_endpoint(
         return result
 
     raise LLMError(f"模型调用失败：{last_error}", code="llm_retry_exhausted")
+
+
+def _accumulate_tool_calls(store: dict[int, dict], raw_calls: list) -> None:
+    for item in raw_calls:
+        if not isinstance(item, dict):
+            continue
+        index = int(item.get("index") or 0)
+        entry = store.setdefault(index, {"id": "", "name": "", "arguments": ""})
+        if item.get("id"):
+            entry["id"] = item["id"]
+        function = item.get("function") or {}
+        if function.get("name"):
+            entry["name"] = function["name"]
+        if function.get("arguments"):
+            entry["arguments"] += function["arguments"]
+
+
+async def _chat_stream(
+    url: str,
+    headers: dict,
+    payload: dict,
+    *,
+    endpoint: dict,
+    model_id: str,
+    timeout: float,
+    purpose: str,
+    retries: int,
+    on_delta: Callable[[str], Awaitable[None]] | None,
+    on_reasoning: Callable[[str], Awaitable[None]] | None,
+) -> LLMResponse:
+    """流式调用（OpenAI SSE 协议）。返回完整响应，同时通过回调推送增量。"""
+    payload = dict(payload)
+    payload["stream"] = True
+
+    for attempt in range(retries + 1):
+        content_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        calls: dict[int, dict] = {}
+        usage: dict[str, int] = {}
+        finish_reason = ""
+        model_name = model_id
+        emitted = False
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as response:
+                    if response.status_code >= 400:
+                        body = (await response.aread()).decode("utf-8", "replace")[:500]
+                        if payload.get("tools") and response.status_code in (400, 422) and _looks_like_tool_error(body):
+                            mark_tools_unsupported(endpoint.get("id"))
+                            raise ToolsUnsupported(body)
+                        if response.status_code in RETRYABLE_STATUS and attempt < retries:
+                            await asyncio.sleep(0.8 * (attempt + 1))
+                            continue
+                        raise LLMError(
+                            f"模型调用失败（{response.status_code}）：{body}",
+                            code="llm_http",
+                            status_code=response.status_code,
+                        )
+
+                    async for line in response.aiter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        raw = line[5:].strip()
+                        if raw == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(raw)
+                        except (json.JSONDecodeError, ValueError):
+                            continue
+                        if not isinstance(chunk, dict):
+                            continue
+
+                        if chunk.get("model"):
+                            model_name = str(chunk["model"])
+                        if chunk.get("usage"):
+                            usage = _extract_usage(chunk)
+                        choices = chunk.get("choices") or []
+                        if not choices:
+                            continue
+                        choice = choices[0] or {}
+                        if choice.get("finish_reason"):
+                            finish_reason = str(choice["finish_reason"])
+                        delta = choice.get("delta") or {}
+
+                        reasoning = delta.get("reasoning_content") or delta.get("reasoning")
+                        if reasoning:
+                            emitted = True
+                            reasoning_parts.append(str(reasoning))
+                            if on_reasoning:
+                                await on_reasoning(str(reasoning))
+
+                        text = delta.get("content")
+                        if text:
+                            emitted = True
+                            content_parts.append(str(text))
+                            if on_delta:
+                                await on_delta(str(text))
+
+                        if delta.get("tool_calls"):
+                            _accumulate_tool_calls(calls, delta["tool_calls"])
+                        legacy = delta.get("function_call")
+                        if isinstance(legacy, dict):
+                            _accumulate_tool_calls(calls, [{"index": 0, "function": legacy}])
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            if not emitted and attempt < retries:
+                await asyncio.sleep(0.8 * (attempt + 1))
+                continue
+            raise LLMError(f"模型流式请求超时或网络错误：{exc}", code="llm_network") from exc
+
+        tool_calls = [
+            ToolCall(
+                id=entry["id"] or f"call_{index}",
+                name=entry["name"],
+                arguments=_parse_arguments(entry["arguments"]),
+                raw_arguments=entry["arguments"],
+            )
+            for index, entry in sorted(calls.items())
+            if entry["name"]
+        ]
+
+        if not usage.get("total_tokens"):
+            # 部分兼容端点流式不返回 usage，做粗略估算用于预算统计
+            completion = sum(len(part) for part in content_parts) + sum(len(part) for part in reasoning_parts)
+            usage = {
+                "prompt_tokens": 0,
+                "completion_tokens": completion,
+                "total_tokens": completion,
+            }
+
+        result = LLMResponse(
+            content="".join(content_parts),
+            reasoning="".join(reasoning_parts),
+            tool_calls=tool_calls,
+            usage=usage,
+            finish_reason=finish_reason,
+            model=model_name,
+        )
+        logger.info(
+            "LLM 流式完成 purpose=%s model=%s tokens=%s tool_calls=%s",
+            purpose,
+            result.model,
+            usage.get("total_tokens"),
+            len(tool_calls),
+        )
+        return result
+
+    raise LLMError("模型流式调用失败", code="llm_retry_exhausted")
 
 
 async def chat(
