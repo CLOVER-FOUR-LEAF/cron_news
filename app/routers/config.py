@@ -41,6 +41,8 @@ class ConfigUpdate(BaseModel):
     agent_recommend_enabled: bool | None = None
     agent_brief_enabled: bool | None = None
     agent_cover_enabled: bool | None = None
+    agent_cover_mode: str | None = None
+    onboarding_done: bool | None = None
     work_mode: str | None = None
 
 
@@ -48,9 +50,11 @@ class ConfigResponse(BaseModel):
     llm_configs: list = []
     image_configs: list = []
     search_configs: list = []
+    embedding_configs: list = []
     active_llm: str = ""
     active_image: str = ""
     active_search: str = ""
+    active_embedding: str = ""
     nickname: str = ""
     avatar_url: str = ""
     llm_base_url: str = ""
@@ -68,6 +72,8 @@ class ConfigResponse(BaseModel):
     agent_recommend_enabled: bool = False
     agent_brief_enabled: bool = False
     agent_cover_enabled: bool = False
+    agent_cover_mode: str = "off"
+    onboarding_done: bool = False
     work_mode: str = ""
     db_mode: str = "system"
     db_config: dict = {}
@@ -95,6 +101,13 @@ def _parse_int(raw: str, default: int) -> int:
         return default
 
 
+def _cover_mode(env_vars: dict[str, str]) -> str:
+    raw = (env_vars.get("AGENT_COVER_MODE", "") or "").strip().lower()
+    if raw in {"image", "svg", "off"}:
+        return raw
+    return "image" if env_vars.get("AGENT_COVER_ENABLED", "") == "true" else "off"
+
+
 @router.get("", response_model=ConfigResponse)
 async def get_config(db: AsyncSession = Depends(get_db)):
     from app.services import db_service
@@ -109,18 +122,22 @@ async def get_config(db: AsyncSession = Depends(get_db)):
     llm_configs = [config_to_dict(c) for c in await get_configs(db, "llm")]
     image_configs = [config_to_dict(c) for c in await get_configs(db, "image")]
     search_configs = [config_to_dict(c) for c in await get_configs(db, "search")]
+    embedding_configs = [config_to_dict(c) for c in await get_configs(db, "embedding")]
 
     llm_enabled = await get_enabled_config(db, "llm")
     image_enabled = await get_enabled_config(db, "image")
     search_enabled = await get_enabled_config(db, "search")
+    embedding_enabled = await get_enabled_config(db, "embedding")
 
     return ConfigResponse(
         llm_configs=llm_configs,
         image_configs=image_configs,
         search_configs=search_configs,
+        embedding_configs=embedding_configs,
         active_llm=str(llm_enabled.id) if llm_enabled else "",
         active_image=str(image_enabled.id) if image_enabled else "",
         active_search=str(search_enabled.id) if search_enabled else "",
+        active_embedding=str(embedding_enabled.id) if embedding_enabled else "",
         nickname=env_vars.get("NICKNAME", ""),
         avatar_url=env_vars.get("AVATAR_URL", ""),
         llm_base_url=llm_enabled.base_url if llm_enabled else "",
@@ -137,7 +154,9 @@ async def get_config(db: AsyncSession = Depends(get_db)):
         agent_ext_prompt=env_vars.get("AGENT_EXT_PROMPT", ""),
         agent_recommend_enabled=env_vars.get("AGENT_RECOMMEND_ENABLED", "") == "true",
         agent_brief_enabled=env_vars.get("AGENT_BRIEF_ENABLED", "") == "true",
-        agent_cover_enabled=env_vars.get("AGENT_COVER_ENABLED", "") == "true",
+        agent_cover_enabled=_cover_mode(env_vars) == "image",
+        agent_cover_mode=_cover_mode(env_vars),
+        onboarding_done=env_vars.get("ONBOARDING_DONE", "") == "true",
         work_mode=env_vars.get("WORK_MODE", ""),
         db_mode=db_state["mode"],
         db_config=db_state["config"],
@@ -162,10 +181,11 @@ async def update_config(config: ConfigUpdate):
         )
     if config.work_mode is not None:
         logger.info("收到工作模式修改：%s", config.work_mode)
-    if config.agent_brief_enabled is not None or config.agent_recommend_enabled is not None or config.agent_cover_enabled is not None:
+    if config.agent_brief_enabled is not None or config.agent_recommend_enabled is not None or config.agent_cover_enabled is not None or config.agent_cover_mode is not None:
         logger.info(
-            "收到 Agent 开关修改：简报=%s，推荐=%s，封面=%s",
-            config.agent_brief_enabled, config.agent_recommend_enabled, config.agent_cover_enabled,
+            "收到 Agent 开关修改：简报=%s，推荐=%s，封面=%s，封面方式=%s",
+            config.agent_brief_enabled, config.agent_recommend_enabled,
+            config.agent_cover_enabled, config.agent_cover_mode,
         )
 
     if config.task_interval_hours is not None:
@@ -185,6 +205,17 @@ async def update_config(config: ConfigUpdate):
         env_vars["AGENT_BRIEF_ENABLED"] = "true" if config.agent_brief_enabled else "false"
     if config.agent_cover_enabled is not None:
         env_vars["AGENT_COVER_ENABLED"] = "true" if config.agent_cover_enabled else "false"
+    if config.agent_cover_mode is not None:
+        mode = (config.agent_cover_mode or "").strip().lower()
+        if mode not in {"image", "svg", "off"}:
+            raise HTTPException(status_code=400, detail="不支持的封面生成方式")
+        env_vars["AGENT_COVER_MODE"] = mode
+        # 同步旧开关，避免其它读取方（如停用文生图模型的校验）状态不一致
+        env_vars["AGENT_COVER_ENABLED"] = "true" if mode == "image" else "false"
+    elif config.agent_cover_enabled is not None:
+        env_vars["AGENT_COVER_MODE"] = "image" if config.agent_cover_enabled else "off"
+    if config.onboarding_done is not None:
+        env_vars["ONBOARDING_DONE"] = "true" if config.onboarding_done else "false"
     if config.work_mode is not None:
         env_vars["WORK_MODE"] = config.work_mode
 

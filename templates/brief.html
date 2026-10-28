@@ -6,8 +6,9 @@
     <title>每日简报 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=40">
+    <link rel="stylesheet" href="/static/css/style.css?v=43">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
 <body>
     {% include "_header.html" %}
@@ -331,7 +332,7 @@
 <body>
 <h1>${escapeHtml(currentCat)} · 每日简报</h1>
 <p style="color:#888">${escapeHtml(currentDate)}</p>
-<div>${marked.parse(content)}</div>
+<div>${window.DOMPurify ? window.DOMPurify.sanitize(marked.parse(content)) : escapeHtml(content)}</div>
 </body></html>`;
             const fname = `简报_${currentCat}_${currentDate}.doc`;
             downloadFile(fname, html, 'application/msword;charset=utf-8');

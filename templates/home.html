@@ -6,31 +6,87 @@
     <title>定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=40">
+    <link rel="stylesheet" href="/static/css/style.css?v=43">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
-<body>
+<body class="home-split">
     {% include "_header.html" %}
 
-    <main>
-        {% for cat in categories %}
-        <section class="ticker-section" data-cat="{{ cat }}" id="ticker-{{ cat }}" style="--cat: {{ cat_colors.get(cat, '#8a8690') }}">
-            <div class="ticker-label">
-                <span class="ticker-cat-name">{{ cat }}</span>
-                <span class="ticker-cat-en">
-                    {% if cat == '科技' %}TECHNOLOGY
-                    {% elif cat == '军事' %}MILITARY
-                    {% elif cat == '政治' %}POLITICS
-                    {% elif cat == '经济' %}ECONOMY
-                    {% endif %}
-                </span>
-            </div>
-            <div class="ticker-track-wrapper">
-                <div class="ticker-track" data-cat="{{ cat }}">
+    <div class="home-layout" id="homeLayout">
+        <main class="home-feed" id="homeFeed">
+            {% for cat in categories %}
+            <section class="ticker-section" data-cat="{{ cat }}" id="ticker-{{ cat }}" style="--cat: {{ cat_colors.get(cat, '#8a8690') }}">
+                <div class="ticker-label">
+                    <span class="ticker-cat-name">{{ cat }}</span>
+                    <span class="ticker-cat-en">
+                        {% if cat == '科技' %}TECHNOLOGY
+                        {% elif cat == '军事' %}MILITARY
+                        {% elif cat == '政治' %}POLITICS
+                        {% elif cat == '经济' %}ECONOMY
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="ticker-track-wrapper">
+                    <div class="ticker-track" data-cat="{{ cat }}">
+                    </div>
+                </div>
+            </section>
+            {% endfor %}
+        </main>
+
+        <aside class="home-agent" id="homeAgent" aria-label="AI 资讯助手">
+            <div class="home-agent-head">
+                <div class="home-agent-title">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 1.6l1.4 3.3 3.5.4-2.6 2.4.7 3.5L8 9.5l-3 1.7.7-3.5L3.1 5.3l3.5-.4L8 1.6z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+                    </svg>
+                    AI 助手
+                </div>
+                <div class="home-agent-actions">
+                    <button type="button" class="home-agent-btn" id="homeNewChat" title="新对话">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    </button>
+                    <button type="button" class="home-agent-btn" id="homeAgentExpand" title="全屏对话">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
                 </div>
             </div>
-        </section>
-        {% endfor %}
-    </main>
+
+            <div class="chat-messages home-agent-messages" id="chatMessages">
+                <div class="chat-empty" id="chatEmpty">
+                    <div class="chat-empty-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 2.5l2.1 4.9 5.4.6-4 3.7 1.1 5.3L12 14.4 7.4 17l1.1-5.3-4-3.7 5.4-.6L12 2.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                            <path d="M4 20.5h16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <h2>问问你的新闻库</h2>
+                    <p>先检索、再回答，并标注来源。</p>
+                    <div class="chat-suggestions">
+                        <button type="button" data-q="今天有什么值得关注的新闻？">今天有什么值得关注的？</button>
+                        <button type="button" data-q="帮我梳理最近一周最重要的科技新闻">最近一周的科技大事</button>
+                    </div>
+                </div>
+            </div>
+
+            <form class="chat-composer" id="chatForm">
+                <textarea id="chatInput" rows="1" placeholder="问点什么…" maxlength="8000"></textarea>
+                <div class="chat-composer-actions">
+                    <button type="button" class="chat-stop-btn" id="stopBtn" hidden>停止</button>
+                    <button type="submit" class="chat-send-btn" id="sendBtn">
+                        发送
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8l12-6-4 12-2.5-5L2 8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                    </button>
+                </div>
+            </form>
+        </aside>
+    </div>
+
+    <button type="button" class="home-feed-toggle" id="homeFeedToggle" title="显示新闻列表">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        新闻
+    </button>
 
     <footer class="site-footer">
         <span>定时资讯 &copy; 2026 &mdash; AI 新闻聚合平台</span>
@@ -135,6 +191,44 @@
         }
 
         CATEGORIES.forEach(cat => initTicker(cat));
+
+        /* ===== 首页分栏：新闻 / 助手 切换 ===== */
+        const layout = document.getElementById('homeLayout');
+        const feed = document.getElementById('homeFeed');
+        const agent = document.getElementById('homeAgent');
+        const feedToggle = document.getElementById('homeFeedToggle');
+        const expandBtn = document.getElementById('homeAgentExpand');
+        const LAYOUT_KEY = 'cronnews.homeLayout';
+
+        function applyLayout(mode) {
+            // mode: split | agent | feed
+            layout.dataset.mode = mode;
+            const isSplit = mode === 'split';
+            agent.style.display = mode === 'feed' ? 'none' : '';
+            feed.style.display = mode === 'agent' ? 'none' : '';
+            feedToggle.style.display = isSplit ? 'none' : '';
+            expandBtn.title = mode === 'agent' ? '恢复分栏' : '全屏对话';
+            try { localStorage.setItem(LAYOUT_KEY, mode); } catch (e) { /* ignore */ }
+            // 切换后让跑马灯重新计算宽度
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        expandBtn.addEventListener('click', () => {
+            applyLayout(layout.dataset.mode === 'agent' ? 'split' : 'agent');
+        });
+
+        feedToggle.addEventListener('click', () => applyLayout('split'));
+
+        // 窄屏默认只显示助手，宽屏默认分栏
+        let saved = '';
+        try { saved = localStorage.getItem(LAYOUT_KEY) || ''; } catch (e) { /* ignore */ }
+        if (!saved) saved = window.innerWidth < 1000 ? 'agent' : 'split';
+        applyLayout(saved);
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth < 1000 && layout.dataset.mode === 'split') applyLayout('agent');
+        });
     </script>
+    <script src="/static/js/chat.js" defer></script>
 </body>
 </html>

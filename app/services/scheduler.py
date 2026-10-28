@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import select
 
-from app.config import settings
 from app.database import get_session
 from app.env_store import read_env_file
 from app.logging_setup import get_logger
@@ -99,6 +98,25 @@ class Scheduler:
             })
         return collect
 
+    async def _embed_new_news(self, lines: list):
+        """采集完成后补齐向量，失败不影响主流程。"""
+        try:
+            from app.services import embeddings
+
+            result = await embeddings.backfill()
+            if result.get("embedded"):
+                lines.append({
+                    "t": "info",
+                    "x": f"向量索引已更新 {result['embedded']} 条",
+                    "ts": datetime.now().strftime("%H:%M:%S"),
+                    "agent": "向量索引",
+                })
+                logger.info("向量索引已更新 %s 条", result["embedded"])
+            elif result.get("reason") == "embedding_not_configured":
+                logger.debug("未配置向量模型，跳过向量索引")
+        except Exception as exc:
+            logger.warning("采集后向量索引失败（不影响采集）：%s", exc)
+
     async def _save_run(self, lines: list, status: str, reason: str | None = None):
         """保存一条 AgentRun 运行日志（含「跳过」记录，保证任何调度决策都可见）。"""
         if not lines:
@@ -138,14 +156,18 @@ class Scheduler:
             async with get_session() as session:
                 logger.info("—— 阶段：新闻采集（搜索 + 撰稿）开始")
                 result = await run_search_task(session, emit=self._make_collector(lines, "定时资讯"))
+                await session.commit()
                 logger.info("—— 阶段：新闻采集完成，新增 %s 条新闻", result.get("total_new"))
+                await self._embed_new_news(lines)
                 if self._recommend_enabled():
                     logger.info("—— 阶段：智能推荐开始")
                     await run_recommend_task(session, emit=self._make_collector(lines, "智能推荐"))
+                    await session.commit()
                     logger.info("—— 阶段：智能推荐完成")
                 if self._brief_enabled():
                     logger.info("—— 阶段：每日简报开始")
                     await run_brief_task(session, emit=self._make_collector(lines, "每日简报"))
+                    await session.commit()
                     logger.info("—— 阶段：每日简报完成")
                 await session.commit()
                 self._last_result = result
@@ -330,14 +352,18 @@ class Scheduler:
             async with get_session() as session:
                 logger.info("—— 阶段：新闻采集（搜索 + 撰稿）开始")
                 result = await run_search_task(session, emit=make_both("定时资讯"))
+                await session.commit()
                 logger.info("—— 阶段：新闻采集完成，新增 %s 条新闻", result.get("total_new"))
+                await self._embed_new_news(lines)
                 if self._recommend_enabled():
                     logger.info("—— 阶段：智能推荐开始")
                     await run_recommend_task(session, emit=make_both("智能推荐"))
+                    await session.commit()
                     logger.info("—— 阶段：智能推荐完成")
                 if self._brief_enabled():
                     logger.info("—— 阶段：每日简报开始")
                     await run_brief_task(session, emit=make_both("每日简报"))
+                    await session.commit()
                     logger.info("—— 阶段：每日简报完成")
                 await session.commit()
                 self._last_result = result

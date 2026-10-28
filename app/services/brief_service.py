@@ -1,14 +1,13 @@
 from datetime import datetime, date
 from typing import Any, Callable, Awaitable
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models import News, Category, Brief
 from app.logging_setup import get_logger
 from app.services.agent_prompts import get_agent_prompt
+from app.services.llm_client import chat_text
 from app.services.model_configs import get_active_endpoint
 
 logger = get_logger("brief")
@@ -21,28 +20,15 @@ async def _llm_endpoint(db) -> dict | None:
 
 
 async def _ask_llm(db, system_prompt: str, prompt: str) -> str:
-    endpoint = await get_active_endpoint(db, "llm")
-    if not endpoint or not endpoint["api_key"] or not endpoint["model_id"]:
-        raise ValueError("大语言模型未配置")
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(
-            f"{endpoint['base_url']}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {endpoint['api_key']}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": endpoint["model_id"],
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.5,
-                "max_tokens": 1200,
-            },
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+    return await chat_text(
+        db,
+        system_prompt,
+        prompt,
+        purpose="brief",
+        temperature=0.5,
+        max_tokens=1200,
+        timeout=120.0,
+    )
 
 
 async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[str, Any]:
@@ -107,6 +93,8 @@ async def run_brief_task(db: AsyncSession, emit: EmitFn | None = None) -> dict[s
             await db.delete(old)
         db.add(Brief(category_name=cat.name, brief_date=today.isoformat(), content=content, source="自主"))
         generated += 1
+        await db.flush()
+        await db.commit()
         logger.info("分类「%s」简报已生成", cat.name)
         await _emit("save", f"✓ [{cat.name}] 简报已生成")
 

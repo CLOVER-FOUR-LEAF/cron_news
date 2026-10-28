@@ -15,6 +15,7 @@ CONFIG_TYPES = {
     "llm": "大语言",
     "image": "文生图",
     "search": "搜索",
+    "embedding": "向量",
 }
 
 SECRET_KEY_ENV = "SECRET_KEY"

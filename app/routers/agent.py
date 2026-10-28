@@ -21,6 +21,7 @@ class PromptsModel(BaseModel):
     timed: str | None = None
     recommend: str | None = None
     brief: str | None = None
+    chat: str | None = None
 
 
 @router.get("/prompts")

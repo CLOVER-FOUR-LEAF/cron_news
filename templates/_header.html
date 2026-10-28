@@ -28,6 +28,12 @@
                     <path d="M5.5 7h7M5.5 10h7M5.5 13h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                 </svg>
             </button>
+            <a href="/chat" class="header-icon-btn {{ 'active' if active_page == 'chat' else '' }}" title="AI 助手">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <path d="M9 2.2l1.5 3.6 3.9.4-2.9 2.7.8 3.9L9 10.9l-3.3 1.9.8-3.9-2.9-2.7 3.9-.4L9 2.2z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+                    <path d="M4 15.6h10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                </svg>
+            </a>
             <a href="/stats" class="header-icon-btn {{ 'active' if active_page == 'stats' else '' }}" title="阅读统计">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                     <rect x="2" y="10" width="3" height="6" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
@@ -182,6 +188,15 @@
                             </span>
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
+                        <button type="button" class="panel-item" data-action="onboarding">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M8 1.6l1.6 3.8 4 .4-3 2.7.8 4L8 10.5l-3.4 2 .8-4-3-2.7 4-.4L8 1.6z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            配置向导
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </button>
                         <button type="button" class="panel-item agent-only" data-action="task">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -220,6 +235,144 @@
         <div class="modal-footer">
             <button class="btn-secondary" data-close>取消</button>
             <button class="btn-primary" id="saveProfileBtn">保存</button>
+        </div>
+    </div>
+</div>
+
+<div id="onboardingModal" class="modal modal-required">
+    <div class="modal-content onboarding-modal">
+        <div class="modal-header">
+            <div class="modal-title-group">
+                <h3>快速开始</h3>
+                <span class="modal-title-hint">三分钟完成必要配置，之后可在设置里随时修改</span>
+            </div>
+            <button class="modal-close" id="onboardingCloseBtn" title="稍后再说">&times;</button>
+        </div>
+
+        <div class="onboarding-steps" id="onboardingSteps">
+            <div class="onboarding-step-dot" data-step="1"><span class="num">1</span><span class="label">工作模式</span></div>
+            <div class="onboarding-step-line"></div>
+            <div class="onboarding-step-dot" data-step="2"><span class="num">2</span><span class="label">模型服务</span></div>
+            <div class="onboarding-step-line"></div>
+            <div class="onboarding-step-dot" data-step="3"><span class="num">3</span><span class="label">自动采集</span></div>
+            <div class="onboarding-step-line"></div>
+            <div class="onboarding-step-dot" data-step="4"><span class="num">4</span><span class="label">完成</span></div>
+        </div>
+
+        <div class="onboarding-body">
+            <section class="onboarding-panel active" data-panel="1">
+                <p class="onboarding-hint">先选择项目的运行方式，之后可在「设置 → 工作模式」随时切换。</p>
+                <div class="onboarding-choice" id="onboardingModeChoice">
+                    <button type="button" data-mode="autonomous">
+                        <span class="t">自主模式（推荐）</span>
+                        <span class="d">内置 Agent 自动搜索、写稿、生成简报；需要大语言模型和搜索服务。</span>
+                    </button>
+                    <button type="button" data-mode="assist">
+                        <span class="t">辅助模式</span>
+                        <span class="d">只做展示与数据中枢，由外部 Agent 推送新闻；不调用模型。</span>
+                    </button>
+                </div>
+                <div class="onboarding-field">
+                    <label>你的称呼</label>
+                    <input type="text" id="onboardingNickname" maxlength="20" placeholder="例如：小明">
+                </div>
+            </section>
+
+            <section class="onboarding-panel" data-panel="2">
+                <p class="onboarding-hint">填写后立即保存并启用。至少配置一个大语言模型；自主模式还需要搜索服务。也可以先跳过，稍后在设置里补全。</p>
+
+                <div class="onboarding-field">
+                    <label>大语言模型</label>
+                    <div class="onboarding-presets" data-target="llm">
+                        <button type="button" class="onboarding-preset" data-provider="deepseek" data-url="https://api.deepseek.com/v1" data-model="deepseek-chat">DeepSeek</button>
+                        <button type="button" class="onboarding-preset" data-provider="kimi" data-url="https://api.moonshot.cn/v1" data-model="moonshot-v1-8k">Kimi</button>
+                        <button type="button" class="onboarding-preset" data-provider="zhipu" data-url="https://open.bigmodel.cn/api/paas/v4" data-model="glm-4-flash">智谱</button>
+                        <button type="button" class="onboarding-preset" data-provider="bailian" data-url="https://dashscope.aliyuncs.com/compatible-mode/v1" data-model="qwen-plus">阿里百炼</button>
+                    </div>
+                    <div class="onboarding-row">
+                        <input type="text" id="onboardingLlmName" placeholder="服务商名称">
+                        <input type="text" id="onboardingLlmUrl" placeholder="Base URL">
+                    </div>
+                    <div class="onboarding-row" style="margin-top:10px">
+                        <input type="text" id="onboardingLlmModel" placeholder="模型 ID">
+                        <input type="password" id="onboardingLlmKey" placeholder="API Key">
+                    </div>
+                    <p class="onboarding-status" id="onboardingLlmStatus"></p>
+                </div>
+
+                <div class="onboarding-field">
+                    <label>搜索服务（自主模式需要）</label>
+                    <div class="onboarding-presets" data-target="search">
+                        <button type="button" class="onboarding-preset" data-provider="tavily" data-url="https://api.tavily.com">Tavily</button>
+                        <button type="button" class="onboarding-preset" data-provider="bocha" data-url="https://api.bochaai.com">博查</button>
+                        <button type="button" class="onboarding-preset" data-provider="searxng" data-url="">SearXNG</button>
+                    </div>
+                    <div class="onboarding-row">
+                        <input type="text" id="onboardingSearchName" placeholder="服务商名称">
+                        <input type="text" id="onboardingSearchUrl" placeholder="Base URL">
+                    </div>
+                    <div class="onboarding-row" style="margin-top:10px">
+                        <input type="password" id="onboardingSearchKey" placeholder="API Key（SearXNG 可留空）">
+                    </div>
+                    <p class="onboarding-status" id="onboardingSearchStatus"></p>
+                </div>
+            </section>
+
+            <section class="onboarding-panel" data-panel="3">
+                <p class="onboarding-hint">设置自动采集的频率与首批关注分类。无关的分类可以先取消勾选。</p>
+                <div class="onboarding-field">
+                    <label>采集间隔</label>
+                    <div class="onboarding-choice" id="onboardingIntervalChoice">
+                        <button type="button" data-interval="3">每 3 小时</button>
+                        <button type="button" data-interval="6">每 6 小时</button>
+                        <button type="button" data-interval="8">每 8 小时</button>
+                        <button type="button" data-interval="12">每 12 小时</button>
+                    </div>
+                </div>
+                <div class="onboarding-field">
+                    <label>每日开始时间</label>
+                    <div class="onboarding-choice" id="onboardingStartChoice">
+                        <button type="button" data-start="0">0 点</button>
+                        <button type="button" data-start="4">4 点</button>
+                        <button type="button" data-start="8">8 点</button>
+                        <button type="button" data-start="12">12 点</button>
+                    </div>
+                </div>
+                <div class="onboarding-field">
+                    <label>采集分类</label>
+                    <div class="onboarding-presets" id="onboardingCategoryList"></div>
+                </div>
+                <div class="onboarding-field">
+                    <label>新增新闻的封面</label>
+                    <div class="onboarding-choice" id="onboardingCoverChoice">
+                        <button type="button" data-cover="svg">
+                            <span class="t">大模型 SVG</span>
+                            <span class="d">矢量插画，成本低；使用大语言模型</span>
+                        </button>
+                        <button type="button" data-cover="image">
+                            <span class="t">文生图模型</span>
+                            <span class="d">写实效果更好，成本较高</span>
+                        </button>
+                        <button type="button" data-cover="off">
+                            <span class="t">暂不生成</span>
+                            <span class="d">使用系统默认封面</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="onboarding-panel" data-panel="4">
+                <p class="onboarding-hint">检查一下配置。带红色标记的项需要补全，否则相应功能不会生效。</p>
+                <div class="onboarding-summary" id="onboardingSummary"></div>
+            </section>
+        </div>
+
+        <div class="onboarding-footer">
+            <button type="button" class="onboarding-skip" id="onboardingSkipBtn">跳过向导</button>
+            <div class="onboarding-footer-right">
+                <button type="button" class="btn-secondary" id="onboardingPrevBtn">上一步</button>
+                <button type="button" class="btn-primary" id="onboardingNextBtn">下一步</button>
+            </div>
         </div>
     </div>
 </div>
@@ -512,8 +665,26 @@
                             <span class="switch-knob"></span>
                         </button>
                     </div>
-                    <div class="feature-desc">资讯助手 Agent 可调用文生图模型为新增新闻生成封面图；未启用任何文生图模型时，无法开启此功能。</div>
-                    <div class="feature-warn">
+                    <div class="feature-desc">为新增新闻生成封面。可选「文生图模型」（效果好、成本高）或「大模型 SVG」（矢量插画、成本低一个数量级、可无损缩放）。</div>
+                    <div class="cover-mode-picker" id="coverModePicker">
+                        <button type="button" class="cover-mode-btn" data-mode="svg">
+                            <span class="cover-mode-title">大模型 SVG</span>
+                            <span class="cover-mode-sub">便宜 · 矢量</span>
+                        </button>
+                        <button type="button" class="cover-mode-btn" data-mode="image">
+                            <span class="cover-mode-title">文生图</span>
+                            <span class="cover-mode-sub">写实 · 较贵</span>
+                        </button>
+                    </div>
+                    <div class="feature-warn" id="coverWarnSvg" style="display:none">
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                            <path d="M8 2L1.5 13.5h13L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                            <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                            <circle cx="8" cy="11.4" r="0.8" fill="currentColor"/>
+                        </svg>
+                        SVG 由大语言模型绘制，风格偏编辑插画，不追求写实
+                    </div>
+                    <div class="feature-warn" id="coverWarnImage" style="display:none">
                         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                             <path d="M8 2L1.5 13.5h13L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
                             <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -562,6 +733,13 @@
                 </div>
                 <textarea id="promptBrief" class="agent-textarea agent-textarea-fixed agent-readonly prompt-textarea" spellcheck="false" readonly></textarea>
             </div>
+            <div class="agent-col">
+                <div class="agent-col-head">
+                    <div class="agent-col-title">对话助手</div>
+                    <button type="button" class="btn-compact prompt-edit-btn" data-prompt="chat">编辑</button>
+                </div>
+                <textarea id="promptChat" class="agent-textarea agent-textarea-fixed agent-readonly prompt-textarea" spellcheck="false" readonly></textarea>
+            </div>
         </div>
         <div class="modal-footer">
             <button class="btn-secondary" id="promptResetBtn">恢复默认</button>
@@ -575,7 +753,7 @@
         <div class="modal-header">
             <div class="modal-title-group">
                 <h3>模型与服务配置</h3>
-                <span class="modal-title-hint">大语言 / 文生图 / 搜索服务统一管理，同一类型仅可启用一个配置</span>
+                <span class="modal-title-hint">大语言 / 文生图 / 搜索 / 向量服务统一管理，同一类型仅可启用一个配置</span>
             </div>
             <button class="modal-close" data-close>&times;</button>
         </div>
@@ -609,6 +787,16 @@
                     </button>
                 </div>
                 <div class="config-col-body" id="configListSearch"></div>
+            </div>
+            <div class="config-col">
+                <div class="config-col-head">
+                    <span class="config-col-title">向量模型</span>
+                    <button type="button" class="btn-primary btn-compact config-add-btn" data-type="embedding">
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        新增
+                    </button>
+                </div>
+                <div class="config-col-body" id="configListEmbedding"></div>
             </div>
         </div>
     </div>
@@ -770,7 +958,7 @@
     const state = {
         categories: [],
         configs: { llm: [], image: [], search: [] },
-        activeConfig: { llm: '', image: '', search: '' },
+        activeConfig: { llm: '', image: '', search: '', embedding: '' },
         hasLlmKey: false,
         hasSearchKey: false,
         editingConfig: null,
@@ -903,8 +1091,307 @@
             else if (action === 'agent') { refreshConfig().then(() => { loadAgentForm(); refreshAgentLogs(); openModal('agentModal'); }); }
             else if (action === 'llm') { refreshConfig().then(() => { renderAllConfigs(); openModal('modelConfigModal'); }); }
             else if (action === 'task') { refreshConfig().then(() => { loadTaskForm(); openModal('taskModal'); }); }
+            else if (action === 'onboarding') { refreshConfig().then(() => openOnboarding()); }
         });
     });
+
+    /* ===== 首次使用向导 ===== */
+    const ONBOARDING = {
+        step: 1,
+        total: 4,
+        mode: '',
+        interval: 8,
+        start: 0,
+        cover: 'off',
+        categories: new Set(),
+        savedLlm: false,
+        savedSearch: false
+    };
+
+    function onboardingShowStep(step) {
+        ONBOARDING.step = Math.min(ONBOARDING.total, Math.max(1, step));
+        document.querySelectorAll('.onboarding-panel').forEach(panel => {
+            panel.classList.toggle('active', Number(panel.dataset.panel) === ONBOARDING.step);
+        });
+        document.querySelectorAll('.onboarding-step-dot').forEach(dot => {
+            const n = Number(dot.dataset.step);
+            dot.classList.toggle('active', n === ONBOARDING.step);
+            dot.classList.toggle('done', n < ONBOARDING.step);
+        });
+        $('onboardingPrevBtn').style.visibility = ONBOARDING.step === 1 ? 'hidden' : '';
+        $('onboardingNextBtn').textContent = ONBOARDING.step === ONBOARDING.total ? '开始使用' : '下一步';
+        if (ONBOARDING.step === ONBOARDING.total) renderOnboardingSummary();
+    }
+
+    function renderOnboardingSummary() {
+        const rows = [];
+        const hasLlm = state.hasLlmKey || ONBOARDING.savedLlm;
+        const hasSearch = state.hasSearchKey || ONBOARDING.savedSearch;
+        rows.push(['工作模式', ONBOARDING.mode === 'assist' ? '辅助模式' : '自主模式', !ONBOARDING.mode]);
+        rows.push(['大语言模型', hasLlm ? '已配置' : '未配置', !hasLlm]);
+        if (ONBOARDING.mode !== 'assist') {
+            rows.push(['搜索服务', hasSearch ? '已配置' : '未配置', !hasSearch]);
+            rows.push(['采集间隔', `每 ${ONBOARDING.interval} 小时 · 每日 ${ONBOARDING.start} 点起`, false]);
+            rows.push(['采集分类', ONBOARDING.categories.size ? [...ONBOARDING.categories].join('、') : '全部非默认分类', false]);
+        }
+        const coverLabels = { svg: '大模型 SVG（低成本）', image: '文生图模型（高成本）', off: '不生成，使用默认封面' };
+        rows.push(['新闻封面', coverLabels[ONBOARDING.cover] || '不生成', false]);
+
+        $('onboardingSummary').innerHTML = rows.map(([label, value, missing]) => `
+            <div class="onboarding-summary-row">
+                <span>${escapeHtml(label)}</span>
+                <span class="v ${missing ? 'missing' : ''}">${escapeHtml(value)}</span>
+            </div>`).join('');
+    }
+
+    function onboardingSelectMode(mode) {
+        ONBOARDING.mode = mode;
+        document.querySelectorAll('#onboardingModeChoice button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+    }
+
+    function onboardingSelectInterval(value) {
+        ONBOARDING.interval = Number(value);
+        document.querySelectorAll('#onboardingIntervalChoice button').forEach(btn => {
+            btn.classList.toggle('active', Number(btn.dataset.interval) === ONBOARDING.interval);
+        });
+    }
+
+    function onboardingSelectStart(value) {
+        ONBOARDING.start = Number(value);
+        document.querySelectorAll('#onboardingStartChoice button').forEach(btn => {
+            btn.classList.toggle('active', Number(btn.dataset.start) === ONBOARDING.start);
+        });
+    }
+
+    function onboardingSelectCover(value) {
+        ONBOARDING.cover = value;
+        document.querySelectorAll('#onboardingCoverChoice button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.cover === value);
+        });
+    }
+
+    function renderOnboardingCategories() {
+        const list = $('onboardingCategoryList');
+        const cats = (state.categories || []).filter(c => !c.is_default);
+        if (!cats.length) {
+            list.innerHTML = '<span class="text-dim" style="font-size:0.74rem">暂无可选分类，稍后可在「分类管理」中新增</span>';
+            return;
+        }
+        list.innerHTML = cats.map(c =>
+            `<button type="button" class="onboarding-preset ${ONBOARDING.categories.has(c.name) ? 'active' : ''}" data-cat="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`
+        ).join('');
+        list.querySelectorAll('[data-cat]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const name = btn.dataset.cat;
+                if (ONBOARDING.categories.has(name)) ONBOARDING.categories.delete(name);
+                else ONBOARDING.categories.add(name);
+                btn.classList.toggle('active', ONBOARDING.categories.has(name));
+            });
+        });
+    }
+
+    function openOnboarding() {
+        ONBOARDING.savedLlm = false;
+        ONBOARDING.savedSearch = false;
+        onboardingSelectMode(state.workMode || 'autonomous');
+        onboardingSelectInterval(state.searchConfig?.task_interval_hours || 8);
+        onboardingSelectStart(state.searchConfig?.task_start_hour || 0);
+        onboardingSelectCover('svg');
+        ONBOARDING.categories = new Set(
+            (state.searchConfig?.task_selected_categories || []).filter(Boolean)
+        );
+        renderOnboardingCategories();
+        onboardingShowStep(1);
+        openModal('onboardingModal');
+    }
+
+    async function onboardingSaveLlm() {
+        const name = $('onboardingLlmName').value.trim();
+        const url = $('onboardingLlmUrl').value.trim();
+        const model = $('onboardingLlmModel').value.trim();
+        const key = $('onboardingLlmKey').value.trim();
+        const status = $('onboardingLlmStatus');
+        if (!url || !model || !key) {
+            status.className = 'onboarding-status err';
+            status.textContent = 'Base URL、模型 ID、API Key 均为必填';
+            return false;
+        }
+        status.className = 'onboarding-status';
+        status.textContent = '正在保存并启用…';
+        try {
+            const resp = await fetch('/api/model-configs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: name || model, base_url: url, model_id: model,
+                    config_type: 'llm', api_key: key, enabled: true
+                })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.detail || '保存失败');
+            status.className = 'onboarding-status ok';
+            status.textContent = '已保存并启用';
+            ONBOARDING.savedLlm = true;
+            await refreshConfig();
+            return true;
+        } catch (e) {
+            status.className = 'onboarding-status err';
+            status.textContent = e.message || '保存失败';
+            return false;
+        }
+    }
+
+    async function onboardingSaveSearch() {
+        const name = $('onboardingSearchName').value.trim();
+        const url = $('onboardingSearchUrl').value.trim();
+        const key = $('onboardingSearchKey').value.trim();
+        const status = $('onboardingSearchStatus');
+        if (!url) {
+            status.className = 'onboarding-status err';
+            status.textContent = '请填写 Base URL（SearXNG 也需填写实例地址）';
+            return false;
+        }
+        status.className = 'onboarding-status';
+        status.textContent = '正在保存并启用…';
+        try {
+            const resp = await fetch('/api/model-configs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: name || 'search', base_url: url, model_id: '',
+                    config_type: 'search', api_key: key, enabled: true
+                })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.detail || '保存失败');
+            status.className = 'onboarding-status ok';
+            status.textContent = '已保存并启用';
+            ONBOARDING.savedSearch = true;
+            await refreshConfig();
+            return true;
+        } catch (e) {
+            status.className = 'onboarding-status err';
+            status.textContent = e.message || '保存失败';
+            return false;
+        }
+    }
+
+    async function finishOnboarding() {
+        const payload = {
+            onboarding_done: true,
+            work_mode: ONBOARDING.mode || 'autonomous'
+        };
+        if (ONBOARDING.mode !== 'assist') {
+            payload.task_interval_hours = ONBOARDING.interval;
+            payload.task_start_hour = ONBOARDING.start;
+            payload.task_selected_categories = [...ONBOARDING.categories];
+        }
+        if (ONBOARDING.cover === 'image' && !imageConfigReady()) {
+            payload.agent_cover_mode = 'off';
+        } else {
+            payload.agent_cover_mode = ONBOARDING.cover;
+        }
+        const nickname = $('onboardingNickname').value.trim();
+        if (nickname) payload.nickname = nickname;
+
+        try {
+            await fetch('/api/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } catch (e) { /* 配置保存失败不阻塞进入应用 */ }
+        closeModal('onboardingModal');
+        await refreshConfig();
+        showToast('配置已保存，开始使用吧', 'success');
+    }
+
+    async function onboardingNext() {
+        if (ONBOARDING.step === 1) {
+            if (!ONBOARDING.mode) {
+                showToast('请选择工作模式', 'error');
+                return;
+            }
+            onboardingShowStep(2);
+            return;
+        }
+        if (ONBOARDING.step === 2) {
+            const hasLlmInput = $('onboardingLlmUrl').value.trim() || $('onboardingLlmKey').value.trim();
+            if (hasLlmInput && !ONBOARDING.savedLlm) {
+                const ok = await onboardingSaveLlm();
+                if (!ok) return;
+            }
+            if (ONBOARDING.mode !== 'assist') {
+                const hasSearchInput = $('onboardingSearchUrl').value.trim();
+                if (hasSearchInput && !ONBOARDING.savedSearch) {
+                    const ok = await onboardingSaveSearch();
+                    if (!ok) return;
+                }
+            }
+            onboardingShowStep(3);
+            return;
+        }
+        if (ONBOARDING.step === 3) {
+            onboardingShowStep(4);
+            return;
+        }
+        await finishOnboarding();
+    }
+
+    document.querySelectorAll('#onboardingModeChoice button').forEach(btn => {
+        btn.addEventListener('click', () => onboardingSelectMode(btn.dataset.mode));
+    });
+    document.querySelectorAll('#onboardingIntervalChoice button').forEach(btn => {
+        btn.addEventListener('click', () => onboardingSelectInterval(btn.dataset.interval));
+    });
+    document.querySelectorAll('#onboardingStartChoice button').forEach(btn => {
+        btn.addEventListener('click', () => onboardingSelectStart(btn.dataset.start));
+    });
+    document.querySelectorAll('#onboardingCoverChoice button').forEach(btn => {
+        btn.addEventListener('click', () => onboardingSelectCover(btn.dataset.cover));
+    });
+
+    document.querySelectorAll('.onboarding-presets[data-target]').forEach(group => {
+        group.querySelectorAll('.onboarding-preset').forEach(btn => {
+            btn.addEventListener('click', () => {
+                group.querySelectorAll('.onboarding-preset').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const isLlm = group.dataset.target === 'llm';
+                const provider = btn.dataset.provider || '';
+                const url = btn.dataset.url || '';
+                if (isLlm) {
+                    $('onboardingLlmName').value = btn.textContent.trim();
+                    $('onboardingLlmUrl').value = url;
+                    if (btn.dataset.model) $('onboardingLlmModel').value = btn.dataset.model;
+                } else {
+                    $('onboardingSearchName').value = btn.textContent.trim();
+                    $('onboardingSearchUrl').value = url;
+                    if (provider === 'searxng') {
+                        $('onboardingSearchKey').placeholder = '自建 SearXNG 一般无需 API Key';
+                    }
+                }
+            });
+        });
+    });
+
+    $('onboardingNextBtn').addEventListener('click', onboardingNext);
+    $('onboardingPrevBtn').addEventListener('click', () => onboardingShowStep(ONBOARDING.step - 1));
+    $('onboardingSkipBtn').addEventListener('click', async () => {
+        try {
+            await fetch('/api/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ onboarding_done: true })
+            });
+        } catch (e) { /* ignore */ }
+        closeModal('onboardingModal');
+    });
+    $('onboardingCloseBtn').addEventListener('click', () => {
+        closeModal('onboardingModal');
+    });
+
 
     /* ===== 配置加载 ===== */
     async function refreshConfig() {
@@ -916,12 +1403,14 @@
             state.configs = {
                 llm: data.llm_configs || [],
                 image: data.image_configs || [],
-                search: data.search_configs || []
+                search: data.search_configs || [],
+                embedding: data.embedding_configs || []
             };
             state.activeConfig = {
                 llm: data.active_llm || '',
                 image: data.active_image || '',
-                search: data.active_search || ''
+                search: data.active_search || '',
+                embedding: data.active_embedding || ''
             };
             state.hasLlmKey = !!data.has_llm_key;
             state.hasSearchKey = !!data.has_search_key;
@@ -933,6 +1422,7 @@
             state.searchConfig = data;
             renderGreeting();
             renderWorkmode();
+            maybeStartOnboarding(data);
             renderDb();
             renderWarnings();
             fetch('/api/my/counts').then(r => r.json()).then(c => {
@@ -978,9 +1468,18 @@
         if (recEntry) {
             recEntry.style.display = (mode === 'autonomous' && state.agentRecommend) ? '' : 'none';
         }
+    }
 
-        if (mode === '') {
-            openModal('workmodeChooseModal');
+    // 首次进入（未选择工作模式且未完成向导）时拉起向导；否则沿用最小的工作模式选择
+    let onboardingChecked = false;
+    function maybeStartOnboarding(data) {
+        if (onboardingChecked) return;
+        onboardingChecked = true;
+        if (!data) return;
+        if (data.onboarding_done) return;
+        if (!data.work_mode) {
+            if (typeof openOnboarding === 'function') openOnboarding();
+            else openModal('workmodeChooseModal');
         }
     }
 
@@ -1592,10 +2091,10 @@
     });
 
             /* ===== 模型与服务配置（大语言 / 文生图 / 搜索） ===== */
-    const CONFIG_TYPE_LABEL = { llm: '大语言模型', image: '文生图模型', search: '搜索服务' };
+    const CONFIG_TYPE_LABEL = { llm: '大语言模型', image: '文生图模型', search: '搜索服务', embedding: '向量模型' };
 
     function renderConfigList(config_type) {
-        const containerId = { llm: 'configListLlm', image: 'configListImage', search: 'configListSearch' }[config_type];
+        const containerId = { llm: 'configListLlm', image: 'configListImage', search: 'configListSearch', embedding: 'configListEmbedding' }[config_type];
         const container = $(containerId);
         if (!container) return;
         const configs = state.configs[config_type] || [];
@@ -1681,6 +2180,7 @@
         renderConfigList('llm');
         renderConfigList('image');
         renderConfigList('search');
+        renderConfigList('embedding');
     }
 
     document.querySelectorAll('.config-add-btn').forEach(btn => {
@@ -1860,15 +2360,27 @@
 /* ===== Agent 管理 ===== */
     state.agentRecommend = false;
     state.agentCover = false;
+    state.agentCoverMode = 'off';
 
     function imageConfigReady() {
         return !!(state.activeConfig.image && (state.configs.image || []).some(c => String(c.id) === String(state.activeConfig.image) && c.has_api_key));
     }
 
+    function llmConfigReady() {
+        return !!(state.activeConfig.llm && (state.configs.llm || []).some(c => String(c.id) === String(state.activeConfig.llm) && c.has_api_key));
+    }
+
+    function coverModeReady(mode) {
+        if (mode === 'svg') return llmConfigReady();
+        if (mode === 'image') return imageConfigReady();
+        return true;
+    }
+
     function loadAgentForm() {
         const data = state.searchConfig || {};
         state.agentRecommend = !!data.agent_recommend_enabled;
-        state.agentCover = !!data.agent_cover_enabled;
+        state.agentCoverMode = data.agent_cover_mode || (data.agent_cover_enabled ? 'image' : 'off');
+        state.agentCover = state.agentCoverMode !== 'off';
         renderAgentForm();
     }
 
@@ -1878,12 +2390,27 @@
         sw.setAttribute('aria-checked', String(state.agentRecommend));
 
         const cw = $('coverSwitch');
-        const canCover = imageConfigReady();
-        cw.classList.toggle('on', state.agentCover && canCover);
-        cw.setAttribute('aria-checked', String(state.agentCover && canCover));
-        cw.title = canCover
-            ? '自动生成资讯封面'
-            : '请先在模型服务配置中启用一个文生图模型（并填写 API Key）';
+        const ready = coverModeReady(state.agentCoverMode);
+        const on = state.agentCover && ready;
+        cw.classList.toggle('on', on);
+        cw.setAttribute('aria-checked', String(on));
+        cw.title = ready ? '自动生成资讯封面' : '当前封面方式缺少可用的模型配置';
+
+        document.querySelectorAll('.cover-mode-btn').forEach(btn => {
+            const mode = btn.dataset.mode;
+            const missing = !coverModeReady(mode);
+            btn.classList.toggle('active', on && state.agentCoverMode === mode);
+            btn.classList.toggle('unavailable', missing);
+            btn.disabled = missing;
+            btn.title = missing
+                ? (mode === 'svg' ? '需要先启用一个大语言模型' : '需要先启用一个文生图模型')
+                : '';
+        });
+
+        const warnSvg = $('coverWarnSvg');
+        const warnImage = $('coverWarnImage');
+        if (warnSvg) warnSvg.style.display = on && state.agentCoverMode === 'svg' ? '' : 'none';
+        if (warnImage) warnImage.style.display = on && state.agentCoverMode === 'image' ? '' : 'none';
     }
 
     $('recommendSwitch').addEventListener('click', () => {
@@ -1891,20 +2418,41 @@
         renderAgentForm();
     });
 
-    $('coverSwitch').addEventListener('click', () => {
-        if (!state.agentCover && !imageConfigReady()) {
-            showToast('请先在模型服务配置中启用一个文生图模型', 'error');
-            renderAgentForm();
-            return;
+    function toggleCover(on) {
+        if (on) {
+            const presets = ['svg', 'image'];
+            const usable = presets.find(coverModeReady);
+            if (!usable) {
+                showToast('请先启用一个大语言模型（SVG 封面）或文生图模型（图片封面）', 'error');
+                renderAgentForm();
+                return;
+            }
+            if (!coverModeReady(state.agentCoverMode)) state.agentCoverMode = usable;
         }
-        state.agentCover = !state.agentCover;
+        state.agentCover = on;
         renderAgentForm();
+    }
+
+    $('coverSwitch').addEventListener('click', () => toggleCover(!state.agentCover));
+
+    document.querySelectorAll('.cover-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.mode;
+            if (!coverModeReady(mode)) {
+                showToast(mode === 'svg' ? '请先启用一个大语言模型' : '请先在模型服务配置中启用一个文生图模型', 'error');
+                return;
+            }
+            // 选择封面方式即视为开启封面生成
+            state.agentCover = true;
+            state.agentCoverMode = mode;
+            renderAgentForm();
+        });
     });
 
     $('saveAgentBtn').addEventListener('click', async () => {
         const payload = {
             agent_recommend_enabled: state.agentRecommend,
-            agent_cover_enabled: state.agentCover && imageConfigReady()
+            agent_cover_mode: state.agentCover && coverModeReady(state.agentCoverMode) ? state.agentCoverMode : 'off'
         };
         try {
             const resp = await fetch('/api/config', {
@@ -1925,8 +2473,9 @@
     });
 
     /* ===== 提示词管理 ===== */
-    const PROMPT_KEYS = ['timed', 'recommend', 'brief'];
-    const PROMPT_TA_ID = { timed: 'promptTimed', recommend: 'promptRecommend', brief: 'promptBrief' };
+    const PROMPT_KEYS = ['timed', 'recommend', 'brief', 'chat'];
+    const PROMPT_TA_ID = { timed: 'promptTimed', recommend: 'promptRecommend', brief: 'promptBrief', chat: 'promptChat' };
+    const PROMPT_LABELS = { timed: '定时资讯', recommend: '智能推荐', brief: 'AI 简报', chat: '对话助手' };
     let promptData = { prompts: {}, defaults: {} };
     let promptEditing = {};
     let promptTimers = {};
@@ -1949,7 +2498,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ [key]: $(PROMPT_TA_ID[key]).value })
             });
-            if (resp.ok) showToast(`${key === 'timed' ? '定时资讯' : key === 'recommend' ? '智能推荐' : 'AI 简报'} 提示词已保存`, 'success');
+            if (resp.ok) showToast(`${PROMPT_LABELS[key] || key} 提示词已保存`, 'success');
         } catch (e) { /* ignore */ }
     }
 
@@ -2014,7 +2563,8 @@
                 body: JSON.stringify({
                     timed: $('promptTimed').value,
                     recommend: $('promptRecommend').value,
-                    brief: $('promptBrief').value
+                    brief: $('promptBrief').value,
+                    chat: $('promptChat').value
                 })
             });
             if (resp.ok) {
@@ -2447,6 +2997,7 @@
     window.showToast = showToast;
     window.openModal = openModal;
     window.closeModal = closeModal;
+    window.openOnboarding = openOnboarding;
 
     /* ===== 顶部搜索 ===== */
     function doSearch() {

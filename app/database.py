@@ -1,3 +1,5 @@
+from sqlalchemy import event
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
@@ -13,7 +15,21 @@ class Base(DeclarativeBase):
 
 def _build_engine(url: str):
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    return create_async_engine(url, echo=settings.DEBUG, connect_args=connect_args)
+    engine = create_async_engine(url, echo=settings.DEBUG, connect_args=connect_args)
+
+    if url.startswith("sqlite"):
+        @event.listens_for(engine.sync_engine, "connect")
+        def _set_sqlite_pragmas(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            try:
+                # WAL + busy_timeout：允许聊天写入与采集任务并发，避免 database is locked
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA busy_timeout=5000")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+            finally:
+                cursor.close()
+
+    return engine
 
 
 def activate_engine(url: str):
@@ -44,13 +60,40 @@ async def get_db():
 
 async def init_db():
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.run_sync(_ensure_category_color_column)
-        await conn.run_sync(_ensure_news_related_ids_column)
-        await conn.run_sync(_ensure_news_read_at_column)
-        await conn.run_sync(_ensure_news_user_action_columns)
-        await conn.run_sync(_ensure_brief_columns)
-        await conn.run_sync(_ensure_model_config_api_key_column)
+        await conn.run_sync(ensure_schema)
+
+
+def ensure_schema(sync_conn):
+    """统一的建表/补列/索引入口，启动与切库共用。"""
+    import app.models  # noqa: F401  确保所有模型已注册到 Base.metadata
+
+    Base.metadata.create_all(sync_conn)
+    _ensure_category_color_column(sync_conn)
+    _ensure_news_related_ids_column(sync_conn)
+    _ensure_news_read_at_column(sync_conn)
+    _ensure_news_user_action_columns(sync_conn)
+    _ensure_brief_columns(sync_conn)
+    _ensure_model_config_api_key_column(sync_conn)
+
+    from app.services.fts import ensure_fts
+
+    ensure_fts(sync_conn)
+
+
+async def commit_with_retry(session: AsyncSession, attempts: int = 3) -> None:
+    """SQLite 写锁重试：短暂等待后重新提交，避免聊天与采集并发时直接失败。"""
+    import asyncio
+
+    for attempt in range(attempts):
+        try:
+            await session.commit()
+            return
+        except OperationalError as exc:
+            if "locked" not in str(exc).lower() or attempt >= attempts - 1:
+                await session.rollback()
+                raise
+            await session.rollback()
+            await asyncio.sleep(0.2 * (attempt + 1))
 
 
 def _ensure_category_color_column(sync_conn):

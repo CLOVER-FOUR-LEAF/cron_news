@@ -119,7 +119,18 @@ def is_busy() -> bool:
     return MIGRATION["state"] == "migrating"
 
 
-TABLE_ORDER = ["categories", "news", "briefs", "agent_runs", "agent_prompts"]
+TABLE_ORDER = [
+    "categories",
+    "news",
+    "briefs",
+    "agent_runs",
+    "agent_prompts",
+    "model_configs",
+    "conversations",
+    "messages",
+    "news_embeddings",
+    "llm_calls",
+]
 
 
 async def _drop_foreign_keys(engine):
@@ -160,21 +171,10 @@ async def _drop_foreign_keys(engine):
 
 async def _ensure_schema(engine):
     """建表并补齐列（不删除任何数据）。"""
-    from app.database import (
-        _ensure_category_color_column,
-        _ensure_news_related_ids_column,
-        _ensure_news_read_at_column,
-        _ensure_news_user_action_columns,
-        _ensure_brief_columns,
-    )
+    from app.database import ensure_schema
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.run_sync(_ensure_category_color_column)
-        await conn.run_sync(_ensure_news_related_ids_column)
-        await conn.run_sync(_ensure_news_read_at_column)
-        await conn.run_sync(_ensure_news_user_action_columns)
-        await conn.run_sync(_ensure_brief_columns)
+        await conn.run_sync(ensure_schema)
 
 
 async def _table_names(engine) -> set[str]:

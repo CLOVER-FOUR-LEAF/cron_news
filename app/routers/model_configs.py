@@ -136,10 +136,14 @@ async def disable_config(config_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="配置不存在")
     if cfg.enabled and cfg.config_type == "image":
         env = read_env_file()
-        if env.get("AGENT_COVER_ENABLED", "") == "true":
+        cover_mode = (env.get("AGENT_COVER_MODE", "") or "").strip().lower()
+        using_image_cover = cover_mode == "image" or (
+            not cover_mode and env.get("AGENT_COVER_ENABLED", "") == "true"
+        )
+        if using_image_cover:
             raise HTTPException(
                 status_code=400,
-                detail="自动生成资讯封面功能已开启，请先关闭该功能后再取消启用当前文生图模型",
+                detail="封面生成方式为「文生图」，请先改为「大模型 SVG」或关闭封面生成，再取消启用当前文生图模型",
             )
     await set_disabled(db, config_id)
     await db.refresh(cfg)
@@ -171,6 +175,21 @@ async def _probe(config_type: str, base_url: str, api_key: str, model_id: str, p
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
+        if config_type == "embedding":
+            if not model_id:
+                return False, "请填写模型 ID"
+            resp = await client.post(
+                f"{base_url}/embeddings",
+                headers=headers,
+                json={"model": model_id, "input": ["ping"]},
+            )
+            if resp.status_code < 400:
+                try:
+                    dim = len((resp.json().get("data") or [{}])[0].get("embedding") or [])
+                except Exception:
+                    dim = 0
+                return True, f"连接成功（向量维度 {dim}）" if dim else "连接成功"
+            return False, f"连接失败（{resp.status_code}）：{resp.text[:120]}"
         if config_type == "image":
             try:
                 resp = await client.get(f"{base_url}/models", headers=headers)

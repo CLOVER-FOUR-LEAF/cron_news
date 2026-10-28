@@ -2,14 +2,13 @@ import json
 import re
 from typing import Any, Callable, Awaitable
 
-import httpx
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.news import News
 from app.logging_setup import get_logger
 from app.services.agent_prompts import get_agent_prompt
+from app.services.llm_client import chat_text
 from app.services.model_configs import get_active_endpoint
 
 logger = get_logger("recommend")
@@ -22,28 +21,15 @@ RELATED_LIMIT = 6
 
 
 async def _ask_llm(db, system_prompt: str, prompt: str) -> str:
-    endpoint = await get_active_endpoint(db, "llm")
-    if not endpoint or not endpoint["api_key"] or not endpoint["model_id"]:
-        raise ValueError("大语言模型未配置")
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            f"{endpoint['base_url']}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {endpoint['api_key']}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": endpoint["model_id"],
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": 0.3,
-                "max_tokens": 300,
-            },
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+    return await chat_text(
+        db,
+        system_prompt,
+        prompt,
+        purpose="recommend",
+        temperature=0.3,
+        max_tokens=300,
+        timeout=60.0,
+    )
 
 
 def _parse_ids(text: str, valid_ids: set[int], exclude_id: int) -> list[int]:
@@ -124,6 +110,8 @@ async def run_recommend_task(db: AsyncSession, emit: EmitFn | None = None) -> di
             related = _parse_ids(answer, valid_ids, news.id)
             news.related_ids = json.dumps(related)
             updated += 1
+            await db.flush()
+            await db.commit()
             logger.info("新闻[%s] 关联 %s 条 → %s", news.id, len(related), related)
             await _emit("save", f"✓ [{news.id}] 关联 {len(related)} 条 → {related}")
         except Exception as e:

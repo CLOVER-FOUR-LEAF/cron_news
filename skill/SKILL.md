@@ -231,19 +231,97 @@ GET /api/stats
 
 ## 模型与服务配置接口
 
-平台的大语言 / 文生图 / 搜索服务配置统一入库（`model_configs` 表），API Key 使用 `SECRET_KEY` 加密存储。
+平台的大语言 / 文生图 / 搜索 / 向量服务配置统一入库（`model_configs` 表），API Key 使用 `SECRET_KEY` 加密存储。
 
 ```
-GET  /api/model-configs?config_type=llm|image|search    # 列表（含 enabled / has_api_key）
-POST /api/model-configs                                  # 新增
-PUT  /api/model-configs/{id}                             # 编辑（api_key 留空表示不修改）
-DELETE /api/model-configs/{id}                           # 删除（已启用配置不可删除）
-POST /api/model-configs/{id}/enable                      # 启用（同类型仅一个启用）
-POST /api/model-configs/{id}/disable                     # 取消启用
-POST /api/model-configs/test                             # 测试连接（body 同新增字段，不落库）
+GET  /api/model-configs?config_type=llm|image|search|embedding   # 列表（含 enabled / has_api_key）
+POST /api/model-configs                                          # 新增
+PUT  /api/model-configs/{id}                                     # 编辑（api_key 留空表示不修改）
+DELETE /api/model-configs/{id}                                   # 删除（已启用配置不可删除）
+POST /api/model-configs/{id}/enable                              # 启用（同类型仅一个启用）
+POST /api/model-configs/{id}/disable                             # 取消启用
+POST /api/model-configs/test                                     # 测试连接（body 同新增字段，不落库）
 ```
 
-新增 / 测试连接时传入字段：`provider`（服务商名称）、`base_url`、`model_id`、`config_type`（llm/image/search）、`api_key`。
+新增 / 测试连接时传入字段：`provider`（服务商名称）、`base_url`、`model_id`、`config_type`（llm/image/search/embedding）、`api_key`。
+`embedding` 类型要求服务商提供 OpenAI 兼容的 `POST {base_url}/embeddings`，测试连接会返回向量维度。
+
+---
+
+## 对话与检索接口（Phase 1）
+
+平台内置对话助手会把「检索本地新闻库 → 读取全文/简报/收藏 → 组织回答」串成工具循环，并在回答中标注来源。外部 Agent 可以直接复用检索能力，或通过非流式接口调用对话。
+
+### 只读检索
+
+```
+GET /api/retrieval/search?q=英伟达 芯片&limit=8&category=科技&days=7&mode=hybrid
+GET /api/retrieval/status
+POST /api/retrieval/probe        {"q": "英伟达 芯片", "limit": 8}
+```
+
+- `mode`：`hybrid`（默认，关键词 + 向量 RRF 融合）/ `lexical` / `semantic`。
+- `q` 建议传 2–6 个关键词；3 字以上的词走 FTS5 trigram，2 字短词自动回退 LIKE。
+- 返回 `{query, mode, terms, sources:{lexical,semantic}, items:[{ref,id,title,summary,category,source,source_url,collected_at,is_read,match,score}]}`。
+- 未配置向量模型时 `mode` 自动降级为 `lexical`，调用方无需处理差异。
+- `probe` 同时返回三组结果，适合评估召回差异；`status` 返回 FTS 能力、向量后端、索引条数与待索引数量。
+
+### 索引维护
+
+```
+POST /api/retrieval/reindex?limit=5000          # 补齐缺失/过期的新闻向量
+POST /api/retrieval/vector/rebuild              # 重建向量派生索引（PostgreSQL）
+POST /api/retrieval/vector/ann-index?dim=512    # 为固定维度创建 pgvector HNSW 索引
+```
+
+### 非流式对话（脚本/外部 Agent 推荐）
+
+```
+POST /api/chat/conversations
+Content-Type: application/json
+{"title": "可选标题"}
+
+POST /api/chat/conversations/{id}/messages
+Content-Type: application/json
+{"message": "最近 AI 芯片领域有什么进展？"}
+```
+
+返回：
+
+```json
+{
+  "conversation_id": 1,
+  "assistant_message_id": 2,
+  "content": "…… [1] ……",
+  "citations": [
+    {"n": 1, "kind": "news", "news_id": 12, "title": "……", "source": "……", "source_url": "https://……"}
+  ],
+  "usage": {"prompt_tokens": 1200, "completion_tokens": 300, "total_tokens": 1500},
+  "tool_trace": [{"name": "search_news", "arguments": {"query": "AI 芯片"}, "ok": true, "count": 8}]
+}
+```
+
+### 流式对话（页面使用）
+
+```
+POST /api/chat/stream
+Content-Type: application/json
+{"conversation_id": 1, "message": "今天科技圈有什么大事？"}
+```
+
+SSE 事件：`meta` → `status` → `tool_call` / `tool_result` → `token` → `citation` → `usage` → `done`；异常时返回 `error`。
+
+### 会话管理
+
+```
+GET    /api/chat/conversations
+GET    /api/chat/conversations/{id}
+PATCH  /api/chat/conversations/{id}   {"title": "新标题"}
+DELETE /api/chat/conversations/{id}
+GET    /api/chat/conversations/{id}/messages?limit=50
+```
+
+> 对话接口与平台其它接口采用相同的信任模型（默认无鉴权，适合本地/内网）。暴露到公网前请先加反向代理鉴权或完成 Phase 4 的 Token 鉴权。
 
 ---
 

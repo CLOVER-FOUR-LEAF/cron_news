@@ -9,8 +9,11 @@ from app.config import settings
 from app.database import init_db, get_session
 from app.models import Category
 from app.crud.category import COLOR_POOL, DEFAULT_COLOR
+from app.base_path import install_base_path_middleware
 from app.routers import news, category, config, db as db_router, agent as agent_router, scheduler as scheduler_router, model_configs as model_configs_router
+from app.routers import chat as chat_router, retrieval as retrieval_router
 from app.services import db_service
+from app.services.embeddings import indexer as embedding_indexer
 from app.services.scheduler import scheduler as scheduler_service
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -52,10 +55,30 @@ async def lifespan(app: FastAPI):
     await migrate_legacy_configs()
     ensure_default_nickname()
     ensure_runtime_image_dirs()
+    await prepare_vector_store()
     scheduler_service.start()
+    embedding_indexer.start()
     yield
+    embedding_indexer.stop()
     scheduler_service.stop()
     print(f"Shutting down {settings.APP_NAME}")
+
+
+async def prepare_vector_store():
+    """按当前数据库方言准备向量后端；PG 建派生索引并补齐历史向量。"""
+    from app.database import engine
+    from app.services.vector_store import get_vector_store
+
+    try:
+        store = get_vector_store(engine)
+        if store.backend == "pgvector":
+            result = await store.ensure_schema()
+            if not result.get("ok"):
+                print(f"[Vector] pgvector 初始化失败，回退 BLOB 检索: {result.get('detail')}")
+        else:
+            print(f"[Vector] 使用 {store.backend} 向量后端")
+    except Exception as e:
+        print(f"[Vector] 向量后端初始化失败（检索将仅使用词法）: {e}")
 
 
 def ensure_runtime_image_dirs():
@@ -139,6 +162,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan,
 )
+install_base_path_middleware(app)
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/images", StaticFiles(directory=BASE_DIR / "images"), name="images")
@@ -152,6 +176,8 @@ app.include_router(db_router.router)
 app.include_router(agent_router.router)
 app.include_router(scheduler_router.router)
 app.include_router(model_configs_router.router)
+app.include_router(chat_router.router)
+app.include_router(retrieval_router.router)
 
 
 async def get_categories():
@@ -196,6 +222,16 @@ async def news_detail(request: Request, news_id: int):
 async def stats_page(request: Request):
     categories, cat_colors = await get_categories()
     return templates.TemplateResponse(request, "stats.html", {"categories": categories, "cat_colors": cat_colors, "active_page": "stats"})
+
+
+@app.get("/chat")
+async def chat_page(request: Request):
+    categories, cat_colors = await get_categories()
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        {"categories": categories, "cat_colors": cat_colors, "active_page": "chat"},
+    )
 
 
 @app.get("/brief")

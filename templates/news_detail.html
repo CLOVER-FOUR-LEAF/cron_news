@@ -6,8 +6,9 @@
     <title>新闻详情 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=40">
+    <link rel="stylesheet" href="/static/css/style.css?v=43">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <style>
         .markdown-body {
             font-family: var(--font-body);
@@ -140,7 +141,8 @@
         function renderMarkdown(md) {
             if (!md) return '<p>暂无正文内容</p>';
             marked.setOptions({ breaks: true, gfm: true });
-            return marked.parse(md);
+            const html = marked.parse(md);
+            return window.DOMPurify ? window.DOMPurify.sanitize(html) : '<p>内容渲染组件加载失败，请刷新页面。</p>';
         }
 
         function estimateReadTime(content) {
