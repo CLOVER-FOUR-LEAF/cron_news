@@ -7,7 +7,7 @@ from sqlalchemy import select, func, text
 from app.config import settings
 from app.database import Base, activate_engine
 from app.env_store import read_env_file, write_env_file
-from app.models import Category, News  # noqa: F401  确保模型注册到 Base.metadata
+from app.models import News  # noqa: F401  确保模型注册到 Base.metadata
 
 DB_TYPES = {
     "mysql": {"label": "MySQL", "port": 3306, "scheme": "mysql+aiomysql"},
@@ -120,8 +120,8 @@ def is_busy() -> bool:
 
 
 TABLE_ORDER = [
-    "categories",
     "news",
+    "news_tags",
     "briefs",
     "agent_runs",
     "agent_prompts",
@@ -130,6 +130,8 @@ TABLE_ORDER = [
     "messages",
     "news_embeddings",
     "llm_calls",
+    "feedback",
+    "tag_follows",
 ]
 
 

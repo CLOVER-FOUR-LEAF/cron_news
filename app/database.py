@@ -81,6 +81,8 @@ def ensure_schema(sync_conn):
     _ensure_news_related_ids_column(sync_conn)
     _ensure_news_read_at_column(sync_conn)
     _ensure_news_user_action_columns(sync_conn)
+    _ensure_news_quality_columns(sync_conn)
+    _ensure_news_batch_column(sync_conn)
     _ensure_brief_columns(sync_conn)
     _ensure_model_config_api_key_column(sync_conn)
 
@@ -153,6 +155,35 @@ def _ensure_news_user_action_columns(sync_conn):
     for col, ddl in additions:
         if col not in cols:
             sync_conn.execute(text(ddl))
+
+
+def _ensure_news_quality_columns(sync_conn):
+    """采集质量字段：标签 / 可信度 / 结构化分析，旧库平滑补列。"""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(sync_conn)
+    if "news" not in inspector.get_table_names():
+        return
+    cols = [c["name"] for c in inspector.get_columns("news")]
+    additions = [
+        ("tags", "ALTER TABLE news ADD COLUMN tags TEXT"),
+        ("credibility", "ALTER TABLE news ADD COLUMN credibility INTEGER"),
+        ("analysis", "ALTER TABLE news ADD COLUMN analysis TEXT"),
+    ]
+    for col, ddl in additions:
+        if col not in cols:
+            sync_conn.execute(text(ddl))
+
+
+def _ensure_news_batch_column(sync_conn):
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(sync_conn)
+    if "news" not in inspector.get_table_names():
+        return
+    cols = [c["name"] for c in inspector.get_columns("news")]
+    if "batch_id" not in cols:
+        sync_conn.execute(text("ALTER TABLE news ADD COLUMN batch_id VARCHAR(40)"))
 
 
 def _ensure_brief_columns(sync_conn):

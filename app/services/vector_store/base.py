@@ -65,8 +65,9 @@ class VectorStore:
         *,
         model: str,
         limit: int,
-        category_id: int | None = None,
+        tag: str | None = None,
         since=None,
+        until=None,
         exclude_ids: set[int] | None = None,
     ) -> list[VectorHit]:
         raise NotImplementedError

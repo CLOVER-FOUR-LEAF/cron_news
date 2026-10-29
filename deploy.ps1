@@ -56,7 +56,7 @@ Write-Host "[deploy] 配置文件 .env 已存在" -ForegroundColor $Green
 $ExistingContainers = docker ps -a --format "{{.Names}}" 2>$null
 if ($ExistingContainers -contains $Container) {
     Write-Host "[deploy] 警告: 检测到已存在的容器 $Container —— 可能是「升级」，也可能是你自己别的同名项目。" -ForegroundColor $Yellow
-    if (-not (Confirm-YesNo "是否继续？继续将替换重建该容器（数据保存在挂载目录 database/ logs/ images/ .env）")) {
+    if (-not (Confirm-YesNo "是否继续？继续将替换重建该容器（数据保存在挂载目录 database/ logs/ images/ memory/ .env）")) {
         Write-Host "[deploy] 已取消部署" -ForegroundColor $Red
         exit 1
     }
@@ -77,8 +77,8 @@ if ($ExistingImages -contains $Image) {
 }
 
 # ---------- 4. 准备持久化目录 ----------
-New-Item -ItemType Directory -Force -Path database, logs, images, "images\cover\default", "images\avatar" | Out-Null
-Write-Host "[deploy] 数据目录已就绪: database/  logs/  images/" -ForegroundColor $Green
+New-Item -ItemType Directory -Force -Path database, logs, images, "images\cover\default", "images\avatar", memory | Out-Null
+Write-Host "[deploy] 数据目录已就绪: database/  logs/  images/  memory/" -ForegroundColor $Green
 
 # 检查默认图片资源是否齐全（默认封面 / 头像 / logo）
 $MissingDefaultImages = -not (Test-Path images\sign.png) -or -not (Test-Path images\avatar\default-avatar.png) -or @(Get-ChildItem images\cover\default\*.png -ErrorAction SilentlyContinue).Count -eq 0

@@ -46,3 +46,7 @@ Thumbs.db
 # 日志
 *.log
 logs/
+
+# 长期记忆（个人画像与反馈，运行时生成）
+memory/*
+!memory/PROFILE.example.md

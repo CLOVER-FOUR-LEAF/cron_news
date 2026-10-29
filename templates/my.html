@@ -6,9 +6,7 @@
     <title>{{ kind_title }} - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=44">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v=47">
 </head>
 <body>
     {% include "_header.html" %}
@@ -45,8 +43,25 @@
 
         function escapeHtml(text) {
             const div = document.createElement('div');
-            div.textContent = text || '';
+            div.textContent = text == null ? '' : String(text);
             return div.innerHTML;
+        }
+
+        function escapeAttr(text) {
+            return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function tagColor(tag) {
+            let hash = 0;
+            for (let i = 0; i < (tag || '').length; i += 1) hash = (hash * 31 + tag.charCodeAt(i)) >>> 0;
+            const palette = ['#d4a853','#4a8fd4','#c75050','#4aad6a','#c47ddc','#e88b5a','#5aa0a0','#b07a4a'];
+            return palette[hash % palette.length];
+        }
+
+        function tagChips(tags) {
+            return (tags || []).slice(0, 5).map(tag =>
+                `<a class="topic-tag" href="/tag/${encodeURIComponent(tag)}" style="--tag-color:${tagColor(tag)}" onclick="event.stopPropagation()">${escapeHtml(tag)}</a>`
+            ).join('');
         }
 
         function renderMarkdown(md) {
@@ -54,6 +69,76 @@
             marked.setOptions({ breaks: true, gfm: true });
             const html = marked.parse(md);
             return window.DOMPurify ? window.DOMPurify.sanitize(html) : '<p>内容渲染组件加载失败，请刷新页面。</p>';
+        }
+
+        function renderMyFeedback() {
+            return `
+                <div class="article-feedback compact" id="myArticleFeedback">
+                    <div class="article-feedback-head">
+                        <div>
+                            <div class="article-feedback-title">这篇对你有帮助吗？</div>
+                            <div class="article-feedback-note">反馈会进入助手的长期记忆，用来调整后续推荐</div>
+                        </div>
+                        <button type="button" class="article-feedback-chat" data-my-fb-chat>和助手聊聊 →</button>
+                    </div>
+                    <div class="article-feedback-chips">
+                        <button type="button" class="feedback-chip positive" data-my-fb="helpful" data-my-rating="1">有用</button>
+                        <button type="button" class="feedback-chip" data-my-fb="irrelevant">不相关</button>
+                        <button type="button" class="feedback-chip" data-my-fb="shallow">内容太浅</button>
+                        <button type="button" class="feedback-chip" data-my-fb="duplicate">重复</button>
+                        <button type="button" class="feedback-chip" data-my-fb="outdated">过时</button>
+                        <button type="button" class="feedback-chip" data-my-fb="inaccurate">信息有误</button>
+                        <button type="button" class="feedback-chip" data-my-fb="source">来源不可靠</button>
+                    </div>
+                    <div class="article-feedback-done" data-my-fb-done hidden></div>
+                </div>`;
+        }
+
+        function bindMyFeedback(news) {
+            const box = document.getElementById('myArticleFeedback');
+            if (!box) return;
+            const done = box.querySelector('[data-my-fb-done]');
+            const chips = box.querySelector('.article-feedback-chips');
+            let submitted = false;
+
+            box.querySelectorAll('[data-my-fb]').forEach(button => {
+                button.addEventListener('click', async () => {
+                    if (submitted) return;
+                    const reason = button.dataset.myFb;
+                    const rating = Number(button.dataset.myRating || -1);
+                    try {
+                        const resp = await fetch('/api/feedback', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                target_type: 'news',
+                                target_id: news.id,
+                                rating,
+                                reason
+                            })
+                        });
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        submitted = true;
+                        if (chips) chips.hidden = true;
+                        done.hidden = false;
+                        done.classList.remove('error');
+                        done.textContent = '已记录。助手会调整后续采集与推荐。';
+                    } catch (e) {
+                        done.hidden = false;
+                        done.classList.add('error');
+                        done.textContent = '反馈提交失败，请稍后再试。';
+                    }
+                });
+            });
+
+            const chat = box.querySelector('[data-my-fb-chat]');
+            if (chat) {
+                chat.addEventListener('click', () => {
+                    const text = `关于这篇《${news.title}》，我想反馈：`;
+                    if (window.CronNewsAssistant) window.CronNewsAssistant.open(text);
+                    else window.location.href = '/chat';
+                });
+            }
         }
 
         function listEndpoint() {
@@ -87,8 +172,9 @@
                     : (item.is_reading ? '<span class="related-read-status reading">在读</span>' : '<span class="related-read-status unread">未读</span>');
                 el.innerHTML = `
                     <div class="related-title">${escapeHtml(item.title)}</div>
+                    ${item.reason ? `<div class="related-reason">${escapeHtml(item.reason)}</div>` : ''}
                     <div class="related-meta">
-                        <span class="related-source">${escapeHtml(item.category_name || '默认')}</span>
+                        <span class="related-source">${tagChips(item.tags)}</span>
                         <span>${formatDate(itemTime(item))}</span>
                         ${readStatus}
                     </div>
@@ -156,7 +242,7 @@
 
                 container.innerHTML = `
                     <div class="detail-meta">
-                        <span class="detail-category" style="--cat: ${escapeHtml(news.category_color || '#8a8690')}">${escapeHtml(news.category_name || '默认')}</span>
+                        <span class="detail-tags">${tagChips(news.tags)}</span>
                         <span>${escapeHtml(news.source || '未知来源')}</span>
                         <span>收录于 ${formatDate(news.collected_at)}</span>
                     </div>
@@ -173,12 +259,38 @@
                         </button>
                     </div>
                     <div class="markdown-body">${renderMarkdown(news.content)}</div>
+                    ${renderMyFeedback()}
+                    <div class="my-related" id="myRelated"><div class="loading">加载相关内容…</div></div>
                 `;
 
                 document.title = `${news.title} - 定时资讯`;
                 bindFlagButtons();
+                bindMyFeedback(news);
+                loadMyRelated(news.id);
             } catch (e) {
                 container.innerHTML = '<div class="empty-state"><p>加载失败</p><a href="/">返回首页</a></div>';
+            }
+        }
+
+        async function loadMyRelated(newsId) {
+            const box = document.getElementById('myRelated');
+            if (!box) return;
+            try {
+                const resp = await fetch(`/api/news/${newsId}/related?limit=4`);
+                const data = await resp.json();
+                const items = data.items || [];
+                if (!items.length) { box.innerHTML = ''; return; }
+                box.innerHTML = '<div class="my-related-title">相关内容</div>' + items.map(item => `
+                    <div class="my-related-item" data-id="${item.id}">
+                        <div class="related-tags">${tagChips(item.tags)}</div>
+                        <div class="my-related-headline">${escapeHtml(item.title)}</div>
+                        <div class="my-related-summary">${escapeHtml(item.short_summary || item.summary || '')}</div>
+                    </div>`).join('');
+                box.querySelectorAll('.my-related-item').forEach(el => {
+                    el.addEventListener('click', () => loadArticle(Number(el.dataset.id)));
+                });
+            } catch (e) {
+                box.innerHTML = '';
             }
         }
 

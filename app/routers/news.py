@@ -17,13 +17,23 @@ async def list_news(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
     keyword: str | None = Query(None, description="搜索关键词"),
-    category: str | None = Query(None, description="分类名称筛选"),
+    tag: str | None = Query(None, description="标签筛选"),
+    batch: str | None = Query(None, description="采集批次ID；latest=最新批次"),
     today_only: bool = Query(False, description="仅显示今日新闻"),
     date_filter: date | None = Query(None, description="按日期筛选(YYYY-MM-DD)"),
     is_read: int | None = Query(None, description="已读状态筛选(0/1)"),
     db: AsyncSession = Depends(get_db),
 ):
-    items, total = await news_crud.get_news_list(db, page, page_size, keyword, category, today_only, date_filter, is_read)
+    from app.services import tag_service
+
+    batch_id = None
+    if batch == "latest":
+        batch_id = await tag_service.latest_batch_id(db)
+    elif batch:
+        batch_id = batch
+    items, total = await news_crud.get_news_list(
+        db, page, page_size, keyword, tag, today_only, date_filter, is_read, batch_id
+    )
     return NewsListResponse(total=total, items=items)
 
 
@@ -111,21 +121,21 @@ async def my_counts(db: AsyncSession = Depends(get_db)):
 
 
 class BriefNoteModel(BaseModel):
-    category: str
+    tag: str
     date: str
     content: str = ""
 
 
 @router.get("/brief/note", response_model=None)
 async def get_brief_note(
-    category: str = Query(...),
+    tag: str = Query(...),
     date: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models import Brief
 
     result = await db.execute(
-        select(Brief).where(Brief.category_name == category, Brief.brief_date == date)
+        select(Brief).where(Brief.category_name == tag, Brief.brief_date == date)
     )
     brief = result.scalars().first()
     return {"content": brief.note if brief else ""}
@@ -136,44 +146,71 @@ async def save_brief_note(body: BriefNoteModel, db: AsyncSession = Depends(get_d
     from app.models import Brief
 
     result = await db.execute(
-        select(Brief).where(Brief.category_name == body.category, Brief.brief_date == body.date)
+        select(Brief).where(Brief.category_name == body.tag, Brief.brief_date == body.date)
     )
     brief = result.scalars().first()
     if brief:
         brief.note = body.content
     else:
-        brief = Brief(category_name=body.category, brief_date=body.date, content="", note=body.content)
+        brief = Brief(category_name=body.tag, brief_date=body.date, content="", note=body.content)
         db.add(brief)
     await db.flush()
     return {"ok": True}
 
 
-@router.get("/brief/dates/{category}")
+@router.get("/brief/daily/dates")
+async def get_daily_brief_dates(db: AsyncSession = Depends(get_db)):
+    """每日简报有内容的日期（用于简报页日历）。"""
+    from app.services import brief_service
+
+    return {"dates": await brief_service.get_daily_brief_dates(db)}
+
+
+@router.get("/brief/daily")
+async def get_daily_brief(
+    date: str | None = Query(None, description="YYYY-MM-DD，不传取最新一期"),
+    db: AsyncSession = Depends(get_db),
+):
+    """统一的每日简报：全站一天一篇，不再按标签拆分。"""
+    from app.services import brief_service
+
+    brief = await brief_service.get_daily_brief(db, date)
+    if not brief:
+        raise HTTPException(status_code=404, detail="暂无每日简报")
+    return {
+        "date": brief.brief_date,
+        "content": brief.content,
+        "source": brief.source,
+        "note": brief.note,
+    }
+
+
+@router.get("/brief/dates/{tag}")
 async def get_brief_dates(
-    category: str,
+    tag: str,
     db: AsyncSession = Depends(get_db),
 ):
     from app.services import brief_service
 
-    return {"dates": await brief_service.get_brief_dates(db, category)}
+    return {"dates": await brief_service.get_brief_dates(db, tag)}
 
 
-@router.get("/brief/{category}")
+@router.get("/brief/{tag}")
 async def get_brief(
-    category: str,
+    tag: str,
     date: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     from app.services import brief_service
 
     if date:
-        brief = await brief_service.get_brief_by_date(db, category, date)
+        brief = await brief_service.get_brief_by_date(db, tag, date)
     else:
-        brief = await brief_service.get_latest_brief(db, category)
+        brief = await brief_service.get_latest_brief(db, tag)
     if not brief:
-        raise HTTPException(status_code=404, detail="暂无该分类的简报")
+        raise HTTPException(status_code=404, detail="暂无该标签的简报")
     return {
-        "category": brief.category_name,
+        "tag": brief.category_name,
         "date": brief.brief_date,
         "content": brief.content,
         "source": brief.source,
@@ -182,7 +219,7 @@ async def get_brief(
 
 
 class BriefCreateModel(BaseModel):
-    category: str
+    tag: str
     date: str
     content: str = ""
     note: str | None = None
@@ -196,7 +233,7 @@ async def create_brief(body: BriefCreateModel, db: AsyncSession = Depends(get_db
 
     source = "外部" if body.source not in ("自主", "外部", "用户") else body.source
     result = await db.execute(
-        select(Brief).where(Brief.category_name == body.category, Brief.brief_date == body.date)
+        select(Brief).where(Brief.category_name == body.tag, Brief.brief_date == body.date)
     )
     brief = result.scalars().first()
     if brief:
@@ -206,7 +243,7 @@ async def create_brief(body: BriefCreateModel, db: AsyncSession = Depends(get_db
         brief.source = source
     else:
         brief = Brief(
-            category_name=body.category,
+            category_name=body.tag,
             brief_date=body.date,
             content=body.content,
             note=body.note or "",
@@ -215,7 +252,7 @@ async def create_brief(body: BriefCreateModel, db: AsyncSession = Depends(get_db
         db.add(brief)
     await db.flush()
     return {
-        "category": brief.category_name,
+        "tag": brief.category_name,
         "date": brief.brief_date,
         "content": brief.content,
         "source": brief.source,
@@ -234,7 +271,7 @@ async def update_brief_editor(body: BriefCreateModel, db: AsyncSession = Depends
 
     enabled = read_env_file().get("AGENT_BRIEF_ENABLED", "") == "true"
     result = await db.execute(
-        select(Brief).where(Brief.category_name == body.category, Brief.brief_date == body.date)
+        select(Brief).where(Brief.category_name == body.tag, Brief.brief_date == body.date)
     )
     brief = result.scalars().first()
     if brief:
@@ -245,7 +282,7 @@ async def update_brief_editor(body: BriefCreateModel, db: AsyncSession = Depends
             brief.source = "用户"
     else:
         brief = Brief(
-            category_name=body.category,
+            category_name=body.tag,
             brief_date=body.date,
             content=body.content,
             note=body.note or "",
@@ -254,7 +291,7 @@ async def update_brief_editor(body: BriefCreateModel, db: AsyncSession = Depends
         db.add(brief)
     await db.flush()
     return {
-        "category": brief.category_name,
+        "tag": brief.category_name,
         "date": brief.brief_date,
         "content": brief.content,
         "source": brief.source,

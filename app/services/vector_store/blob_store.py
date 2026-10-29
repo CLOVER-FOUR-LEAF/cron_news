@@ -14,7 +14,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.logging_setup import get_logger
-from app.models import News, NewsEmbedding
+from app.models import News, NewsEmbedding, NewsTag
 from app.services.vector_store.base import VectorHit, VectorRow, VectorStore, decode_vector, encode_vector
 
 logger = get_logger("vector.blob")
@@ -116,8 +116,9 @@ class BlobVectorStore(VectorStore):
         *,
         model: str,
         limit: int,
-        category_id: int | None = None,
+        tag: str | None = None,
         since=None,
+        until=None,
         exclude_ids: set[int] | None = None,
     ) -> list[VectorHit]:
         dim = len(query_vector)
@@ -133,32 +134,34 @@ class BlobVectorStore(VectorStore):
             if id_array.size == 0:
                 return []
 
-            sims = matrix @ query
-            order = np.argsort(-sims)
-            candidates = order[: max(limit * 4, 20)]
-            candidate_ids = [int(id_array[index]) for index in candidates]
-            score_map = {int(id_array[index]): float(sims[index]) for index in candidates}
-
-            stmt = select(News.id).where(
-                News.id.in_(candidate_ids),
-                News.is_deleted == 0,
-            )
-            if category_id is not None:
-                stmt = stmt.where(News.category_id == category_id)
+            # 先取全部允许的新闻 ID，再做精确掩码，避免 top-N 后过滤导致的召回塌陷
+            stmt = select(News.id).where(News.is_deleted == 0)
+            if tag:
+                stmt = stmt.join(NewsTag, NewsTag.news_id == News.id).where(NewsTag.tag == tag)
             if since is not None:
                 stmt = stmt.where(News.collected_at >= since)
-            allowed = {int(item) for item in (await db.execute(stmt)).scalars().all()}
+            if until is not None:
+                stmt = stmt.where(News.collected_at < until)
+            allowed_ids = {int(item) for item in (await db.execute(stmt)).scalars().all()}
+            if not allowed_ids:
+                return []
 
-        hits = []
-        for news_id in candidate_ids:
-            if news_id not in allowed:
-                continue
-            if exclude_ids and news_id in exclude_ids:
-                continue
-            hits.append(VectorHit(news_id=news_id, score=score_map[news_id]))
-            if len(hits) >= limit:
-                break
-        return hits
+            mask = np.isin(id_array, np.fromiter(allowed_ids, dtype=np.int64))
+            sims = matrix @ query
+            sims = np.where(mask, sims, -np.inf)
+            if exclude_ids:
+                exclude_mask = np.isin(id_array, np.fromiter(exclude_ids, dtype=np.int64))
+                sims = np.where(exclude_mask, -np.inf, sims)
+            count = min(max(limit, 1), int(mask.sum()))
+            if count <= 0:
+                return []
+            top = np.argpartition(-sims, count - 1)[:count]
+            top = top[np.argsort(-sims[top])]
+            return [
+                VectorHit(news_id=int(id_array[index]), score=float(sims[index]))
+                for index in top
+                if np.isfinite(sims[index])
+            ]
 
     async def stats(self) -> dict:
         async with self._session_factory() as db:

@@ -5,19 +5,8 @@ import pytest
 from sqlalchemy import select
 
 from app.database import get_session, init_db
-from app.models import Category, News
-from app.services import retrieval
-
-
-async def _category_id(db, name: str) -> int:
-    result = await db.execute(select(Category).where(Category.name == name))
-    category = result.scalars().first()
-    if category:
-        return category.id
-    category = Category(name=name, sort_order=50, color="#d4a853")
-    db.add(category)
-    await db.flush()
-    return category.id
+from app.models import News
+from app.services import retrieval, tag_service
 
 
 @pytest.mark.asyncio
@@ -25,18 +14,18 @@ async def test_fts_search_and_short_query_fallback():
     await init_db()
     token = uuid.uuid4().hex[:8]
     async with get_session() as db:
-        category_id = await _category_id(db, "科技")
-        db.add(
-            News(
-                title=f"英伟达发布新一代 AI 芯片 {token}",
-                summary="面向推理场景，能效提升明显。",
-                content="正文内容。",
-                source="测试来源",
-                source_url=f"https://example.com/{token}",
-                category_id=category_id,
-                collected_at=datetime.now(),
-            )
+        news = News(
+            title=f"英伟达发布新一代 AI 芯片 {token}",
+            summary="面向推理场景，能效提升明显。",
+            content="正文内容。",
+            source="测试来源",
+            source_url=f"https://example.com/{token}",
+            collected_at=datetime.now(),
+            tags='["AI芯片", "英伟达"]',
         )
+        db.add(news)
+        await db.flush()
+        await tag_service.sync_news_tags(db, news)
         await db.commit()
 
         long_query = await retrieval.search_news(db, f"英伟达 {token}", limit=5)
@@ -50,21 +39,21 @@ async def test_fts_search_and_short_query_fallback():
 
 
 @pytest.mark.asyncio
-async def test_list_recent_respects_category():
+async def test_list_recent_respects_tag():
     await init_db()
     token = uuid.uuid4().hex[:8]
     async with get_session() as db:
-        category_id = await _category_id(db, "科技")
-        db.add(
-            News(
-                title=f"最近新闻 {token}",
-                summary="摘要",
-                content="正文",
-                category_id=category_id,
-                collected_at=datetime.now(),
-            )
+        news = News(
+            title=f"最近新闻 {token}",
+            summary="摘要",
+            content="正文",
+            collected_at=datetime.now(),
+            tags='["AI芯片"]',
         )
+        db.add(news)
+        await db.flush()
+        await tag_service.sync_news_tags(db, news)
         await db.commit()
 
-        result = await retrieval.list_recent(db, category="科技", days=1, limit=10)
+        result = await retrieval.list_recent(db, tag="AI芯片", days=1, limit=10)
         assert any(token in item["title"] for item in result["items"])

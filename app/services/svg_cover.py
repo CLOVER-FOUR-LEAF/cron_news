@@ -233,10 +233,10 @@ def _dedupe_xmlns(markup: str) -> str:
     return markup.replace(tag, new_tag, 1)
 
 
-def _prompt(title: str, summary: str, category: str | None, color: str | None) -> str:
+def _prompt(title: str, summary: str, tag: str | None, color: str | None) -> str:
     hint = []
-    if category:
-        hint.append(f"新闻分类：{category}")
+    if tag:
+        hint.append(f"新闻标签：{tag}")
     if color:
         hint.append(f"建议主色调参考 {color}，可自行搭配同色系渐变")
     extra = "\n".join(hint)
@@ -253,7 +253,7 @@ async def generate_svg_cover(
     title: str,
     summary: str,
     *,
-    category: str | None = None,
+    tag: str | None = None,
     color: str | None = None,
 ) -> str | None:
     """调用当前启用的大语言模型生成封面 SVG；失败返回 None。"""
@@ -263,7 +263,7 @@ async def generate_svg_cover(
             db,
             [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": _prompt(title, summary, category, color)},
+                {"role": "user", "content": _prompt(title, summary, tag, color)},
             ],
             purpose="cover_svg",
             temperature=0.85,

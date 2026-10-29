@@ -6,7 +6,7 @@
     <title>每日简报 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=44">
+    <link rel="stylesheet" href="/static/css/style.css?v=47">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
@@ -17,19 +17,7 @@
         <div class="brief-page">
             <aside class="brief-side">
                 <div class="brief-side-title">每日简报</div>
-                <div class="brief-field">
-                    <label>分类</label>
-                    <div class="cat-dropdown" id="catDropdown">
-                        <button type="button" class="cat-dropdown-btn" id="catDropdownBtn">
-                            <span class="brief-dot" id="catDot"></span>
-                            <span id="catLabel" class="cat-label">选择分类</span>
-                            <span class="cat-arrow">
-                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            </span>
-                        </button>
-                        <div class="cat-dropdown-list" id="catDropdownList"></div>
-                    </div>
-                </div>
+                <p class="brief-side-intro">每天一篇，汇总当日全部新闻——不再按标签拆分。</p>
                 <div class="brief-field">
                     <label>时间</label>
                     <div class="brief-selected-label">当前选择：<strong id="selectedDateLabel"></strong></div>
@@ -65,7 +53,7 @@
                         </button>
                     </div>
                 </div>
-                <p class="brief-side-hint brief-side-hint-bottom">自主模式下由内置 Agent 在每次采集完成后自动生成简报；辅助模式下由外部 Agent 通过接口写入。圆点标记表示当日有简报。</p>
+                <p class="brief-side-hint brief-side-hint-bottom">自主模式下，每次采集完成后由内置 Agent 把当日全部新闻汇总成一篇简报；辅助模式下由外部 Agent 通过接口写入。圆点标记表示当日有简报。</p>
             </aside>
 
             <div class="brief-main" id="briefMain">
@@ -79,9 +67,7 @@
     </main>
 
     <script>
-        const CATEGORIES = {{ categories | tojson }};
-        const CAT_COLORS = {{ cat_colors | tojson }};
-
+        const DAILY_TAG = '每日';
         const $ = id => document.getElementById(id);
         const pad2 = n => String(n).padStart(2, '0');
 
@@ -96,8 +82,11 @@
             return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
         }
 
+        function sanitizeFilename(name) {
+            return String(name || '').replace(/[\/\\:*?"<>|\x00-\x1f]/g, '_').trim() || '简报';
+        }
+
         const params = new URLSearchParams(window.location.search);
-        let currentCat = params.get('cat') && CATEGORIES.includes(params.get('cat')) ? params.get('cat') : (CATEGORIES[0] || '');
         let currentDate = /^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '') ? params.get('date') : localTodayIso();
         let briefDates = new Set();
         let viewYear, viewMonth;
@@ -116,43 +105,6 @@
             a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 2000);
         }
-
-        /* ===== 分类下拉 ===== */
-        const dropdown = $('catDropdown');
-        const list = $('catDropdownList');
-
-        function renderCatBtn() {
-            $('catLabel').textContent = currentCat;
-            $('catDot').style.background = CAT_COLORS[currentCat] || '#8a8690';
-        }
-
-        list.innerHTML = CATEGORIES.map(cat => `
-            <button type="button" class="cat-dropdown-item" data-cat="${escapeHtml(cat)}" style="--cat: ${CAT_COLORS[cat] || '#8a8690'}">
-                <span class="brief-dot"></span>${escapeHtml(cat)}
-            </button>
-        `).join('');
-
-        $('catDropdownBtn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            list.classList.toggle('show');
-            dropdown.classList.toggle('open');
-        });
-        document.addEventListener('click', () => {
-            list.classList.remove('show');
-            dropdown.classList.remove('open');
-        });
-        list.querySelectorAll('.cat-dropdown-item').forEach(btn => {
-            btn.addEventListener('click', () => {
-                currentCat = btn.dataset.cat;
-                renderCatBtn();
-                list.classList.remove('show');
-                dropdown.classList.remove('open');
-                refreshBriefDates().then(() => {
-                    renderCalendar();
-                    loadBrief();
-                });
-            });
-        });
 
         /* ===== 日历 ===== */
         function setCalViewFrom(iso) {
@@ -209,7 +161,7 @@
 
         async function refreshBriefDates() {
             try {
-                const resp = await fetch(`/api/brief/dates/${encodeURIComponent(currentCat)}`);
+                const resp = await fetch('/api/brief/daily/dates');
                 const data = await resp.json();
                 briefDates = new Set(data.dates || []);
             } catch (e) {
@@ -233,7 +185,7 @@
             loadNote();
             let data = null;
             try {
-                const resp = await fetch(`/api/brief/${encodeURIComponent(currentCat)}?date=${currentDate}`);
+                const resp = await fetch(`/api/brief/daily?date=${encodeURIComponent(currentDate)}`);
                 if (resp.ok) data = await resp.json();
             } catch (e) { /* 视为无简报 */ }
             currentBrief = data;
@@ -246,7 +198,7 @@
             if (hasContent) {
                 placeholder = '在此编辑简报内容，输入后自动保存…';
             } else if (briefEnabled) {
-                placeholder = '暂无简报，等待 AI 工作……\n\n自主模式下，每次采集完成后将按分类自动生成每日简报；辅助模式下等待外部 Agent 通过接口写入。\n（如需自行撰写，请先关闭左侧「功能状态」开关，再在下方输入，来源将标记为「用户」。）';
+                placeholder = '暂无简报，等待 AI 工作……\n\n自主模式下，每次采集完成后会把当日全部新闻汇总成一篇简报；辅助模式下等待外部 Agent 通过接口写入。\n（如需自行撰写，请先关闭左侧「功能状态」开关，再在下方输入，来源将标记为「用户」。）';
             } else {
                 placeholder = '当前每日简报功能已关闭，不会自动生成简报。\n\n你可以在这里输入内容，写一份属于自己的每日摘要，输入后自动保存，来源将标记为「用户」。\n右侧便签可用于记录随想，同样自动保存。';
             }
@@ -258,7 +210,7 @@
 
             main.innerHTML = `
                 <div class="brief-main-head">
-                    <span class="brief-main-cat" style="--cat: ${CAT_COLORS[currentCat] || '#8a8690'}">${escapeHtml(currentCat)}</span>
+                    <span class="brief-main-cat">每日简报</span>
                     <span class="brief-main-date">${escapeHtml(currentDate)}</span>
                     ${srcHtml}
                 </div>
@@ -286,7 +238,7 @@
                 const resp = await fetch('/api/brief', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category: currentCat, date: currentDate, content })
+                    body: JSON.stringify({ tag: DAILY_TAG, date: currentDate, content })
                 });
                 if (resp.ok) {
                     editorDirty = false;
@@ -299,6 +251,7 @@
                         badge.className = `brief-main-source ${sourceClass(data.source)}`;
                         badge.textContent = data.source || '自主';
                     }
+                    refreshBriefDates().then(renderCalendar);
                 } else {
                     const foot = $('briefEditorFoot');
                     if (foot) foot.textContent = '保存失败，稍后自动重试';
@@ -315,7 +268,7 @@
         $('exportMdBtn').addEventListener('click', () => {
             const content = currentEditorContent();
             if (!content.trim()) { showToast('当前没有可导出的简报', 'error'); return; }
-            const fname = `简报_${currentCat}_${currentDate}.md`;
+            const fname = `每日简报_${sanitizeFilename(currentDate)}.md`;
             downloadFile(fname, content, 'text/markdown;charset=utf-8');
             showToast('Markdown 已导出', 'success');
         });
@@ -326,15 +279,15 @@
             marked.setOptions({ breaks: true, gfm: true });
             const html = `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
-<head><meta charset="utf-8"><title>${escapeHtml(currentCat)} 每日简报</title>
+<head><meta charset="utf-8"><title>每日简报 ${escapeHtml(currentDate)}</title>
 <style>body{font-family:SimSun,'Songti SC',serif;font-size:14px;line-height:1.9;color:#222;max-width:720px;margin:40px auto;padding:0 24px} h1,h2,h3{font-family:'Microsoft YaHei';} blockquote{border-left:3px solid #c8a852;margin:12px 0;padding:4px 14px;color:#666;background:#faf8f2}</style>
 </head>
 <body>
-<h1>${escapeHtml(currentCat)} · 每日简报</h1>
+<h1>每日简报</h1>
 <p style="color:#888">${escapeHtml(currentDate)}</p>
 <div>${window.DOMPurify ? window.DOMPurify.sanitize(marked.parse(content)) : escapeHtml(content)}</div>
 </body></html>`;
-            const fname = `简报_${currentCat}_${currentDate}.doc`;
+            const fname = `每日简报_${sanitizeFilename(currentDate)}.doc`;
             downloadFile(fname, html, 'application/msword;charset=utf-8');
             showToast('Word 文档已导出', 'success');
         });
@@ -342,7 +295,7 @@
         /* ===== 便签（自动保存） ===== */
         async function loadNote() {
             try {
-                const resp = await fetch(`/api/brief/note?category=${encodeURIComponent(currentCat)}&date=${currentDate}`);
+                const resp = await fetch(`/api/brief/note?tag=${encodeURIComponent(DAILY_TAG)}&date=${currentDate}`);
                 const data = await resp.json();
                 $('noteArea').value = data.content || '';
                 noteDirty = false;
@@ -357,7 +310,7 @@
                 const resp = await fetch('/api/brief/note', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category: currentCat, date: currentDate, content: $('noteArea').value })
+                    body: JSON.stringify({ tag: DAILY_TAG, date: currentDate, content: $('noteArea').value })
                 });
                 if (resp.ok) noteDirty = false;
             } catch (e) { /* 下次输入时重试 */ }
@@ -374,7 +327,7 @@
                     method: 'PUT',
                     keepalive: true,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category: currentCat, date: currentDate, content: $('noteArea').value })
+                    body: JSON.stringify({ tag: DAILY_TAG, date: currentDate, content: $('noteArea').value })
                 });
             }
             if (editorDirty) {
@@ -382,7 +335,7 @@
                     method: 'PUT',
                     keepalive: true,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category: currentCat, date: currentDate, content: $('briefEditor').value })
+                    body: JSON.stringify({ tag: DAILY_TAG, date: currentDate, content: $('briefEditor').value })
                 });
             }
         });
@@ -411,7 +364,7 @@
             const turningOn = !briefEnabled;
             $('briefToggleTitle').textContent = turningOn ? '开启每日简报' : '关闭每日简报';
             $('briefToggleText').textContent = turningOn
-                ? '开启后：自主模式下将在每次采集完成后，按分类自动生成每日简报；辅助模式下等待外部 Agent 通过接口写入。'
+                ? '开启后：自主模式下将在每次采集完成后，把当日全部新闻汇总成一篇每日简报；辅助模式下等待外部 Agent 通过接口写入。'
                 : '关闭后：将不再自动生成每日简报，已生成的简报会保留在数据库中，不受影响；你仍可在中间区域手动撰写简报（来源标记为「用户」），右侧便签也可继续使用。';
             $('briefToggleWarn').textContent = turningOn
                 ? '开启后将额外调用大模型，会增加 Token 消耗量。'
@@ -453,7 +406,6 @@
         /* ===== 初始化 ===== */
         $('selectedDateLabel').textContent = currentDate;
         setCalViewFrom(currentDate);
-        renderCatBtn();
         loadBriefSwitch().then(() => {
             refreshBriefDates().then(() => {
                 renderCalendar();

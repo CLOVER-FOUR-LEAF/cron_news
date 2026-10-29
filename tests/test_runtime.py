@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import select
 
 from app.database import get_session, init_db
-from app.models import Category, Message, News
-from app.services import llm_client
+from app.models import Message, News
+from app.services import llm_client, memory_service
 from app.services.agent import runtime
 
 
@@ -15,21 +15,14 @@ async def _seed_news() -> int:
     await init_db()
     token = uuid.uuid4().hex[:8]
     async with get_session() as db:
-        category = (
-            await db.execute(select(Category).where(Category.name == "科技"))
-        ).scalars().first()
-        if not category:
-            category = Category(name="科技", sort_order=50, color="#d4a853")
-            db.add(category)
-            await db.flush()
         news = News(
             title=f"英伟达发布新一代 AI 芯片 {token}",
             summary="面向推理场景，能效提升明显。",
             content="英伟达发布新一代 AI 芯片。",
             source="测试来源",
             source_url=f"https://example.com/{token}",
-            category_id=category.id,
             collected_at=datetime.now(),
+            tags='["AI芯片", "英伟达"]',
         )
         db.add(news)
         await db.commit()
@@ -121,3 +114,40 @@ async def test_json_protocol_fallback(monkeypatch):
     result = await runtime.run_turn(None, "英伟达有什么？", emit=None)
     assert result["content"].endswith("[1]")
     assert result["citations"][0]["news_id"] == news_id
+
+
+@pytest.mark.asyncio
+async def test_chat_can_write_long_term_memory(monkeypatch, tmp_path):
+    await init_db()
+    monkeypatch.setattr(memory_service, "memory_dir", lambda: tmp_path)
+    monkeypatch.setenv("AGENT_MEMORY_ENABLED", "true")
+
+    async def fake_get_active_endpoint(db, config_type):
+        return _endpoint() if config_type == "llm" else None
+
+    async def fake_chat_endpoint(endpoint, messages, **kwargs):
+        saw_tool = any(message.get("role") == "tool" for message in messages)
+        if kwargs.get("tools") and not saw_tool:
+            return llm_client.LLMResponse(
+                tool_calls=[
+                    llm_client.ToolCall(
+                        id="call_mem",
+                        name="remember",
+                        arguments={"content": "跟踪 AI 芯片（科技）", "section": "watch"},
+                    )
+                ],
+                usage={"total_tokens": 10},
+            )
+        return llm_client.LLMResponse(content="记住了：你正在跟踪 AI 芯片。", usage={"total_tokens": 8})
+
+    monkeypatch.setattr(runtime, "get_active_endpoint", fake_get_active_endpoint)
+    monkeypatch.setattr(llm_client, "chat_endpoint", fake_chat_endpoint)
+    monkeypatch.setattr(llm_client, "protocol_for", lambda endpoint: "native")
+
+    result = await runtime.run_turn(None, "记住：我最近在跟踪 AI 芯片", emit=None)
+    assert "记住" in result["content"]
+
+    text = await memory_service.read_memory()
+    watch = memory_service.read_section(text, "watch")
+    assert "AI 芯片" in watch
+    assert any(item["name"] == "remember" for item in result["tool_trace"])

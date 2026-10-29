@@ -222,8 +222,9 @@ class PgVectorStore(BlobVectorStore):
         *,
         model: str,
         limit: int,
-        category_id: int | None = None,
+        tag: str | None = None,
         since=None,
+        until=None,
         exclude_ids: set[int] | None = None,
     ) -> list[VectorHit]:
         dim = len(query_vector)
@@ -235,8 +236,9 @@ class PgVectorStore(BlobVectorStore):
                     query_vector,
                     model=model,
                     limit=limit,
-                    category_id=category_id,
+                    tag=tag,
                     since=since,
+                    until=until,
                     exclude_ids=exclude_ids,
                 )
 
@@ -253,12 +255,18 @@ class PgVectorStore(BlobVectorStore):
                 "dim": dim,
                 "limit": max(limit, 1),
             }
-            if category_id is not None:
-                sql += " AND n.category_id = :category_id"
-                params["category_id"] = category_id
+            if tag:
+                sql += (
+                    " AND EXISTS (SELECT 1 FROM news_tags nt "
+                    "WHERE nt.news_id = n.id AND nt.tag = :tag)"
+                )
+                params["tag"] = tag
             if since is not None:
                 sql += " AND n.collected_at >= :since"
                 params["since"] = since
+            if until is not None:
+                sql += " AND n.collected_at < :until"
+                params["until"] = until
             sql += " ORDER BY dist LIMIT :limit"
 
             rows = (await db.execute(text(sql), params)).all()

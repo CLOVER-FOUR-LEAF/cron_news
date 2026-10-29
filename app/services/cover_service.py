@@ -126,14 +126,17 @@ async def assign_news_cover(db, news: News, emit=None) -> str | None:
             cover_url = f"/images/cover/{news.id}.png"
 
     elif mode == COVER_MODE_SVG:
-        category = getattr(news, "category", None)
-        color = getattr(category, "color", None) if category else None
+        from app.services import tag_service
+
+        tags = news.tag_list
+        primary_tag = tags[0] if tags else None
+        color = tag_service.tag_color(primary_tag) if primary_tag else None
         try:
             svg = await svg_cover.generate_svg_cover(
                 db,
                 news.title,
                 news.summary or "",
-                category=getattr(category, "name", None) if category else None,
+                tag=primary_tag,
                 color=color,
             )
         except Exception as exc:

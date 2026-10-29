@@ -11,7 +11,7 @@ DB_DIR.mkdir(exist_ok=True)
 
 class Settings(BaseSettings):
     APP_NAME: str = "Cron News"
-    APP_VERSION: str = "3.0.0"
+    APP_VERSION: str = "3.2.0"
     DEBUG: bool = False
 
     DB_PATH: str = str(DB_DIR / "cron_news.db")

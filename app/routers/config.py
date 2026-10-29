@@ -35,7 +35,7 @@ class ConfigUpdate(BaseModel):
     search_api_key: str | None = None
     task_interval_hours: int | None = None
     task_start_hour: int | None = None
-    task_selected_categories: list | None = None
+    task_selected_tags: list | None = None
     agent_ext_mode: str | None = None
     agent_ext_prompt: str | None = None
     agent_recommend_enabled: bool | None = None
@@ -64,7 +64,7 @@ class ConfigResponse(BaseModel):
     has_search_key: bool = False
     task_interval_hours: int = 8
     task_start_hour: int = 0
-    task_selected_categories: list = []
+    task_selected_tags: list = []
     agent_base_prompt: str = ""
     agent_ext_preset: str = ""
     agent_ext_mode: str = "preset"
@@ -116,8 +116,10 @@ async def get_config(db: AsyncSession = Depends(get_db)):
     db_state = db_service.get_db_state()
 
     interval_hours = _parse_int(env_vars.get("TASK_INTERVAL_HOURS", ""), 8)
-    selected_categories = _parse_json_list(env_vars.get("TASK_SELECTED_CATEGORIES", ""))
-    selected_categories = [str(x) for x in selected_categories]
+    raw_tags = env_vars.get("TASK_SELECTED_TAGS")
+    legacy_tags = env_vars.get("TASK_SELECTED_CATEGORIES", "")
+    selected_tags = _parse_json_list(raw_tags if raw_tags is not None else legacy_tags)
+    selected_tags = [str(x) for x in selected_tags]
 
     llm_configs = [config_to_dict(c) for c in await get_configs(db, "llm")]
     image_configs = [config_to_dict(c) for c in await get_configs(db, "image")]
@@ -147,8 +149,8 @@ async def get_config(db: AsyncSession = Depends(get_db)):
         has_search_key=bool(search_enabled and decrypt_api_key(search_enabled.api_key_enc)),
         task_interval_hours=interval_hours,
         task_start_hour=_parse_int(env_vars.get("TASK_START_HOUR", ""), 0),
-        task_selected_categories=selected_categories,
-        agent_base_prompt=build_base_prompt(interval_hours, selected_categories),
+        task_selected_tags=selected_tags,
+        agent_base_prompt=build_base_prompt(interval_hours, selected_tags),
         agent_ext_preset=DEFAULT_EXT_PROMPT,
         agent_ext_mode=env_vars.get("AGENT_EXT_MODE", "preset"),
         agent_ext_prompt=env_vars.get("AGENT_EXT_PROMPT", ""),
@@ -170,14 +172,14 @@ async def update_config(config: ConfigUpdate):
 
     # 详细日志：记录收到的配置项（便于排查自动任务设置是否真正生效）
     task_changed = any(v is not None for v in (
-        config.task_interval_hours, config.task_start_hour, config.task_selected_categories,
+        config.task_interval_hours, config.task_start_hour, config.task_selected_tags,
     ))
     if task_changed:
         logger.info(
-            "收到自动任务配置保存请求：时间间隔=%s，每日开始=%s，分类=%s",
+            "收到自动任务配置保存请求：时间间隔=%s，每日开始=%s，标签=%s",
             config.task_interval_hours,
             config.task_start_hour,
-            (config.task_selected_categories or []) if config.task_selected_categories is not None else "（未修改）",
+            (config.task_selected_tags or []) if config.task_selected_tags is not None else "（未修改）",
         )
     if config.work_mode is not None:
         logger.info("收到工作模式修改：%s", config.work_mode)
@@ -192,8 +194,8 @@ async def update_config(config: ConfigUpdate):
         env_vars["TASK_INTERVAL_HOURS"] = str(max(1, config.task_interval_hours))
     if config.task_start_hour is not None:
         env_vars["TASK_START_HOUR"] = str(config.task_start_hour % 24)
-    if config.task_selected_categories is not None:
-        env_vars["TASK_SELECTED_CATEGORIES"] = json.dumps(config.task_selected_categories, ensure_ascii=False)
+    if config.task_selected_tags is not None:
+        env_vars["TASK_SELECTED_TAGS"] = json.dumps(config.task_selected_tags, ensure_ascii=False)
 
     if config.agent_ext_mode is not None:
         env_vars["AGENT_EXT_MODE"] = config.agent_ext_mode
@@ -238,10 +240,10 @@ async def update_config(config: ConfigUpdate):
 
     if task_changed:
         logger.info(
-            "自动任务配置已保存生效：间隔=%s 小时，每日开始=%s 点，分类=%s",
+            "自动任务配置已保存生效：间隔=%s 小时，每日开始=%s 点，标签=%s",
             env_vars.get("TASK_INTERVAL_HOURS"),
             env_vars.get("TASK_START_HOUR"),
-            env_vars.get("TASK_SELECTED_CATEGORIES"),
+            env_vars.get("TASK_SELECTED_TAGS"),
         )
 
     return {"message": "ok"}

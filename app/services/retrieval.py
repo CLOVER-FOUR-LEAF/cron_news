@@ -1,8 +1,9 @@
-"""本地新闻库检索：词法 + 语义混合，RRF 融合。
+"""本地新闻库检索：标签过滤 + 词法/语义混合 + 时间线。
 
-- 词法：SQLite FTS5 trigram（≥3 字）；否则 LIKE
+- 词法：SQLite FTS5 trigram；否则 LIKE
 - 语义：向量存储（BLOB/numpy 或 pgvector），按当前启用的 embedding 模型
 - 融合：Reciprocal Rank Fusion，k=60
+- 时间线：按时间桶分别召回，保证「过去半个月」不会只返回某一天的 12 条
 """
 
 from __future__ import annotations
@@ -15,11 +16,11 @@ from typing import Any
 from sqlalchemy import and_, case, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.category import get_category_by_name
 from app.env_store import read_env_file
 from app.logging_setup import get_logger
-from app.models import News
-from app.services import fts
+from app.models import News, NewsTag
+from app.services import fts, tag_service
+from app.services.dedup import normalize_url, title_similarity
 
 logger = get_logger("retrieval")
 
@@ -50,12 +51,16 @@ def to_item(news: News, match: str, score: float | None = None) -> dict[str, Any
         "ref": f"news:{news.id}",
         "id": news.id,
         "title": news.title,
-        "summary": (news.summary or "")[:220],
-        "category": news.category_name,
+        "summary": (news.summary or "")[:300],
+        "short_summary": news.short_summary,
+        "tags": news.tag_list,
         "source": news.source,
         "source_url": news.source_url,
+        "cover_url": news.cover_url,
         "collected_at": news.collected_at.isoformat() if news.collected_at else None,
+        "batch_id": news.batch_id,
         "is_read": news.is_read,
+        "credibility": news.credibility,
         "match": match,
     }
     if score is not None:
@@ -81,15 +86,6 @@ def refs_from_items(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return refs
 
 
-async def _resolve_category(db: AsyncSession, category: str | None) -> tuple[bool, int | None]:
-    if not category:
-        return True, None
-    row = await get_category_by_name(db, category.strip())
-    if not row:
-        return False, None
-    return True, row.id
-
-
 async def _load_ordered(db: AsyncSession, ids: list[int]) -> list[News]:
     if not ids:
         return []
@@ -101,8 +97,9 @@ async def _load_ordered(db: AsyncSession, ids: list[int]) -> list[News]:
 async def _fts_search(
     db: AsyncSession,
     terms: list[str],
-    category_id: int | None,
+    tag: str | None,
     since: datetime | None,
+    until: datetime | None,
     limit: int,
 ) -> list[News]:
     match = fts.build_match_query(terms)
@@ -115,12 +112,15 @@ async def _fts_search(
         "WHERE news_fts MATCH :match AND n.is_deleted = 0"
     )
     params: dict[str, Any] = {"match": match, "limit": limit}
-    if category_id is not None:
-        sql += " AND n.category_id = :category_id"
-        params["category_id"] = category_id
+    if tag:
+        sql += " AND EXISTS (SELECT 1 FROM news_tags nt WHERE nt.news_id = n.id AND nt.tag = :tag)"
+        params["tag"] = tag
     if since is not None:
         sql += " AND n.collected_at >= :since"
         params["since"] = since
+    if until is not None:
+        sql += " AND n.collected_at < :until"
+        params["until"] = until
     sql += " ORDER BY bm25(news_fts, 8.0, 2.0) LIMIT :limit"
 
     try:
@@ -135,8 +135,9 @@ async def _fts_search(
 async def _like_search(
     db: AsyncSession,
     terms: list[str],
-    category_id: int | None,
+    tag: str | None,
     since: datetime | None,
+    until: datetime | None,
     limit: int,
 ) -> list[News]:
     conditions = [
@@ -144,10 +145,14 @@ async def _like_search(
         for term in terms
     ]
     query = select(News).where(News.is_deleted == 0, and_(*conditions))
-    if category_id is not None:
-        query = query.where(News.category_id == category_id)
+    if tag:
+        query = query.where(
+            News.id.in_(select(NewsTag.news_id).where(NewsTag.tag == tag))
+        )
     if since is not None:
         query = query.where(News.collected_at >= since)
+    if until is not None:
+        query = query.where(News.collected_at < until)
 
     relevance = sum(case((News.title.contains(term), 1), else_=0) for term in terms)
     query = query.order_by(relevance.desc(), News.collected_at.desc()).limit(limit)
@@ -159,17 +164,19 @@ async def lexical_search(
     db: AsyncSession,
     terms: list[str],
     *,
-    category_id: int | None = None,
+    tag: str | None = None,
     since: datetime | None = None,
+    until: datetime | None = None,
     limit: int = LEXICAL_CANDIDATES,
 ) -> tuple[list[News], str]:
     if not terms:
         return [], "empty"
+    tag = tag_service.normalize_tag(tag or "")
     if fts.can_use_fts(terms):
-        items = await _fts_search(db, terms, category_id, since, limit)
+        items = await _fts_search(db, terms, tag or None, since, until, limit)
         if items:
             return items, "fts"
-    items = await _like_search(db, terms, category_id, since, limit)
+    items = await _like_search(db, terms, tag or None, since, until, limit)
     return items, "like"
 
 
@@ -225,7 +232,6 @@ def rrf_fuse(
     *,
     k: int = RRF_K,
 ) -> list[tuple[int, float, str]]:
-    """返回 [(news_id, score, match)]，按分数降序。"""
     scores: dict[int, float] = {}
     origin: dict[int, str] = {}
 
@@ -241,56 +247,47 @@ def rrf_fuse(
     return [(news_id, score, origin.get(news_id, "lexical")) for news_id, score in ordered]
 
 
-async def search_news(
+async def _rank_window(
     db: AsyncSession,
-    query: str,
     *,
-    category: str | None = None,
-    days: int | None = None,
-    limit: int = 8,
-    mode: str = "hybrid",
-) -> dict[str, Any]:
-    """mode: hybrid | lexical | semantic（默认 hybrid，语义不可用时自动降级）。"""
-    terms = fts.split_terms(query)
-    limit = max(1, min(int(limit or 8), 12))
-    if not terms:
-        return {"query": query, "items": [], "mode": "empty"}
-
-    ok, category_id = await _resolve_category(db, category)
-    if not ok:
-        return {"query": query, "items": [], "mode": "empty", "note": f"分类「{category}」不存在"}
-
-    since = None
-    if days:
-        since = datetime.now() - timedelta(days=max(1, min(int(days), 365)))
-
+    query: str,
+    terms: list[str],
+    tag: str | None,
+    since: datetime | None,
+    until: datetime | None,
+    limit: int,
+    mode: str,
+    query_vector: list[float] | None = None,
+    model: str | None = None,
+) -> tuple[list[tuple[News, float, str]], dict[str, Any]]:
     snapshot = {
         "lexical": {"mode": "none", "candidates": 0},
         "semantic": {"mode": "disabled", "candidates": 0},
     }
-
     lexical_items: list[News] = []
     if mode in {"hybrid", "lexical"}:
         lexical_items, lexical_mode = await lexical_search(
-            db, terms, category_id=category_id, since=since, limit=LEXICAL_CANDIDATES
+            db, terms, tag=tag, since=since, until=until, limit=LEXICAL_CANDIDATES
         )
         snapshot["lexical"] = {"mode": lexical_mode, "candidates": len(lexical_items)}
 
     semantic_items: list[News] = []
     semantic_scores: dict[int, float] = {}
     if mode in {"hybrid", "semantic"} and semantic_enabled():
-        vector, model = await _query_vector(db, query)
-        if vector:
+        if query_vector is None:
+            query_vector, model = await _query_vector(db, query)
+        if query_vector and model:
             try:
                 from app.services.vector_store import get_vector_store
 
                 store = get_vector_store(active_engine())
                 hits = await store.search(
-                    vector,
+                    query_vector,
                     model=model,
                     limit=SEMANTIC_CANDIDATES,
-                    category_id=category_id,
+                    tag=tag,
                     since=since,
+                    until=until,
                 )
                 semantic_scores = {hit.news_id: hit.score for hit in hits}
                 semantic_items = await _load_ordered(db, [hit.news_id for hit in hits])
@@ -303,44 +300,80 @@ async def search_news(
 
     if mode == "lexical" or not semantic_items:
         ranked = [
-            (news.id, semantic_scores.get(news.id, 0.0), snapshot["lexical"]["mode"])
+            (news, semantic_scores.get(news.id, 0.0), snapshot["lexical"]["mode"])
             for news in lexical_items
         ]
-        by_id = {news.id: news for news in lexical_items}
-    elif len(lexical_items) == 0:
+    elif not lexical_items:
         ranked = [
-            (news.id, semantic_scores.get(news.id, 0.0), "semantic") for news in semantic_items
+            (news, semantic_scores.get(news.id, 0.0), "semantic") for news in semantic_items
         ]
-        by_id = {news.id: news for news in semantic_items}
     else:
-        ranked = rrf_fuse([news.id for news in lexical_items], [news.id for news in semantic_items])
         by_id = {news.id: news for news in lexical_items + semantic_items}
+        ranked = [
+            (by_id[news_id], score, match)
+            for news_id, score, match in rrf_fuse(
+                [news.id for news in lexical_items], [news.id for news in semantic_items]
+            )
+            if news_id in by_id
+        ]
+
+    return ranked[:limit], snapshot
+
+
+async def search_news(
+    db: AsyncSession,
+    query: str,
+    *,
+    tag: str | None = None,
+    days: int | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    limit: int = 8,
+    mode: str = "hybrid",
+) -> dict[str, Any]:
+    """mode: hybrid | lexical | semantic（默认 hybrid，语义不可用时自动降级）。"""
+    terms = fts.split_terms(query)
+    limit = max(1, min(int(limit or 8), 60))
+    if not terms:
+        return {"query": query, "items": [], "mode": "empty"}
+
+    tag = tag_service.normalize_tag(tag or "")
+    if days and since is None:
+        since = datetime.now() - timedelta(days=max(1, min(int(days), 365)))
+
+    query_vector, model = await _query_vector(db, query) if mode in {"hybrid", "semantic"} and semantic_enabled() else (None, None)
+    ranked, snapshot = await _rank_window(
+        db,
+        query=query,
+        terms=terms,
+        tag=tag or None,
+        since=since,
+        until=until,
+        limit=limit,
+        mode=mode,
+        query_vector=query_vector,
+        model=model,
+    )
 
     results = []
     seen_urls: set[str] = set()
-    for news_id, score, match in ranked:
-        news = by_id.get(news_id)
-        if not news:
-            continue
+    for news, score, match in ranked:
         if news.source_url:
-            if news.source_url in seen_urls:
+            key = normalize_url(news.source_url)
+            if key in seen_urls:
                 continue
-            seen_urls.add(news.source_url)
-        item = to_item(news, match, score if mode == "hybrid" else None)
-        if mode == "hybrid" and score == 0.0:
-            item["score"] = round(semantic_scores.get(news_id, 0.0), 4)
-        results.append(item)
-        if len(results) >= limit:
-            break
+            seen_urls.add(key)
+        results.append(to_item(news, match, score if mode == "hybrid" else None))
 
     result_mode = mode
-    if mode == "hybrid" and not semantic_items:
+    if mode == "hybrid" and snapshot["semantic"]["mode"] in {"disabled", "unavailable", "error"}:
         result_mode = "lexical"
 
     return {
         "query": query,
         "mode": result_mode,
         "terms": terms,
+        "tag": tag or None,
         "sources": snapshot,
         "items": results,
     }
@@ -349,27 +382,156 @@ async def search_news(
 async def list_recent(
     db: AsyncSession,
     *,
-    category: str | None = None,
+    tag: str | None = None,
     days: int = 1,
     unread_only: bool = False,
     limit: int = 10,
+    until: datetime | None = None,
 ) -> dict[str, Any]:
-    ok, category_id = await _resolve_category(db, category)
-    if not ok:
-        return {"items": [], "mode": "recent", "note": f"分类「{category}」不存在"}
-
-    limit = max(1, min(int(limit or 10), 20))
+    tag = tag_service.normalize_tag(tag or "")
+    limit = max(1, min(int(limit or 10), 50))
     since = datetime.now() - timedelta(days=max(1, min(int(days or 1), 90)))
     query = select(News).where(News.is_deleted == 0, News.collected_at >= since)
-    if category_id is not None:
-        query = query.where(News.category_id == category_id)
+    if tag:
+        query = query.where(News.id.in_(select(NewsTag.news_id).where(NewsTag.tag == tag)))
+    if until is not None:
+        query = query.where(News.collected_at < until)
     if unread_only:
         query = query.where(News.is_read == 0)
     query = query.order_by(News.collected_at.desc()).limit(limit)
 
     result = await db.execute(query)
     items = [to_item(news, "recent") for news in result.scalars().all()]
-    return {"items": items, "mode": "recent", "days": days}
+    return {"items": items, "mode": "recent", "days": days, "tag": tag or None}
+
+
+def _clean_timeline_terms(query: str) -> list[str]:
+    """去掉「发展历程/进展/动态」等泛词，保留实体与主题，避免 LIKE 被泛词带偏。"""
+    text = query or ""
+    for word in (
+        "发展历程", "发展史", "演变", "脉络", "时间线", "梳理", "总结", "回顾",
+        "进展", "动态", "情况", "帮我", "一下", "过去", "最近", "近", "的", "新闻",
+    ):
+        text = text.replace(word, " ")
+    return fts.split_terms(text) or fts.split_terms(query)
+
+
+async def search_timeline(
+    db: AsyncSession,
+    query: str,
+    *,
+    since: datetime,
+    until: datetime,
+    tag: str | None = None,
+    bucket_days: int | None = None,
+    per_bucket: int = 8,
+    max_events: int = 60,
+    mode: str = "hybrid",
+) -> dict[str, Any]:
+    """按时间桶召回，返回按日期排序的事件时间线与覆盖情况。"""
+    now = datetime.now()
+    if until > now:
+        until = now
+    days = max(1, (until - since).days)
+    bucket_days = bucket_days or (1 if days <= 14 else (7 if days <= 60 else 14))
+    bucket_days = max(1, min(int(bucket_days), 30))
+    tag = tag_service.normalize_tag(tag or "")
+    terms = _clean_timeline_terms(query)
+    if not terms:
+        terms = fts.split_terms(query)
+    if not terms:
+        return {
+            "query": query,
+            "items": [],
+            "timeline": [],
+            "buckets": [],
+            "coverage": {"days_total": days, "days_with_news": 0},
+        }
+
+    query_vector, model = await _query_vector(db, query) if mode in {"hybrid", "semantic"} and semantic_enabled() else (None, None)
+    bucket_count = max(1, (days + bucket_days - 1) // bucket_days)
+    budget_per_bucket = max(2, min(per_bucket, max(2, max_events // bucket_count + 1)))
+
+    buckets: list[dict[str, Any]] = []
+    timeline: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    seen_titles: list[str] = []
+    days_with_news: set[str] = set()
+    semantic_modes: set[str] = set()
+
+    cursor = since
+    while cursor < until:
+        end = min(cursor + timedelta(days=bucket_days), until)
+        ranked, snapshot = await _rank_window(
+            db,
+            query=query,
+            terms=terms,
+            tag=tag or None,
+            since=cursor,
+            until=end,
+            limit=budget_per_bucket,
+            mode=mode,
+            query_vector=query_vector,
+            model=model,
+        )
+        semantic_modes.add(snapshot["semantic"]["mode"])
+        events = []
+        for news, score, match in ranked:
+            if news.source_url:
+                key = normalize_url(news.source_url)
+                if key in seen_urls:
+                    continue
+                seen_urls.add(key)
+            if any(title_similarity(news.title, title) >= 0.86 for title in seen_titles):
+                continue
+            seen_titles.append(news.title)
+            item = to_item(news, match, score if mode == "hybrid" else None)
+            item["date"] = (news.collected_at or cursor).isoformat()
+            item["bucket"] = cursor.isoformat()
+            events.append(item)
+            timeline.append(item)
+            if news.collected_at:
+                days_with_news.add(news.collected_at.date().isoformat())
+        buckets.append(
+            {
+                "start": cursor.isoformat(),
+                "end": end.isoformat(),
+                "count": len(events),
+                "events": events,
+            }
+        )
+        cursor = end
+
+    timeline.sort(key=lambda item: item.get("date") or "")
+    if len(timeline) > max_events:
+        step = len(timeline) / max_events
+        timeline = [timeline[int(index * step)] for index in range(max_events)]
+
+    empty_buckets = [bucket["start"] for bucket in buckets if bucket["count"] == 0]
+    backend = "pgvector" if "pgvector" in semantic_modes else ("blob" if "blob" in semantic_modes else "lexical_only")
+    return {
+        "query": query,
+        "tag": tag or None,
+        "range": {
+            "since": since.isoformat(),
+            "until": until.isoformat(),
+            "days": days,
+            "bucket_days": bucket_days,
+        },
+        "buckets": buckets,
+        "timeline": timeline,
+        "items": timeline,
+        "coverage": {
+            "days_total": days,
+            "days_with_news": len(days_with_news),
+            "empty_buckets": empty_buckets,
+            "backend": backend,
+        },
+        "sources": {
+            "terms": terms,
+            "semantic": backend,
+        },
+    }
 
 
 async def status(db: AsyncSession) -> dict[str, Any]:

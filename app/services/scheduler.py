@@ -46,6 +46,7 @@ class Scheduler:
             "running": self._running,
             "schedule": self._schedule_desc(),
             "last_run": self._last_run.isoformat() if self._last_run else None,
+            "last_search_time": read_env_file().get("LAST_SEARCH_TIME") or None,
             "next_run": next_run_dt,
             "last_result": self._last_result,
             "last_skip": self._last_skip,

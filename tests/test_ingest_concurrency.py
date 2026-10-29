@@ -11,18 +11,8 @@ import pytest
 from sqlalchemy import select
 
 from app.database import get_session, init_db
-from app.models import Category, News
+from app.models import News
 from app.services import ai_service
-
-
-async def _category(db, name: str) -> int:
-    row = (await db.execute(select(Category).where(Category.name == name))).scalars().first()
-    if row:
-        return row.id
-    row = Category(name=name, sort_order=60, color="#d4a853")
-    db.add(row)
-    await db.flush()
-    return row.id
 
 
 @pytest.mark.asyncio
@@ -49,16 +39,28 @@ async def test_process_search_results_many_items_with_covers(monkeypatch):
     monkeypatch.setattr(ai_service, "cover_mode", lambda: "svg")
 
     results = [
-        {"title": f"测试并发新闻 {token}-{i}", "snippet": "摘要", "url": f"https://e/{i}"}
-        for i in range(6)
+        {
+            "title": f"{token} {title}",
+            "snippet": (
+                "这是一条用于并发回归测试的新闻摘要，包含明确的事件主体、关键动作与结果，"
+                "长度足以通过采集链路的素材质量闸门；测试关注的是并发写入是否会共用同一个会话。"
+            ) * 2,
+            "url": f"https://example.com/news/{i}-{token}",
+        }
+        for i, title in enumerate(
+            [
+                "英伟达发布新一代芯片",
+                "央行下调存款准备金率",
+                "神舟飞船成功完成对接",
+                "故宫推出数字文物展览",
+                "国足公布最新集训名单",
+                "医院完成远程机器人手术",
+            ]
+        )
     ]
 
     async with get_session() as db:
-        await _category(db, "科技")
-        await db.commit()
-
-    async with get_session() as db:
-        count = await ai_service.process_search_results(db, "科技", results)
+        count = await ai_service.process_search_results(db, results)
         await db.commit()
     assert count == 6
 

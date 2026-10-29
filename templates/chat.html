@@ -6,59 +6,73 @@
     <title>AI 助手 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=44">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v=47">
 </head>
 <body>
     {% include "_header.html" %}
 
-    <main class="chat-page">
-        <aside class="chat-side" id="chatSide">
+    <main class="chat-page chat-page-v2">
+        <aside class="chat-side" id="chatSide" data-chat-side>
             <div class="chat-side-head">
-                <button type="button" class="chat-new-btn" id="newChatBtn">
+                <button type="button" class="chat-new-btn" data-chat-new>
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
                     新对话
                 </button>
             </div>
-            <div class="chat-side-status" id="chatStatus">正在检查服务…</div>
-            <div class="chat-conv-list" id="convList"></div>
+            <div class="chat-side-status" data-chat-status>正在检查服务…</div>
+            <div class="chat-side-label">最近对话</div>
+            <div class="chat-conv-list" data-chat-conv-list></div>
+            <a class="chat-memory-entry" href="?panel=memory" data-memory-jump>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1.8c2.4 0 4.2 1.7 4.2 3.9 0 1.7-1 2.6-1.9 3.4-.6.5-1.1 1-1.1 1.9H6.8c0-1.4-.7-2-1.4-2.7-.8-.7-1.6-1.5-1.6-2.6 0-2.2 1.8-3.9 4.2-3.9z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><circle cx="8" cy="13.7" r="1" fill="currentColor"/></svg>
+                看看助手记得我什么
+            </a>
         </aside>
 
-        <section class="chat-main">
+        <section class="chat-main" data-chat-root data-chat-variant="page">
             <div class="chat-head">
                 <button type="button" class="chat-side-toggle" id="sideToggle" title="会话列表">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
                 </button>
-                <div>
-                    <div class="chat-head-title" id="chatTitle">AI 资讯助手</div>
-                    <div class="chat-head-sub">基于你的新闻库回答，带来源引用</div>
+                <div class="chat-head-titles">
+                    <div class="chat-head-title" data-chat-title>AI 资讯助手</div>
+                    <div class="chat-head-sub">基于新闻库、长期记忆与你的反馈回答</div>
+                </div>
+                <div class="chat-head-actions">
+                    <button type="button" class="chat-quick-pill" data-chat-quick-text="帮我采集最新新闻">采集最新</button>
+                    <button type="button" class="chat-quick-pill" data-chat-quick-text="给我一份今天的简报">今日简报</button>
+                    <button type="button" class="chat-quick-pill" data-chat-quick-text="给我推荐几条值得看的新闻">我的推荐</button>
+                    <button type="button" class="chat-quick-pill chat-memory-toggle" data-memory-toggle>记忆</button>
                 </div>
             </div>
 
-            <div class="chat-messages" id="chatMessages">
-                <div class="chat-empty" id="chatEmpty">
-                    <div class="chat-empty-icon">
-                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 2.5l2.1 4.9 5.4.6-4 3.7 1.1 5.3L12 14.4 7.4 17l1.1-5.3-4-3.7 5.4-.6L12 2.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-                            <path d="M4 20.5h16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-                        </svg>
+            <div class="chat-messages" data-chat-messages>
+                <template data-chat-empty>
+                    <div class="chat-empty">
+                        <div class="chat-empty-icon">
+                            <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 2.5l2.1 4.9 5.4.6-4 3.7 1.1 5.3L12 14.4 7.4 17l1.1-5.3-4-3.7 5.4-.6L12 2.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                                <path d="M4 20.5h16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <h2>问问你的新闻库</h2>
+                        <p>它记得你读过的、收藏的、反馈过的；会先检索、再回答，并标注来源。</p>
+                        <div class="assistant-memory-hint" data-chat-memory-hint hidden></div>
+                        <div class="chat-suggestions">
+                            <button type="button" data-q="今天科技圈有什么大事？">今天科技圈有什么大事？</button>
+                            <button type="button" data-q="给我推荐几条值得看的新闻">按我的习惯推荐几条值得看的</button>
+                            <button type="button" data-q="帮我梳理最近一周最值得关注的新闻">最近一周最值得关注什么？</button>
+                            <button type="button" data-q="记住：我最近在跟踪 AI 芯片的新闻">记住：我在跟踪 AI 芯片</button>
+                            <button type="button" data-q="我收藏的新闻里有哪些共同主题？">我收藏的新闻有什么共同主题？</button>
+                        </div>
                     </div>
-                    <h2>问问你的新闻库</h2>
-                    <p>它记得你收录过的每一条资讯，会先检索、再回答，并标注来源。</p>
-                    <div class="chat-suggestions">
-                        <button type="button" data-q="今天科技圈有什么大事？">今天科技圈有什么大事？</button>
-                        <button type="button" data-q="帮我梳理最近一周最值得关注的新闻">最近一周最值得关注什么？</button>
-                        <button type="button" data-q="我收藏的新闻里有哪些共同主题？">我收藏的新闻有什么共同主题？</button>
-                    </div>
-                </div>
+                </template>
             </div>
 
-            <form class="chat-composer" id="chatForm">
-                <textarea id="chatInput" rows="1" placeholder="问点什么，比如：最近 AI 芯片领域有什么进展？" maxlength="8000"></textarea>
+            <form class="chat-composer" data-chat-form>
+                <textarea data-chat-input rows="1" placeholder="问点什么，比如：最近 AI 芯片领域有什么进展？" maxlength="8000"></textarea>
                 <div class="chat-composer-actions">
-                    <button type="button" class="chat-stop-btn" id="stopBtn" hidden>停止</button>
-                    <button type="submit" class="chat-send-btn" id="sendBtn">
+                    <button type="button" class="chat-stop-btn" data-chat-stop hidden>停止</button>
+                    <button type="submit" class="chat-send-btn" data-chat-send>
                         发送
                         <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 8l12-6-4 12-2.5-5L2 8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
                     </button>
@@ -66,8 +80,47 @@
                 <div class="chat-hint">Enter 发送 · Shift + Enter 换行 · 回答由 AI 生成，请核对原文</div>
             </form>
         </section>
-    </main>
 
-    <script src="/static/js/chat.js?v=44" defer></script>
+        <aside class="chat-memory" data-memory-panel>
+            <div class="memory-head">
+                <div>
+                    <div class="memory-title">我了解的你</div>
+                    <div class="memory-sub">来自阅读、收藏、停留与反馈</div>
+                </div>
+                <div class="memory-head-actions">
+                    <button type="button" class="memory-icon-btn" data-memory-refresh title="重新整理记忆">↻</button>
+                    <button type="button" class="memory-icon-btn memory-close" data-memory-close title="收起">×</button>
+                </div>
+            </div>
+            <div class="memory-profile" data-memory-profile>
+                <div class="memory-loading">正在读取你的阅读习惯…</div>
+            </div>
+
+            <div class="memory-section-head">
+                <span>长期记忆</span>
+                <button type="button" class="memory-text-btn" data-memory-edit>编辑</button>
+            </div>
+            <div class="memory-content" data-memory-content>
+                <div class="memory-loading">加载中…</div>
+            </div>
+            <textarea class="memory-editor" data-memory-editor hidden></textarea>
+            <div class="memory-editor-actions" data-memory-editor-actions hidden>
+                <button type="button" class="memory-btn primary" data-memory-save>保存</button>
+                <button type="button" class="memory-btn" data-memory-cancel>取消</button>
+            </div>
+
+            <div class="memory-section-head">
+                <span>最近反馈</span>
+                <span class="memory-feedback-count" data-memory-feedback-count></span>
+            </div>
+            <div class="memory-feedback" data-memory-feedback>
+                <div class="memory-loading">加载中…</div>
+            </div>
+            <div class="memory-actions">
+                <button type="button" class="memory-btn danger" data-memory-reset>重置记忆</button>
+                <span class="memory-path" data-memory-path></span>
+            </div>
+        </aside>
+    </main>
 </body>
 </html>

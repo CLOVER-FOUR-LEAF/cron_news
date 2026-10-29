@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.services import retrieval
+from app.services import retrieval, time_range
 from app.services.vector_store import get_vector_store
 
 router = APIRouter(prefix="/api/retrieval", tags=["retrieval"])
@@ -16,14 +16,36 @@ router = APIRouter(prefix="/api/retrieval", tags=["retrieval"])
 @router.get("/search")
 async def search(
     q: str = Query(..., min_length=1, max_length=200),
-    limit: int = Query(8, ge=1, le=20),
-    category: str | None = Query(None),
+    limit: int = Query(8, ge=1, le=60),
+    tag: str | None = Query(None),
     days: int | None = Query(None, ge=1, le=365),
     mode: str = Query("hybrid", pattern="^(hybrid|lexical|semantic)$"),
     db: AsyncSession = Depends(get_db),
 ):
     return await retrieval.search_news(
-        db, q, category=category, days=days, limit=limit, mode=mode
+        db, q, tag=tag, days=days, limit=limit, mode=mode
+    )
+
+
+@router.get("/timeline")
+async def timeline(
+    q: str = Query(..., min_length=1, max_length=200),
+    range: str = Query("过去半个月", max_length=80),
+    tag: str | None = Query(None),
+    max_events: int = Query(60, ge=5, le=120),
+    mode: str = Query("hybrid", pattern="^(hybrid|lexical|semantic)$"),
+    db: AsyncSession = Depends(get_db),
+):
+    parsed = time_range.parse_time_range(range)
+    return await retrieval.search_timeline(
+        db,
+        q,
+        since=parsed["since"],
+        until=parsed["until"],
+        tag=tag,
+        bucket_days=parsed["bucket_days"],
+        max_events=max_events,
+        mode=mode,
     )
 
 

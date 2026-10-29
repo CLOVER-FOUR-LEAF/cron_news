@@ -1,34 +1,27 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func, select
 
 from app.config import settings
 from app.database import init_db, get_session
-from app.models import Category
-from app.crud.category import COLOR_POOL, DEFAULT_COLOR
+from app.models import NewsTag
+from app.services import tag_service
 from app.base_path import install_base_path_middleware
-from app.routers import news, category, config, db as db_router, agent as agent_router, scheduler as scheduler_router, model_configs as model_configs_router
+from app.routers import news, config, db as db_router, agent as agent_router, scheduler as scheduler_router, model_configs as model_configs_router
 from app.routers import chat as chat_router, retrieval as retrieval_router
+from app.routers import memory as memory_router
+from app.routers import tags as tags_router
 from app.services import db_service
 from app.services.embeddings import indexer as embedding_indexer
 from app.services.scheduler import scheduler as scheduler_service
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-DEFAULT_CATEGORIES = ["默认", "科技", "军事", "政治", "经济", "文化", "热点"]
-
-KNOWN_CAT_COLORS = {
-    "默认": "#8a8690",
-    "科技": "#d4a853",
-    "军事": "#c75050",
-    "政治": "#4a8fd4",
-    "经济": "#4aad6a",
-    "文化": "#c47ddc",
-    "热点": "#e88b5a",
-}
 
 
 async def choose_startup_database():
@@ -51,11 +44,13 @@ async def lifespan(app: FastAPI):
     print(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     await choose_startup_database()
     await init_db()
-    await seed_categories()
+    await migrate_tags()
     await migrate_legacy_configs()
     ensure_default_nickname()
     ensure_runtime_image_dirs()
+    ensure_memory_dir()
     await prepare_vector_store()
+    print("[API] 标签 / 记忆 / 反馈 / 时间线路由已启用")
     scheduler_service.start()
     embedding_indexer.start()
     yield
@@ -95,6 +90,47 @@ def ensure_runtime_image_dirs():
         print("[Config] 提示：images/cover/default 目录为空，将无法使用默认封面，请确认默认图片资源已随代码部署")
 
 
+def ensure_memory_dir():
+    """确保长期记忆目录与模板存在；用户可随时在对话页查看/编辑。"""
+    try:
+        from app.services import memory_service
+
+        memory_service.memory_dir().mkdir(parents=True, exist_ok=True)
+        memory_service.ensure_file()
+    except Exception as e:
+        print(f"[Memory] 初始化记忆目录失败（不影响启动）：{e}")
+
+
+async def migrate_tags():
+    """旧库分类 -> 标签；首次升级时补齐 news_tags 索引。"""
+    async with get_session() as session:
+        try:
+            migrated = await tag_service.migrate_categories_to_tags(session)
+            from app.models import News
+
+            existing = int(await session.scalar(select(func.count()).select_from(NewsTag)) or 0)
+            tagged_news = int(
+                await session.scalar(
+                    select(func.count()).where(
+                        News.is_deleted == 0,
+                        News.tags.isnot(None),
+                        News.tags != "",
+                        News.tags != "[]",
+                    )
+                )
+                or 0
+            )
+            if existing < tagged_news:
+                count = await tag_service.sync_all_news_tags(session)
+                print(f"[Tags] 已建立 {count} 条新闻标签索引")
+            if migrated:
+                print(f"[Tags] 已把 {migrated} 条旧新闻的分类迁为标签")
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            print(f"[Tags] 标签迁移失败（不影响启动）：{e}")
+
+
 async def migrate_legacy_configs():
     from app.services.model_configs import migrate_legacy_configs as _migrate
 
@@ -121,42 +157,6 @@ def ensure_default_nickname():
         print(f"[Config] 已生成默认用户名 {env['NICKNAME']}")
 
 
-async def seed_categories():
-    import random
-
-    async with get_session() as session:
-        from sqlalchemy import select
-        result = await session.execute(select(Category))
-        cats = result.scalars().all()
-
-        if not cats:
-            for i, name in enumerate(DEFAULT_CATEGORIES):
-                session.add(Category(
-                    name=name,
-                    sort_order=i,
-                    is_default=(name == "默认"),
-                    color=KNOWN_CAT_COLORS.get(name, DEFAULT_COLOR),
-                ))
-            await session.commit()
-            print(f"Seeded {len(DEFAULT_CATEGORIES)} default categories")
-        else:
-            used = {c.color for c in cats if c.color}
-            changed = False
-            for c in cats:
-                if not c.color:
-                    known = KNOWN_CAT_COLORS.get(c.name)
-                    if known and known not in used:
-                        c.color = known
-                    else:
-                        available = [x for x in COLOR_POOL if x not in used]
-                        c.color = random.choice(available) if available else random.choice(COLOR_POOL)
-                    used.add(c.color)
-                    changed = True
-            if changed:
-                await session.commit()
-                print("Backfilled missing category colors")
-
-
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -170,7 +170,6 @@ app.mount("/images", StaticFiles(directory=BASE_DIR / "images"), name="images")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 app.include_router(news.router)
-app.include_router(category.router)
 app.include_router(config.router)
 app.include_router(db_router.router)
 app.include_router(agent_router.router)
@@ -178,66 +177,66 @@ app.include_router(scheduler_router.router)
 app.include_router(model_configs_router.router)
 app.include_router(chat_router.router)
 app.include_router(retrieval_router.router)
-
-
-async def get_categories():
-    async with get_session() as session:
-        from sqlalchemy import select
-        result = await session.execute(
-            select(Category)
-            .order_by(Category.sort_order.desc(), Category.id)
-        )
-        cats = result.scalars().all()
-        names = [c.name for c in cats]
-        colors = {c.name: (c.color or DEFAULT_COLOR) for c in cats}
-        return names, colors
+app.include_router(memory_router.router)
+app.include_router(tags_router.router)
 
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION}
+    return {
+        "status": "ok",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "features": ["tags", "memory", "feedback", "timeline"],
+    }
 
 
 @app.get("/")
 async def home(request: Request):
-    categories, cat_colors = await get_categories()
-    return templates.TemplateResponse(request, "home.html", {"categories": categories, "cat_colors": cat_colors, "active_page": "home"})
+    return templates.TemplateResponse(request, "home.html", {"active_page": "home"})
+
+
+@app.get("/tag")
+async def tag_page_query(request: Request, name: str = ""):
+    return templates.TemplateResponse(
+        request,
+        "tag.html",
+        {"tag": tag_service.normalize_tag(name), "tag_color": tag_service.tag_color(tag_service.normalize_tag(name)), "active_page": "tag"},
+    )
+
+
+@app.get("/tag/{tag}")
+async def tag_page(request: Request, tag: str):
+    return templates.TemplateResponse(
+        request,
+        "tag.html",
+        {"tag": tag_service.normalize_tag(tag), "tag_color": tag_service.tag_color(tag_service.normalize_tag(tag)), "active_page": "tag"},
+    )
 
 
 @app.get("/category/{category}")
-async def category_page(request: Request, category: str):
-    categories, cat_colors = await get_categories()
-    if category not in categories:
-        return templates.TemplateResponse(request, "404.html", status_code=404)
-    return templates.TemplateResponse(request, "category.html", {"category": category, "categories": categories, "cat_colors": cat_colors, "active_page": "category", "active_category": category})
+async def legacy_category(category: str):
+    return RedirectResponse(f"/tag/{quote(category)}", status_code=301)
 
 
 @app.get("/news/{news_id}")
 async def news_detail(request: Request, news_id: int):
-    categories, cat_colors = await get_categories()
-    return templates.TemplateResponse(request, "news_detail.html", {"news_id": news_id, "categories": categories, "cat_colors": cat_colors, "active_page": "news"})
+    return templates.TemplateResponse(request, "news_detail.html", {"news_id": news_id, "active_page": "news"})
 
 
 @app.get("/stats")
 async def stats_page(request: Request):
-    categories, cat_colors = await get_categories()
-    return templates.TemplateResponse(request, "stats.html", {"categories": categories, "cat_colors": cat_colors, "active_page": "stats"})
+    return templates.TemplateResponse(request, "stats.html", {"active_page": "stats"})
 
 
 @app.get("/chat")
 async def chat_page(request: Request):
-    categories, cat_colors = await get_categories()
-    return templates.TemplateResponse(
-        request,
-        "chat.html",
-        {"categories": categories, "cat_colors": cat_colors, "active_page": "chat"},
-    )
+    return templates.TemplateResponse(request, "chat.html", {"active_page": "chat"})
 
 
 @app.get("/brief")
 async def brief_page(request: Request):
-    categories, cat_colors = await get_categories()
-    return templates.TemplateResponse(request, "brief.html", {"categories": categories, "cat_colors": cat_colors, "active_page": "brief"})
+    return templates.TemplateResponse(request, "brief.html", {"active_page": "brief"})
 
 
 MY_PAGE_KINDS = {"recommend": "推荐阅读", "favorites": "新闻收藏", "later": "稍后再读"}
@@ -246,16 +245,13 @@ MY_PAGE_KINDS = {"recommend": "推荐阅读", "favorites": "新闻收藏", "late
 @app.get("/my/{kind}")
 async def my_page(request: Request, kind: str):
     if kind not in MY_PAGE_KINDS:
-        categories, cat_colors = await get_categories()
-        return templates.TemplateResponse(request, "404.html", status_code=404, context={"categories": categories, "cat_colors": cat_colors})
-    categories, cat_colors = await get_categories()
+        return templates.TemplateResponse(request, "404.html", status_code=404)
     return templates.TemplateResponse(
         request, "my.html",
-        {"categories": categories, "cat_colors": cat_colors, "active_page": "my", "kind": kind, "kind_title": MY_PAGE_KINDS[kind]},
+        {"active_page": "my", "kind": kind, "kind_title": MY_PAGE_KINDS[kind]},
     )
 
 
 @app.get("/search")
 async def search_page(request: Request):
-    categories, cat_colors = await get_categories()
-    return templates.TemplateResponse(request, "search.html", {"categories": categories, "cat_colors": cat_colors, "active_page": "search"})
+    return templates.TemplateResponse(request, "search.html", {"active_page": "search"})

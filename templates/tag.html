@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ category }} - 定时资讯</title>
+    <title>{{ tag }} - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=44">
+    <link rel="stylesheet" href="/static/css/style.css?v=47">
 </head>
 <body>
     {% include "_header.html" %}
 
     <main>
-        <div class="category-hero" data-cat="{{ category }}" style="--cat: {{ cat_colors.get(category, '#8a8690') }}">
+        <div class="category-hero" data-cat="{{ tag }}" data-tag="{{ tag }}" style="--cat: {{ tag_color or '#8a8690' }}">
             <div class="category-hero-top">
-                <h1>{{ category }}</h1>
+                <h1>#{{ tag }}</h1>
                 <div class="date-filter" id="dateFilter">
                     <div class="date-filter-btn" id="dateFilterBtn">
                         <span class="date-filter-icon">
@@ -31,13 +31,7 @@
                     </div>
                     <div class="date-dropdown" id="dateDropdown"></div>
                 </div>
-                <span class="category-subtitle">
-                    {% if category == '科技' %}TECHNOLOGY
-                    {% elif category == '军事' %}MILITARY
-                    {% elif category == '政治' %}POLITICS
-                    {% elif category == '经济' %}ECONOMY
-                    {% endif %}
-                </span>
+                <span class="category-subtitle">TAG</span>
             </div>
         </div>
 
@@ -51,7 +45,7 @@
     </footer>
 
     <script>
-        const CATEGORY = '{{ category }}';
+        const TAG = {{ tag | tojson }};
         const dateFilterBtn = document.getElementById('dateFilterBtn');
         const dateFilterText = document.getElementById('dateFilterText');
         const dateDropdown = document.getElementById('dateDropdown');
@@ -68,8 +62,25 @@
 
         function escapeHtml(text) {
             const div = document.createElement('div');
-            div.textContent = text || '';
+            div.textContent = text == null ? '' : String(text);
             return div.innerHTML;
+        }
+
+        function escapeAttr(text) {
+            return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function tagColor(tag) {
+            let hash = 0;
+            for (let i = 0; i < (tag || '').length; i += 1) hash = (hash * 31 + tag.charCodeAt(i)) >>> 0;
+            const palette = ['#d4a853','#4a8fd4','#c75050','#4aad6a','#c47ddc','#e88b5a','#5aa0a0','#b07a4a'];
+            return palette[hash % palette.length];
+        }
+
+        function tagChips(tags) {
+            return (tags || []).slice(0, 4).map(tag =>
+                `<a class="topic-tag" href="/tag/${encodeURIComponent(tag)}" style="--tag-color:${tagColor(tag)}" onclick="event.stopPropagation()">${escapeHtml(tag)}</a>`
+            ).join('');
         }
 
         function getDateList() {
@@ -122,8 +133,9 @@
         function createNewsCard(item) {
             const el = document.createElement('div');
             el.className = 'news-card';
-            el.setAttribute('data-cat', item.category_name || '');
-            el.style.setProperty('--cat', item.category_color || '#8a8690');
+            const tags = item.tags || [];
+            el.dataset.tag = TAG;
+            el.style.setProperty('--cat', tags.length ? tagColor(tags[0]) : '#8a8690');
 
             const coverHtml = item.cover_url
                 ? `<img src="${escapeHtml(item.cover_url)}" alt="${escapeHtml(item.title)}" loading="lazy">`
@@ -146,9 +158,9 @@
             el.innerHTML = `
                 <div class="card-cover">${coverHtml}${laterBtn}</div>
                 <div class="card-body">
-                    <span class="card-category" data-cat="${escapeHtml(item.category_name || '')}">${escapeHtml(item.category_name || '默认')}</span>
+                    <div class="card-tags">${tagChips(tags)}</div>
                     <h3 class="card-title">${escapeHtml(item.title)}</h3>
-                    <p class="card-summary">${escapeHtml(item.summary || '')}</p>
+                    <p class="card-summary">${escapeHtml(item.short_summary || item.summary || '')}</p>
                     <div class="card-footer">
                         ${sourceHtml}
                         <span class="card-time">${formatDate(item.collected_at)}</span>
@@ -179,7 +191,7 @@
             const grid = document.getElementById('newsGrid');
             grid.innerHTML = '<div class="loading">加载中...</div>';
 
-            let url = `/api/news?category=${encodeURIComponent(CATEGORY)}&page_size=50`;
+            let url = `/api/news?tag=${encodeURIComponent(TAG)}&page_size=50`;
             if (dateVal) url += `&date_filter=${dateVal}`;
 
             try {

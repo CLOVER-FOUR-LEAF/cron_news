@@ -6,7 +6,7 @@
     <title>阅读统计 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=44">
+    <link rel="stylesheet" href="/static/css/style.css?v=47">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         .stats-container {
@@ -370,10 +370,10 @@
                 <div class="charts-row">
                     <div class="chart-card">
                         <div class="chart-card-head">
-                            <h3>各分类新闻数量</h3>
+                            <h3>各标签新闻数量<span class="section-hint">一条新闻可属于多个标签，占比按标注次数计算</span></h3>
                         </div>
                         <div class="pie-chart-wrapper">
-                            <div class="pie-chart-canvas"><canvas id="categoryPieChart"></canvas></div>
+                            <div class="pie-chart-canvas"><canvas id="tagPieChart"></canvas></div>
                             <div class="pie-legend" id="pieLegend"></div>
                         </div>
                     </div>
@@ -408,9 +408,8 @@
     </footer>
 
     <script>
-        const CATEGORIES = {{ categories | tojson }};
-        const CAT_COLORS = {{ cat_colors | tojson }};
         const DEFAULT_COLOR = '#8a8690';
+        const TAG_COLOR_CACHE = Object.create(null);
 
         let pieChart = null, barChart = null, lineChart = null;
         let STATS = null;
@@ -463,17 +462,78 @@
             return out;
         }
 
-        function catColor(name) {
-            return CAT_COLORS[name] || DEFAULT_COLOR;
+        function hashTagColor(name) {
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+            }
+            return `hsl(${hash % 360}, 55%, 62%)`;
+        }
+
+        function tagColor(name, color) {
+            const key = name || '未标记';
+            if (color) {
+                TAG_COLOR_CACHE[key] = color;
+                return color;
+            }
+            if (key === '未标记') return DEFAULT_COLOR;
+            if (!TAG_COLOR_CACHE[key]) TAG_COLOR_CACHE[key] = hashTagColor(key);
+            return TAG_COLOR_CACHE[key];
+        }
+
+        function tintColor(color, percent) {
+            if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+                const alpha = Math.round((percent / 100) * 255).toString(16).padStart(2, '0');
+                return color + alpha;
+            }
+            return `color-mix(in srgb, ${color} ${percent}%, transparent)`;
+        }
+
+        function itemTags(item) {
+            let tags = item ? item.tags : null;
+            if (typeof tags === 'string') {
+                try {
+                    tags = JSON.parse(tags);
+                } catch (e) {
+                    tags = [];
+                }
+            }
+            return Array.isArray(tags) ? tags.filter(Boolean).map(String) : [];
+        }
+
+        function tagChipHtml(tag, color, link) {
+            const style = `color:${color};border:1px solid ${tintColor(color, 19)};background:${tintColor(color, 6)};font-size:0.7rem;font-weight:600;padding:2px 7px;border-radius:4px;line-height:1.4;white-space:nowrap;text-decoration:none;display:inline-block;`;
+            if (link) {
+                return `<a class="item-tag" href="/tag/${encodeURIComponent(tag)}" style="${style}">${escapeHtml(tag)}</a>`;
+            }
+            return `<span class="item-tag" style="${style}">${escapeHtml(tag)}</span>`;
+        }
+
+        function renderTagChips(item, limit, link) {
+            const tags = itemTags(item);
+            if (tags.length === 0) return '';
+            const primaryTag = item.primary_tag || tags[0];
+            const shown = tags.slice(0, limit);
+            const chips = shown.map(tag => {
+                const color = tag === primaryTag ? (item.primary_color || tagColor(tag)) : tagColor(tag);
+                return tagChipHtml(tag, color, link);
+            });
+            const more = tags.length > limit
+                ? `<span style="font-size:0.68rem;color:var(--text-dim);white-space:nowrap;">+${tags.length - limit}</span>`
+                : '';
+            return `<span class="item-tags" style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;overflow:hidden;white-space:nowrap;">${chips.join('')}${more}</span>`;
         }
 
         async function loadStats() {
             try {
                 const resp = await fetch('/api/stats');
                 STATS = await resp.json();
+                (STATS.tag_stats || []).forEach(t => {
+                    if (t && t.tag) tagColor(t.tag, t.color);
+                });
                 renderStats(STATS);
                 renderDash(STATS);
-                renderCategoryPieChart(STATS.category_stats);
+                renderTagPieChart(STATS.tag_stats);
                 renderDailyBarChart();
                 renderRecentReading(STATS.recent_reading);
                 renderRecentReads(STATS.recent_reads);
@@ -549,15 +609,14 @@
                 }
 
                 listEl.innerHTML = data.items.map(item => {
-                    const color = item.category_color || CAT_COLORS[item.category_name] || '#888';
                     return `
-                        <a href="/news/${item.id}" class="expand-item">
-                            <span class="item-cat" style="color:${color};border:1px solid ${color}30;background:${color}10">${escapeHtml(item.category_name || '默认')}</span>
-                            <span class="item-title">${escapeHtml(item.title)}</span>
+                        <div class="expand-item">
+                            ${renderTagChips(item, 3, true)}
+                            <a href="/news/${item.id}" class="item-title" style="text-decoration:none;">${escapeHtml(item.title)}</a>
                             <span class="item-source">${escapeHtml(item.source || '未知')}</span>
                             <span class="item-time">${formatTime(item.collected_at)}</span>
                             <span class="item-status ${item.is_read?'read':(item.is_reading?'reading':'unread')}">${item.is_read?'已读':(item.is_reading?'在读':'未读')}</span>
-                        </a>
+                        </div>
                     `;
                 }).join('');
 
@@ -791,37 +850,59 @@
             grid.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
         }
 
-        function renderCategoryPieChart(categoryStats) {
-            const ctx = document.getElementById('categoryPieChart').getContext('2d');
+        function renderTagPieChart(tagStats) {
+            const canvas = document.getElementById('tagPieChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
             if (pieChart) pieChart.destroy();
 
-            const labels = [], values = [], colors = [];
-            let total = 0;
-            CATEGORIES.forEach(cat => {
-                const count = categoryStats[cat] || 0;
-                if (count > 0) { labels.push(cat); values.push(count); colors.push(catColor(cat)); total += count; }
-            });
+            const items = (tagStats || [])
+                .filter(t => t && t.tag && Number(t.count) > 0)
+                .map(t => ({ tag: t.tag, count: Number(t.count), color: tagColor(t.tag, t.color) }));
+
+            const top = items.slice(0, 8);
+            const restCount = items.slice(8).reduce((sum, t) => sum + t.count, 0);
+            const total = items.reduce((sum, t) => sum + t.count, 0);
+
+            const pieces = top.slice();
+            if (restCount > 0) pieces.push({ tag: '其他', count: restCount, color: DEFAULT_COLOR });
 
             pieChart = new Chart(ctx, {
                 type: 'pie',
-                data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: 'rgba(11,11,15,0.8)', borderWidth: 2 }] },
+                data: {
+                    labels: pieces.map(p => p.tag),
+                    datasets: [{
+                        data: pieces.map(p => p.count),
+                        backgroundColor: pieces.map(p => p.color),
+                        borderColor: 'rgba(11,11,15,0.8)',
+                        borderWidth: 2
+                    }]
+                },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { label: c => ` ${c.label}: ${c.raw} 篇 (${Math.round(c.raw/total*100)}%)` } }
+                        tooltip: {
+                            callbacks: {
+                                label: c => ` ${c.label}: ${c.raw} 篇 (${total > 0 ? Math.round(c.raw / total * 100) : 0}%)`
+                            }
+                        }
                     }
                 }
             });
 
-            document.getElementById('pieLegend').innerHTML = CATEGORIES.map(cat => {
-                const count = categoryStats[cat] || 0;
-                const percent = total > 0 ? Math.round(count / total * 100) : 0;
+            const legendEl = document.getElementById('pieLegend');
+            if (pieces.length === 0) {
+                legendEl.innerHTML = '<div class="expand-empty">暂无标签数据</div>';
+                return;
+            }
+            legendEl.innerHTML = pieces.map(p => {
+                const percent = total > 0 ? Math.round(p.count / total * 100) : 0;
                 return `
-                    <div class="pie-legend-item ${count === 0 ? 'zero' : ''}">
-                        <span class="pie-legend-dot" style="background:${catColor(cat)}"></span>
-                        <span class="pie-legend-name">${escapeHtml(cat)}</span>
-                        <span class="pie-legend-count">${count}篇</span>
+                    <div class="pie-legend-item">
+                        <span class="pie-legend-dot" style="background:${p.color}"></span>
+                        <span class="pie-legend-name">${escapeHtml(p.tag)}</span>
+                        <span class="pie-legend-count">${p.count}篇</span>
                         <span class="pie-legend-percent">${percent}%</span>
                     </div>
                 `;
@@ -834,17 +915,17 @@
 
             barView = (STATS.daily_stats || []).slice(30 - barRange);
 
-            const catTotals = {};
-            barView.forEach(d => Object.entries(d.by_category).forEach(([cat, n]) => {
-                catTotals[cat] = (catTotals[cat] || 0) + n;
+            const tagTotals = {};
+            barView.forEach(d => Object.entries(d.by_primary_tag || {}).forEach(([tag, n]) => {
+                tagTotals[tag] = (tagTotals[tag] || 0) + (Number(n) || 0);
             }));
-            const cats = CATEGORIES.filter(c => catTotals[c]);
-            Object.keys(catTotals).forEach(c => { if (!cats.includes(c)) cats.push(c); });
+            const tags = Object.keys(tagTotals)
+                .sort((a, b) => (tagTotals[b] - tagTotals[a]) || a.localeCompare(b));
 
-            const datasets = cats.map(cat => ({
-                label: cat,
-                data: barView.map(d => d.by_category[cat] || 0),
-                backgroundColor: catColor(cat),
+            const datasets = tags.map(tag => ({
+                label: tag,
+                data: barView.map(d => (d.by_primary_tag || {})[tag] || 0),
+                backgroundColor: tagColor(tag),
                 stack: 'news',
                 borderWidth: 0,
                 borderRadius: barRange === 7 ? 3 : 1,
@@ -940,10 +1021,9 @@
             const container = document.getElementById('readingList');
             if (!reads || reads.length === 0) { container.innerHTML = '<div class="expand-empty">暂无在读内容</div>'; return; }
             container.innerHTML = reads.map(item => {
-                const color = item.category_color || CAT_COLORS[item.category_name] || '#888';
                 return `
                     <a href="/news/${item.id}" class="recent-item">
-                        <span class="item-cat" style="color:${color};border:1px solid ${color}30;background:${color}10">${escapeHtml(item.category_name || '默认')}</span>
+                        ${renderTagChips(item, 3, false)}
                         <span class="item-title">${escapeHtml(item.title)}</span>
                         <span class="item-source">${escapeHtml(item.source || '未知来源')}</span>
                         <span class="item-time">${formatTime(item.reading_at || item.collected_at)}</span>
@@ -957,10 +1037,9 @@
             const container = document.getElementById('recentList');
             if (!reads || reads.length === 0) { container.innerHTML = '<div class="expand-empty">暂无阅读记录</div>'; return; }
             container.innerHTML = reads.map(item => {
-                const color = item.category_color || CAT_COLORS[item.category_name] || '#888';
                 return `
                     <a href="/news/${item.id}" class="recent-item">
-                        <span class="item-cat" style="color:${color};border:1px solid ${color}30;background:${color}10">${escapeHtml(item.category_name || '默认')}</span>
+                        ${renderTagChips(item, 3, false)}
                         <span class="item-title">${escapeHtml(item.title)}</span>
                         <span class="item-source">${escapeHtml(item.source || '未知来源')}</span>
                         <span class="item-time">${formatTime(item.read_at || item.collected_at)}</span>

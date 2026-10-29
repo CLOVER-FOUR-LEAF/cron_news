@@ -10,7 +10,7 @@ class Brief(Base):
     __tablename__ = "briefs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="主键ID")
-    category_name: Mapped[str] = mapped_column(String(50), nullable=False, comment="分类名称")
+    category_name: Mapped[str] = mapped_column(String(50), nullable=False, comment="标签名称（沿用旧列名 category_name）")
     brief_date: Mapped[str] = mapped_column(String(10), nullable=False, comment="简报日期(YYYY-MM-DD)")
     content: Mapped[str] = mapped_column(Text, default="", comment="简报Markdown内容")
     note: Mapped[str] = mapped_column(Text, default="", comment="配套便签")

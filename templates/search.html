@@ -6,7 +6,7 @@
     <title>搜索结果 - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=44">
+    <link rel="stylesheet" href="/static/css/style.css?v=47">
     <style>
         .search-results-container {
             padding: 40px 24px 60px;
@@ -85,15 +85,32 @@
 
         function escapeHtml(text) {
             const div = document.createElement('div');
-            div.textContent = text || '';
+            div.textContent = text == null ? '' : String(text);
             return div.innerHTML;
+        }
+
+        function escapeAttr(text) {
+            return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function tagColor(tag) {
+            let hash = 0;
+            for (let i = 0; i < (tag || '').length; i += 1) hash = (hash * 31 + tag.charCodeAt(i)) >>> 0;
+            const palette = ['#d4a853','#4a8fd4','#c75050','#4aad6a','#c47ddc','#e88b5a','#5aa0a0','#b07a4a'];
+            return palette[hash % palette.length];
+        }
+
+        function tagChips(tags) {
+            return (tags || []).slice(0, 4).map(tag =>
+                `<a class="topic-tag" href="/tag/${encodeURIComponent(tag)}" style="--tag-color:${tagColor(tag)}" onclick="event.stopPropagation()">${escapeHtml(tag)}</a>`
+            ).join('');
         }
 
         function createNewsCard(item) {
             const el = document.createElement('div');
             el.className = 'news-card';
-            el.setAttribute('data-cat', item.category_name || '');
-            el.style.setProperty('--cat', item.category_color || '#8a8690');
+            const tags = item.tags || [];
+            el.style.setProperty('--cat', tags.length ? tagColor(tags[0]) : '#8a8690');
 
             const coverHtml = item.cover_url
                 ? `<img src="${escapeHtml(item.cover_url)}" alt="${escapeHtml(item.title)}" loading="lazy">`
@@ -116,9 +133,9 @@
             el.innerHTML = `
                 <div class="card-cover">${coverHtml}${laterBtn}</div>
                 <div class="card-body">
-                    <span class="card-category" data-cat="${escapeHtml(item.category_name || '')}">${escapeHtml(item.category_name || '默认')}</span>
+                    <div class="card-tags">${tagChips(tags)}</div>
                     <h3 class="card-title">${escapeHtml(item.title)}</h3>
-                    <p class="card-summary">${escapeHtml(item.summary || '')}</p>
+                    <p class="card-summary">${escapeHtml(item.short_summary || item.summary || '')}</p>
                     <div class="card-footer">
                         ${sourceHtml}
                         <span class="card-time">${formatDate(item.collected_at)}</span>

@@ -96,7 +96,7 @@ async def _run_job(name: str, worker) -> dict:
 
 async def run_collection(
     emit=None,
-    categories: list[str] | None = None,
+    tags: list[str] | None = None,
     interval_hours: int | None = None,
 ) -> dict:
     """委派给采集 Agent：搜索 → 撰稿 → 封面 → 向量索引。"""
@@ -104,7 +104,7 @@ async def run_collection(
     async def worker():
         async with get_session() as session:
             result = await run_search_task(
-                session, emit=emit, categories=categories, interval_hours=interval_hours
+                session, emit=emit, tags=tags, interval_hours=interval_hours
             )
             await session.commit()
         await embeddings.backfill()
@@ -113,8 +113,8 @@ async def run_collection(
     return await _run_job("采集", worker)
 
 
-async def run_brief(emit=None, categories: list[str] | None = None) -> dict:
-    """委派给简报 Agent：按分类生成当日简报。"""
+async def run_brief(emit=None) -> dict:
+    """委派给简报 Agent：把当日全部新闻汇总成一篇统一简报。"""
 
     async def worker():
         async with get_session() as session:

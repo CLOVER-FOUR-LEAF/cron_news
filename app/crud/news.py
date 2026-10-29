@@ -1,6 +1,6 @@
 from datetime import datetime, date, timedelta
+import json
 import os
-import random
 import re
 import shutil
 from pathlib import Path
@@ -9,9 +9,10 @@ from sqlalchemy import select, func, case, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import News
-from app.models.category import Category
-from app.crud.category import get_default_category
+from app.models.news_tag import NewsTag
 from app.schemas.news import NewsCreate
+from app.services import tag_service
+from app.services.text_utils import normalize_summary
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 IMAGES_DIR = BASE_DIR / "images"
@@ -23,10 +24,11 @@ async def get_news_list(
     page: int = 1,
     page_size: int = 10,
     keyword: str | None = None,
-    category: str | None = None,
+    tag: str | None = None,
     today_only: bool = False,
     date_filter: date | None = None,
     is_read: int | None = None,
+    batch_id: str | None = None,
 ) -> tuple[list[News], int]:
     query = select(News).where(News.is_deleted == 0)
 
@@ -45,8 +47,11 @@ async def get_news_list(
             query = query.where(and_(*conditions))
             relevance = sum(case((News.title.contains(t), 1), else_=0) for t in terms)
 
-    if category:
-        query = query.join(Category, News.category_id == Category.id).where(Category.name == category)
+    tag = tag_service.normalize_tag(tag or "")
+    if tag:
+        query = query.join(NewsTag, NewsTag.news_id == News.id).where(NewsTag.tag == tag)
+    if batch_id:
+        query = query.where(News.batch_id == batch_id)
 
     if is_read is not None:
         query = query.where(News.is_read == is_read)
@@ -83,7 +88,7 @@ async def get_news_list(
         query = query.order_by(priority, News.collected_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
-    items = result.scalars().all()
+    items = list(result.scalars().all())
 
     return items, total
 
@@ -110,9 +115,33 @@ async def get_related_news(db: AsyncSession, news_id: int, limit: int = 10, reco
             if ordered:
                 return ordered[:limit]
 
+    # 分类移除后，回退推荐改为「共享标签 + 时间/可信度」
+    tags = tag_service.parse_tags(news)
+    if tags:
+        query = (
+            select(News)
+            .join(NewsTag, NewsTag.news_id == News.id)
+            .where(News.is_deleted == 0, News.id != news_id, NewsTag.tag.in_(tags))
+            .order_by(News.collected_at.desc())
+            .limit(limit * 4)
+        )
+        candidates = list((await db.execute(query)).scalars().all())
+        shared = []
+        seen = set()
+        for item in candidates:
+            if item.id == news_id or item.id in seen:
+                continue
+            if set(tag_service.parse_tags(item)) & set(tags):
+                shared.append(item)
+                seen.add(item.id)
+            if len(shared) >= limit:
+                break
+        if shared:
+            return shared
+
     query = (
         select(News)
-        .where(News.is_deleted == 0, News.id != news_id, News.category_id == news.category_id)
+        .where(News.is_deleted == 0, News.id != news_id)
         .order_by(News.collected_at.desc())
         .limit(limit)
     )
@@ -121,28 +150,23 @@ async def get_related_news(db: AsyncSession, news_id: int, limit: int = 10, reco
 
 
 async def create_news(db: AsyncSession, news_in: NewsCreate) -> News:
-    category_id = news_in.category_id
-    if news_in.category:
-        result = await db.execute(select(Category).where(Category.name == news_in.category))
-        cat = result.scalars().first()
-        if cat:
-            category_id = cat.id
-        else:
-            default = await get_default_category(db)
-            category_id = default.id if default else category_id
-
+    tags = tag_service.normalize_tags(news_in.tags or [])
+    summary = normalize_summary(news_in.summary, news_in.content)
     news = News(
         title=news_in.title,
-        summary=news_in.summary,
+        summary=summary or None,
         content=news_in.content,
         source_url=news_in.source_url,
         source=news_in.source,
-        category_id=category_id,
         cover_url=news_in.cover_url,
         collected_at=news_in.collected_at or datetime.now(),
+        tags=json.dumps(tags, ensure_ascii=False) if tags else None,
+        credibility=news_in.credibility,
+        analysis=json.dumps(news_in.analysis, ensure_ascii=False) if news_in.analysis else None,
     )
     db.add(news)
     await db.flush()
+    await tag_service.sync_news_tags(db, news)
     await db.refresh(news)
 
     if news_in.cover_url:
@@ -214,273 +238,166 @@ async def mark_news_as_read(db: AsyncSession, news_id: int) -> bool:
 async def get_news_stats(db: AsyncSession) -> dict:
     today_start = datetime.combine(date.today(), datetime.min.time())
 
-    total_query = select(func.count()).where(News.is_deleted == 0)
-    result = await db.execute(total_query)
-    total = result.scalar()
-
-    read_query = select(func.count()).where(News.is_deleted == 0, News.is_read == 1)
-    result = await db.execute(read_query)
-    read_count = result.scalar()
-
-    unread_count = total - read_count
-
-    today_query = select(func.count()).where(News.is_deleted == 0, News.collected_at >= today_start)
-    result = await db.execute(today_query)
-    today_count = result.scalar()
-
-    category_query = (
-        select(Category.name, func.count(News.id))
-        .join(News, Category.id == News.category_id)
-        .where(News.is_deleted == 0)
-        .group_by(Category.name)
+    total = int(await db.scalar(select(func.count()).where(News.is_deleted == 0)) or 0)
+    read_count = int(
+        await db.scalar(select(func.count()).where(News.is_deleted == 0, News.is_read == 1)) or 0
     )
-    result = await db.execute(category_query)
-    category_stats = {row[0]: row[1] for row in result.all()}
+    unread_count = total - read_count
+    today_count = int(
+        await db.scalar(
+            select(func.count()).where(News.is_deleted == 0, News.collected_at >= today_start)
+        )
+        or 0
+    )
+
+    # 标签统计：一条新闻可计入多个标签，因此 tagged_total 与 tag_assignments_total 分开
+    tag_rows = (
+        await db.execute(
+            select(NewsTag.tag, func.count(func.distinct(NewsTag.news_id)))
+            .join(News, News.id == NewsTag.news_id)
+            .where(News.is_deleted == 0)
+            .group_by(NewsTag.tag)
+            .order_by(func.count(func.distinct(NewsTag.news_id)).desc(), NewsTag.tag)
+        )
+    ).all()
+    tag_stats = [
+        {"tag": tag, "count": int(count), "color": tag_service.tag_color(tag)}
+        for tag, count in tag_rows
+    ]
+    tagged_total = int(
+        await db.scalar(
+            select(func.count(func.distinct(NewsTag.news_id)))
+            .join(News, News.id == NewsTag.news_id)
+            .where(News.is_deleted == 0)
+        )
+        or 0
+    )
+    tag_assignments_total = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(NewsTag)
+            .join(News, News.id == NewsTag.news_id)
+            .where(News.is_deleted == 0)
+        )
+        or 0
+    )
+    untagged_count = max(0, total - tagged_total)
 
     range_start = datetime.combine(date.today() - timedelta(days=29), datetime.min.time())
-    daily_query = (
-        select(func.date(News.collected_at), Category.name, func.count(News.id))
-        .outerjoin(Category, News.category_id == Category.id)
-        .where(News.is_deleted == 0, News.collected_at >= range_start)
-        .group_by(func.date(News.collected_at), Category.name)
-    )
-    result = await db.execute(daily_query)
-    daily_map = {}
-    for day_str, cat_name, count in result.all():
-        if not day_str:
+    daily_rows = (
+        await db.execute(
+            select(func.date(News.collected_at), func.count(News.id))
+            .where(News.is_deleted == 0, News.collected_at >= range_start)
+            .group_by(func.date(News.collected_at))
+        )
+    ).all()
+    daily_counts = {str(day): int(count) for day, count in daily_rows if day}
+
+    primary_rows = (
+        await db.execute(
+            select(func.date(News.collected_at), NewsTag.tag, func.count(News.id))
+            .join(NewsTag, NewsTag.news_id == News.id)
+            .where(
+                News.is_deleted == 0,
+                News.collected_at >= range_start,
+                NewsTag.position == 0,
+            )
+            .group_by(func.date(News.collected_at), NewsTag.tag)
+        )
+    ).all()
+    primary_map: dict[str, dict[str, int]] = {}
+    for day, tag, count in primary_rows:
+        if not day:
             continue
-        name = cat_name or "默认"
-        entry = daily_map.setdefault(day_str, {})
-        entry[name] = entry.get(name, 0) + count
+        primary_map.setdefault(str(day), {})[tag] = int(count)
 
     daily_stats = []
     for i in range(29, -1, -1):
-        day = date.today() - timedelta(days=i)
-        day_str = day.isoformat()
-        by_category = daily_map.get(day_str, {})
-        daily_stats.append({
-            "date": day_str,
-            "count": sum(by_category.values()),
-            "by_category": by_category,
-        })
+        day_str = (date.today() - timedelta(days=i)).isoformat()
+        by_primary_tag = dict(primary_map.get(day_str, {}))
+        count = daily_counts.get(day_str, sum(by_primary_tag.values()))
+        missing = count - sum(by_primary_tag.values())
+        if missing > 0:
+            by_primary_tag["未标记"] = missing
+        daily_stats.append(
+            {
+                "date": day_str,
+                "count": count,
+                "by_primary_tag": by_primary_tag,
+            }
+        )
 
-    read_query = (
-        select(func.date(News.read_at), func.count(News.id))
-        .where(News.is_deleted == 0, News.read_at.isnot(None))
-        .group_by(func.date(News.read_at))
-    )
-    result = await db.execute(read_query)
-    read_by_day = {row[0]: row[1] for row in result.all() if row[0]}
+    read_by_day = {
+        row[0]: row[1]
+        for row in (
+            await db.execute(
+                select(func.date(News.read_at), func.count(News.id))
+                .where(News.is_deleted == 0, News.read_at.isnot(None))
+                .group_by(func.date(News.read_at))
+            )
+        ).all()
+        if row[0]
+    }
 
-    recent_query = (
-        select(News, Category.name, Category.color)
-        .outerjoin(Category, News.category_id == Category.id)
-        .where(News.is_deleted == 0, News.is_read == 1)
-        .order_by(News.read_at.desc())
-        .limit(10)
+    recent_rows = (
+        await db.execute(
+            select(News)
+            .where(News.is_deleted == 0, News.is_read == 1)
+            .order_by(News.read_at.desc())
+            .limit(10)
+        )
+    ).scalars().all()
+    reading_rows = (
+        await db.execute(
+            select(News)
+            .where(News.is_deleted == 0, News.is_reading == 1, News.is_read == 0)
+            .order_by(News.reading_at.desc())
+            .limit(10)
+        )
+    ).scalars().all()
+    tag_map = await tag_service.news_tags_map(
+        db, [row.id for row in list(recent_rows) + list(reading_rows)]
     )
-    result = await db.execute(recent_query)
-    recent_reads = [
-        {
-            "id": row.News.id,
-            "title": row.News.title,
-            "category_name": row[1],
-            "category_color": row[2] or "#8a8690",
-            "source": row.News.source,
-            "collected_at": row.News.collected_at.isoformat() if row.News.collected_at else None,
-            "read_at": row.News.read_at.isoformat() if row.News.read_at else None,
-            "is_read": row.News.is_read,
-            "is_reading": row.News.is_reading,
+
+    def _stat_item(news: News) -> dict:
+        tags = tag_map.get(news.id) or tag_service.parse_tags(news)
+        primary = tags[0] if tags else "未标记"
+        return {
+            "id": news.id,
+            "title": news.title,
+            "short_summary": news.short_summary,
+            "tags": tags,
+            "primary_tag": primary,
+            "primary_color": tag_service.tag_color(primary) if tags else "#8a8690",
+            "source": news.source,
+            "collected_at": news.collected_at.isoformat() if news.collected_at else None,
+            "read_at": news.read_at.isoformat() if news.read_at else None,
+            "reading_at": news.reading_at.isoformat() if news.reading_at else None,
+            "is_read": news.is_read,
+            "is_reading": news.is_reading,
         }
-        for row in result.all()
-    ]
-
-    reading_query = (
-        select(News, Category.name, Category.color)
-        .outerjoin(Category, News.category_id == Category.id)
-        .where(News.is_deleted == 0, News.is_reading == 1, News.is_read == 0)
-        .order_by(News.reading_at.desc())
-        .limit(10)
-    )
-    result = await db.execute(reading_query)
-    recent_reading = [
-        {
-            "id": row.News.id,
-            "title": row.News.title,
-            "category_name": row[1],
-            "category_color": row[2] or "#8a8690",
-            "source": row.News.source,
-            "collected_at": row.News.collected_at.isoformat() if row.News.collected_at else None,
-            "reading_at": row.News.reading_at.isoformat() if row.News.reading_at else None,
-            "is_read": row.News.is_read,
-            "is_reading": row.News.is_reading,
-        }
-        for row in result.all()
-    ]
 
     return {
         "total": total,
         "read_count": read_count,
         "unread_count": unread_count,
         "today_count": today_count,
-        "category_stats": category_stats,
+        "tag_stats": tag_stats,
+        "tagged_total": tagged_total,
+        "untagged_count": untagged_count,
+        "tag_assignments_total": tag_assignments_total,
         "daily_stats": daily_stats,
         "read_by_day": read_by_day,
-        "recent_reads": recent_reads,
-        "recent_reading": recent_reading,
+        "recent_reads": [_stat_item(news) for news in recent_rows],
+        "recent_reading": [_stat_item(news) for news in reading_rows],
     }
-
-
-def _recommend_item(n: News) -> dict:
-    return {
-        "id": n.id,
-        "title": n.title,
-        "category_name": n.category_name,
-        "category_color": n.category_color or "#8a8690",
-        "source": n.source,
-        "collected_at": n.collected_at.isoformat() if n.collected_at else None,
-        "read_at": n.read_at.isoformat() if n.read_at else None,
-        "is_read": n.is_read,
-        "is_reading": n.is_reading,
-    }
-
-
-async def _preferred_categories(db: AsyncSession) -> list[str]:
-    result = await db.execute(
-        select(Category.name, func.count(News.id))
-        .join(Category, News.category_id == Category.id)
-        .where(News.is_deleted == 0, News.is_read == 1)
-        .group_by(Category.name)
-        .order_by(func.count(News.id).desc())
-    )
-    return [row[0] for row in result.all()]
-
-
-async def _unread_by_categories(db: AsyncSession, cats: list[str], per: int) -> list[News]:
-    items = []
-    for cat in cats:
-        result = await db.execute(
-            select(News)
-            .join(Category, News.category_id == Category.id)
-            .where(News.is_deleted == 0, News.is_read == 0, Category.name == cat)
-            .order_by(News.collected_at.desc())
-            .limit(per)
-        )
-        items.extend(result.scalars().all())
-    return items
 
 
 async def get_recommended_news(db: AsyncSession, mode: str, limit: int = 10) -> dict:
-    if mode == "autonomous":
-        items, hint = await _recommend_autonomous(db, limit)
-    else:
-        items, hint = await _recommend_assist(db, limit)
-    return {
-        "mode": mode,
-        "hint": hint,
-        "items": [_recommend_item(n) for n in items],
-    }
+    """个性化推荐已迁移到 recommend_service（行为统计 + 反馈 + 多样性）。"""
+    from app.services.recommend_service import personalized_recommendations
 
-
-async def _recommend_assist(db: AsyncSession, limit: int) -> tuple[list[News], str]:
-    today_start = datetime.combine(date.today(), datetime.min.time())
-    result = await db.execute(
-        select(Category.name, func.count(News.id))
-        .join(Category, News.category_id == Category.id)
-        .where(News.is_deleted == 0, News.is_read == 1, News.read_at >= today_start)
-        .group_by(Category.name)
-        .order_by(func.count(News.id).desc())
-    )
-    cats = [row[0] for row in result.all()]
-
-    if len(cats) < 2:
-        result = await db.execute(
-            select(Category.name, func.count(News.id))
-            .join(Category, News.category_id == Category.id)
-            .where(News.is_deleted == 0, News.is_read == 0)
-            .group_by(Category.name)
-        )
-        others = [row[0] for row in result.all() if row[0] not in cats and row[1] > 0]
-        random.shuffle(others)
-        cats = (cats + others)[:2]
-
-    items = await _unread_by_categories(db, cats[:2], limit // 2)
-
-    if len(items) < limit:
-        have = {n.id for n in items}
-        result = await db.execute(
-            select(News)
-            .where(News.is_deleted == 0, News.is_read == 0)
-            .order_by(News.collected_at.desc())
-            .limit(limit)
-        )
-        for n in result.scalars().all():
-            if n.id not in have:
-                items.append(n)
-
-    return items[:limit], "基于你今日阅读最多的分类挑选未读内容"
-
-
-async def _recommend_autonomous(db: AsyncSession, limit: int) -> tuple[list[News], str]:
-    result = await db.execute(
-        select(News)
-        .where(News.is_deleted == 0, News.is_read == 1, News.read_at.isnot(None))
-        .order_by(News.read_at.desc())
-        .limit(20)
-    )
-    read_news = result.scalars().all()
-
-    score: dict[int, int] = {}
-    for n in read_news:
-        for rid in n.related_id_list:
-            score[rid] = score.get(rid, 0) + 1
-
-    items: list[News] = []
-    if score:
-        result = await db.execute(
-            select(News).where(
-                News.id.in_(list(score.keys())), News.is_deleted == 0, News.is_read == 0
-            )
-        )
-        by_id = {n.id: n for n in result.scalars().all()}
-        items = [by_id[i] for i in sorted(score, key=lambda i: -score[i]) if i in by_id]
-
-    if len(items) < limit:
-        pref = await _preferred_categories(db)
-        have = {n.id for n in items}
-        pools = []
-        for cat in pref[:3]:
-            result = await db.execute(
-                select(News)
-                .join(Category, News.category_id == Category.id)
-                .where(News.is_deleted == 0, News.is_read == 0, Category.name == cat)
-                .order_by(News.collected_at.desc())
-                .limit(limit)
-            )
-            pools.append(list(result.scalars().all()))
-        idx = 0
-        while len(items) < limit and any(pools):
-            pool = pools[idx % len(pools)]
-            if pool:
-                n = pool.pop(0)
-                if n.id not in have:
-                    items.append(n)
-                    have.add(n.id)
-            idx += 1
-
-    if len(items) < limit:
-        have = {n.id for n in items}
-        result = await db.execute(
-            select(News)
-            .where(News.is_deleted == 0, News.is_read == 0)
-            .order_by(News.collected_at.desc())
-            .limit(limit)
-        )
-        for n in result.scalars().all():
-            if n.id not in have:
-                items.append(n)
-
-    return items[:limit], "AI 基于你的阅读偏好与智能关联分析推荐"
+    return await personalized_recommendations(db, limit, mode=mode)
 
 
 async def toggle_news_flag(db: AsyncSession, news_id: int, flag: str) -> int | None:

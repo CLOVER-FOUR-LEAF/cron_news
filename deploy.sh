@@ -65,7 +65,7 @@ ok "配置文件 .env 已存在"
 # ---------- 3. 检测同名容器 / 镜像 ----------
 if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$CONTAINER"; then
   warn "检测到已存在的容器 $CONTAINER —— 可能是「升级」，也可能是你自己别的同名项目。"
-  if confirm "是否继续？继续将替换重建该容器（数据保存在挂载目录 database/ logs/ images/ .env）"; then
+  if confirm "是否继续？继续将替换重建该容器（数据保存在挂载目录 database/ logs/ images/ memory/ .env）"; then
     ok "确认继续，将替换重建容器 $CONTAINER"
   else
     die "已取消部署"
@@ -84,9 +84,9 @@ else
   REBUILD=1
 fi
 
-# ---------- 4. 准备持久化目录（四个挂载目录） ----------
-mkdir -p database logs images images/cover/default images/avatar
-ok "数据目录已就绪：database/  logs/  images/"
+# ---------- 4. 准备持久化目录（五个挂载目录） ----------
+mkdir -p database logs images images/cover/default images/avatar memory
+ok "数据目录已就绪：database/  logs/  images/  memory/"
 
 # 检查默认图片资源是否齐全（默认封面 / 头像 / logo），缺失时警告
 if [ ! -f images/sign.png ] || [ ! -f images/avatar/default-avatar.png ] || [ -z "$(ls images/cover/default/*.png 2>/dev/null)" ]; then

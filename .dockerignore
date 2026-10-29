@@ -12,3 +12,4 @@ images/avatar/avatar.png
 images/cover/*
 !images/cover/default/
 !images/cover/default/*
+memory/PROFILE.md

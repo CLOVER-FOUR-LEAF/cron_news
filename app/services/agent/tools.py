@@ -17,11 +17,18 @@ from typing import Any, Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud import category as category_crud
 from app.crud import news as news_crud
 from app.database import get_session
 from app.env_store import read_env_file
-from app.services import brief_service, retrieval
+from app.services import (
+    brief_service,
+    feedback_service,
+    memory_service,
+    recommend_service,
+    retrieval,
+    tag_service,
+    user_profile,
+)
 
 
 @dataclass
@@ -92,13 +99,13 @@ def _as_bool(value: Any, default: bool = False) -> bool:
 async def _search_news(
     db: AsyncSession,
     query: str,
-    category: str | None = None,
+    tag: str | None = None,
     days: int | None = None,
     limit: int = 8,
 ) -> ToolResult:
-    limit = _as_int(limit, 8, 1, 12)
+    limit = _as_int(limit, 8, 1, 20)
     day_value = _as_int(days, 1, 1, 365) if days is not None else None
-    result = await retrieval.search_news(db, query, category=category, days=day_value, limit=limit)
+    result = await retrieval.search_news(db, query, tag=tag, days=day_value, limit=limit)
     items = result.get("items") or []
     mode = result.get("mode")
     labels = {"hybrid": "混合检索", "lexical": "关键词检索", "semantic": "语义检索"}
@@ -107,6 +114,46 @@ async def _search_news(
     return ToolResult(
         ok=True,
         data={"mode": mode, "terms": result.get("terms"), "items": items},
+        summary=summary,
+        count=len(items),
+        refs=retrieval.refs_from_items(items),
+    )
+
+
+async def _timeline_news(
+    db: AsyncSession,
+    query: str,
+    range: str = "过去半个月",
+    tag: str | None = None,
+    max_events: int = 50,
+) -> ToolResult:
+    from app.services import time_range
+
+    parsed = time_range.parse_time_range(range)
+    max_events = _as_int(max_events, 50, 5, 100)
+    result = await retrieval.search_timeline(
+        db,
+        query,
+        since=parsed["since"],
+        until=parsed["until"],
+        tag=tag,
+        bucket_days=parsed["bucket_days"],
+        max_events=max_events,
+    )
+    items = result.get("items") or []
+    coverage = result.get("coverage") or {}
+    summary = (
+        f"在{parsed['label']}内找到 {len(items)} 条相关事件，"
+        f"覆盖 {coverage.get('days_with_news', 0)}/{coverage.get('days_total', parsed['days'])} 天"
+    )
+    return ToolResult(
+        ok=True,
+        data={
+            "range": result.get("range"),
+            "timeline": result.get("timeline"),
+            "buckets": result.get("buckets"),
+            "coverage": coverage,
+        },
         summary=summary,
         count=len(items),
         refs=retrieval.refs_from_items(items),
@@ -134,16 +181,16 @@ async def _get_news(db: AsyncSession, news_id: int, max_chars: int = 3000) -> To
 
 async def _list_news(
     db: AsyncSession,
-    category: str | None = None,
+    tag: str | None = None,
     days: int = 1,
     unread_only: bool = False,
     limit: int = 10,
 ) -> ToolResult:
     days = _as_int(days, 1, 1, 90)
-    limit = _as_int(limit, 10, 1, 20)
+    limit = _as_int(limit, 10, 1, 30)
     unread_only = _as_bool(unread_only)
     result = await retrieval.list_recent(
-        db, category=category, days=days, unread_only=unread_only, limit=limit
+        db, tag=tag, days=days, unread_only=unread_only, limit=limit
     )
     items = result.get("items") or []
     summary = f"最近 {days} 天找到 {len(items)} 条新闻" if items else "该时间范围内没有新闻"
@@ -156,46 +203,39 @@ async def _list_news(
     )
 
 
-async def _get_daily_brief(db: AsyncSession, category: str | None = None, date: str | None = None) -> ToolResult:
-    if category:
+async def _get_daily_brief(db: AsyncSession, tag: str | None = None, date: str | None = None) -> ToolResult:
+    if tag and tag not in {"每日", "daily"}:
         brief = (
-            await brief_service.get_brief_by_date(db, category, date)
+            await brief_service.get_brief_by_date(db, tag, date)
             if date
-            else await brief_service.get_latest_brief(db, category)
+            else await brief_service.get_latest_brief(db, tag)
         )
         if not brief:
-            return ToolResult(ok=True, data=None, summary=f"「{category}」暂无简报", count=0)
+            return ToolResult(ok=True, data=None, summary=f"「{tag}」暂无简报", count=0)
         return ToolResult(
             ok=True,
             data={
-                "category": brief.category_name,
+                "tag": brief.category_name,
                 "date": brief.brief_date,
-                "content": (brief.content or "")[:2500],
+                "content": (brief.content or "")[:4000],
                 "source": brief.source,
             },
-            summary=f"读取「{category}」{brief.brief_date} 简报",
+            summary=f"读取「{tag}」{brief.brief_date} 简报",
             count=1,
         )
 
-    categories, _ = await category_crud.get_category_list(db)
-    items = []
-    consumed = 0
-    for cat in categories:
-        brief = await brief_service.get_latest_brief(db, cat.name)
-        if not brief:
-            continue
-        content = (brief.content or "")[:1200]
-        if consumed + len(content) > 6000:
-            break
-        consumed += len(content)
-        items.append(
-            {"category": brief.category_name, "date": brief.brief_date, "content": content}
-        )
+    brief = await brief_service.get_daily_brief(db, date)
+    if not brief:
+        return ToolResult(ok=True, data=None, summary="暂无每日简报", count=0)
     return ToolResult(
         ok=True,
-        data={"items": items},
-        summary=f"读取 {len(items)} 个分类的最新简报",
-        count=len(items),
+        data={
+            "date": brief.brief_date,
+            "content": (brief.content or "")[:4000],
+            "source": brief.source,
+        },
+        summary=f"读取 {brief.brief_date} 每日简报",
+        count=1,
     )
 
 
@@ -221,9 +261,10 @@ async def _get_news_stats(db: AsyncSession) -> ToolResult:
         "read_count": stats.get("read_count"),
         "unread_count": stats.get("unread_count"),
         "today_count": stats.get("today_count"),
-        "category_stats": stats.get("category_stats"),
+        "tag_stats": stats.get("tag_stats"),
+        "tagged_total": stats.get("tagged_total"),
         "recent_reads": [
-            {"id": item["id"], "title": item["title"], "category": item.get("category_name")}
+            {"id": item["id"], "title": item["title"], "tags": item.get("tags")}
             for item in (stats.get("recent_reads") or [])[:5]
         ],
     }
@@ -235,16 +276,16 @@ async def _get_news_stats(db: AsyncSession) -> ToolResult:
     )
 
 
-async def _list_categories(db: AsyncSession) -> ToolResult:
-    categories, _ = await category_crud.get_category_list(db)
-    items = [
-        {"name": category.name, "color": category.color, "is_default": bool(category.is_default)}
-        for category in categories
-    ]
+async def _list_tags(db: AsyncSession, limit: int = 30) -> ToolResult:
+    limit = _as_int(limit, 30, 1, 80)
+    items = await tag_service.top_tags(db, days=90, limit=limit)
+    followed = set(await tag_service.followed_tags(db))
+    for item in items:
+        item["followed"] = item["tag"] in followed
     return ToolResult(
         ok=True,
-        data={"items": items},
-        summary=f"共 {len(items)} 个分类",
+        data={"items": items, "followed": sorted(followed)},
+        summary=f"共 {len(items)} 个标签",
         count=len(items),
     )
 
@@ -265,7 +306,129 @@ async def _get_reading_list(db: AsyncSession, kind: str = "favorites", limit: in
     )
 
 
+async def _read_memory(db: AsyncSession) -> ToolResult:
+    if not memory_service.enabled():
+        return _error("记忆系统未启用")
+    try:
+        await memory_service.ensure_profile_fresh(db)
+        content = await memory_service.read_memory()
+    except Exception as exc:
+        return _error(f"读取记忆失败：{exc}")
+    sections = memory_service.sections(content)
+    compact = {
+        key: value[:500]
+        for key, value in sections.items()
+        if value and value.strip() and "（暂无）" not in value
+    }
+    return ToolResult(
+        ok=True,
+        data={"content": content[:3000], "sections": compact},
+        summary="读取长期记忆（用户画像 / 兴趣 / 跟踪任务 / 反馈整改）",
+        count=1,
+    )
+
+
+async def _remember(db: AsyncSession, content: str, section: str = "notes") -> ToolResult:
+    if not memory_service.enabled():
+        return _error("记忆系统未启用")
+    try:
+        updated = await memory_service.remember(str(content or ""), str(section or "notes"))
+    except ValueError as exc:
+        return _error(str(exc))
+    except Exception as exc:
+        return _error(f"写入记忆失败：{exc}")
+    return ToolResult(
+        ok=True,
+        data={"section": section, "content": updated},
+        summary=f"已写入记忆「{section}」",
+        count=1,
+    )
+
+
+async def _forget_memory(db: AsyncSession, query: str) -> ToolResult:
+    if not memory_service.enabled():
+        return _error("记忆系统未启用")
+    try:
+        removed = await memory_service.forget(str(query or ""))
+    except Exception as exc:
+        return _error(f"删除记忆失败：{exc}")
+    return ToolResult(
+        ok=True,
+        data={"removed": removed},
+        summary=f"已删除 {removed} 条相关记忆" if removed else "没有找到匹配的记忆",
+        count=removed,
+    )
+
+
+async def _get_user_profile(db: AsyncSession) -> ToolResult:
+    try:
+        profile = await user_profile.compute_profile(db)
+    except Exception as exc:
+        return _error(f"读取用户画像失败：{exc}")
+    summary = user_profile.profile_summary(profile)
+    top_tags = "、".join(summary.get("top_tags") or []) or "暂无"
+    return ToolResult(
+        ok=True,
+        data=summary,
+        summary=f"阅读 {summary['totals'].get('read', 0)} 条，偏好标签：{top_tags}",
+        count=1,
+    )
+
+
+async def _get_recommendations(db: AsyncSession, limit: int = 8) -> ToolResult:
+    limit = _as_int(limit, 8, 1, 15)
+    result = await recommend_service.personalized_recommendations(db, limit)
+    items = result.get("items") or []
+    return ToolResult(
+        ok=True,
+        data={
+            "hint": result.get("hint"),
+            "items": items,
+        },
+        summary=f"按你的习惯挑选了 {len(items)} 条未读新闻",
+        count=len(items),
+        refs=retrieval.refs_from_items(items),
+    )
+
+
+async def _submit_feedback(
+    db: AsyncSession,
+    target_type: str = "chat",
+    target_id: int | None = None,
+    rating: int = -1,
+    reason: str = "",
+    comment: str = "",
+    conversation_id: int | None = None,
+) -> ToolResult:
+    target_type = str(target_type or "chat").strip().lower()
+    target_id = _as_int(target_id, 0, 0, 2_000_000_000) or None
+    rating = _as_int(rating, -1, -1, 1)
+    try:
+        feedback = await feedback_service.create_feedback(
+            db,
+            target_type=target_type,
+            target_id=target_id,
+            conversation_id=conversation_id,
+            rating=rating,
+            reason=str(reason or ""),
+            comment=str(comment or ""),
+        )
+        await db.commit()
+    except ValueError as exc:
+        return _error(str(exc))
+    except Exception as exc:
+        return _error(f"记录反馈失败：{exc}")
+    feedback_service.schedule_reflection()
+    return ToolResult(
+        ok=True,
+        data={"id": feedback.id, "status": feedback.status},
+        summary="反馈已记录，并会用于调整后续采集、推荐与回答方式",
+        count=1,
+    )
+
+
 async def _search_web(db: AsyncSession, query: str, hours: int = 24, max_results: int = 8) -> ToolResult:
+    from app.services import content_quality
     from app.services.ai_service import search_news as web_search
 
     hours = _as_int(hours, 24, 1, 720)
@@ -273,15 +436,20 @@ async def _search_web(db: AsyncSession, query: str, hours: int = 24, max_results
     hits = await web_search(db, query, max_results=max_results, hours=hours)
     items = []
     refs = {}
+    skipped = 0
     for hit in hits:
         url = hit.get("url") or hit.get("link") or ""
-        if not url:
+        title = str(hit.get("title") or "")
+        snippet = hit.get("snippet") or hit.get("description") or ""
+        ok, _reason = content_quality.is_probable_article(title, url, snippet)
+        if not url or not ok:
+            skipped += 1
             continue
         ref = f"web:{hashlib.sha1(url.encode('utf-8')).hexdigest()[:10]}"
         item = {
             "ref": ref,
-            "title": hit.get("title") or "",
-            "snippet": (hit.get("snippet") or hit.get("description") or "")[:240],
+            "title": content_quality.clean_title(title),
+            "snippet": str(snippet)[:240],
             "source": hit.get("source") or hit.get("domain") or "",
             "url": url,
             "published_date": hit.get("published_date") or hit.get("date") or "",
@@ -294,10 +462,13 @@ async def _search_web(db: AsyncSession, query: str, hours: int = 24, max_results
             "source": item["source"],
             "source_url": url,
         }
+    summary = f"网络搜索返回 {len(items)} 条可用结果"
+    if skipped:
+        summary += f"（已过滤 {skipped} 条门户/登录/导航页）"
     return ToolResult(
         ok=True,
         data={"items": items},
-        summary=f"网络搜索返回 {len(items)} 条结果",
+        summary=summary,
         count=len(items),
         refs=refs,
     )
@@ -305,21 +476,21 @@ async def _search_web(db: AsyncSession, query: str, hours: int = 24, max_results
 
 async def _delegate_collect(
     db: AsyncSession,
-    categories: list[str] | None = None,
+    tags: list[str] | None = None,
     hours: int | None = None,
     __emit=None,
 ) -> ToolResult:
     """把采集任务委派给采集 Agent。"""
-    from app.services import agent_jobs
+    from app.services import agent_jobs, tag_service
 
     names = None
-    if categories:
-        if isinstance(categories, str):
-            categories = [categories]
-        names = [str(item).strip() for item in categories if str(item).strip()]
+    if tags:
+        if isinstance(tags, str):
+            tags = [tags]
+        names = tag_service.normalize_tags(tags)
 
     result = await agent_jobs.run_collection(
-        emit=(__emit if __emit else None), categories=names, interval_hours=hours
+        emit=(__emit if __emit else None), tags=names, interval_hours=hours
     )
     if not result.get("ok"):
         if result.get("busy"):
@@ -334,7 +505,7 @@ async def _delegate_collect(
     total = int(data.get("total_new") or 0)
     details = data.get("details") or {}
     parts = [f"{name} {count} 条" for name, count in details.items() if isinstance(count, int)]
-    detail_text = "；".join(parts) if parts else "无分类明细"
+    detail_text = "；".join(parts) if parts else "无标签明细"
     elapsed = result.get("elapsed_seconds")
     return ToolResult(
         ok=True,
@@ -344,7 +515,7 @@ async def _delegate_collect(
     )
 
 
-async def _delegate_brief(db: AsyncSession, categories: list[str] | None = None, __emit=None) -> ToolResult:
+async def _delegate_brief(db: AsyncSession, __emit=None) -> ToolResult:
     """把简报生成任务委派给简报 Agent。"""
     from app.services import agent_jobs
 
@@ -359,7 +530,7 @@ async def _delegate_brief(db: AsyncSession, categories: list[str] | None = None,
     return ToolResult(
         ok=True,
         data={"generated": generated, "elapsed_seconds": result.get("elapsed_seconds")},
-        summary=f"简报 Agent 完成：生成 {generated} 个分类的简报",
+        summary="今日简报已生成" if generated else "今日暂无简报",
         count=generated,
     )
 
@@ -395,9 +566,9 @@ TOOLS: dict[str, ToolSpec] = {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "2-6 个关键词，空格分隔"},
-                "category": {"type": "string", "description": "可选分类名，如 科技、政治"},
+                "tag": {"type": "string", "description": "可选标签筛选，如 AI芯片、地缘政治"},
                 "days": {"type": "integer", "minimum": 1, "maximum": 365},
-                "limit": {"type": "integer", "minimum": 1, "maximum": 12, "default": 8},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 8},
             },
             "required": ["query"],
         },
@@ -418,25 +589,25 @@ TOOLS: dict[str, ToolSpec] = {
     ),
     "list_news": ToolSpec(
         name="list_news",
-        description="按分类、时间、已读状态浏览新闻，按收录时间倒序。适合「今天有什么」「最近科技新闻」这类问题。",
+        description="按标签、时间、已读状态浏览新闻，按收录时间倒序。适合「今天有什么」「最近 AI 新闻」这类问题。",
         parameters={
             "type": "object",
             "properties": {
-                "category": {"type": "string"},
+                "tag": {"type": "string"},
                 "days": {"type": "integer", "minimum": 1, "maximum": 90, "default": 1},
                 "unread_only": {"type": "boolean", "default": False},
-                "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 10},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 30, "default": 10},
             },
         },
         handler=_list_news,
     ),
     "get_daily_brief": ToolSpec(
         name="get_daily_brief",
-        description="读取某分类某天的每日简报（Markdown）。不传日期取最新一期；不传分类返回各分类最新简报。",
+        description="读取每日简报（Markdown）。默认返回最新一期统一简报；可传 date 指定日期。",
         parameters={
             "type": "object",
             "properties": {
-                "category": {"type": "string"},
+                "tag": {"type": "string", "description": "兼容旧数据；一般不用传"},
                 "date": {"type": "string", "description": "YYYY-MM-DD"},
             },
         },
@@ -444,7 +615,7 @@ TOOLS: dict[str, ToolSpec] = {
     ),
     "get_related_news": ToolSpec(
         name="get_related_news",
-        description="读取与某条新闻相关的其它新闻（平台已计算的跨分类关联；未计算时回退同分类最新）。",
+        description="读取与某条新闻相关的其它新闻（平台已计算的跨标签关联；未计算时回退共享标签最新）。",
         parameters={
             "type": "object",
             "properties": {
@@ -457,15 +628,43 @@ TOOLS: dict[str, ToolSpec] = {
     ),
     "get_news_stats": ToolSpec(
         name="get_news_stats",
-        description="获取新闻库统计：总数、已读/未读、今日新增、分类分布、最近阅读。用于趋势和概览类问题。",
+        description="获取新闻库统计：总数、已读/未读、今日新增、标签分布、最近阅读。用于趋势和概览类问题。",
         parameters={"type": "object", "properties": {}},
         handler=_get_news_stats,
     ),
-    "list_categories": ToolSpec(
-        name="list_categories",
-        description="列出所有新闻分类及颜色。",
-        parameters={"type": "object", "properties": {}},
-        handler=_list_categories,
+    "list_tags": ToolSpec(
+        name="list_tags",
+        description="列出新闻库中的标签、数量、颜色与用户是否已关注。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 80, "default": 30}
+            },
+        },
+        handler=_list_tags,
+    ),
+    "timeline_news": ToolSpec(
+        name="timeline_news",
+        description=(
+            "按时间线梳理新闻，适合「过去半个月 AI 发展历程」「最近一个月某主题的演变」这类问题。"
+            "会按天/周分桶召回、跨来源去重，并返回覆盖情况。回答时按日期组织并引用每条事件。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "主题 / 实体 / 关键词"},
+                "range": {
+                    "type": "string",
+                    "description": "中文时间范围，如 过去半个月、最近两周、上个月、2026-09-01 到 2026-09-15",
+                    "default": "过去半个月",
+                },
+                "tag": {"type": "string", "description": "可选标签筛选"},
+                "max_events": {"type": "integer", "minimum": 5, "maximum": 100, "default": 50},
+            },
+            "required": ["query"],
+        },
+        handler=_timeline_news,
+        timeout=60.0,
     ),
     "get_reading_list": ToolSpec(
         name="get_reading_list",
@@ -478,6 +677,102 @@ TOOLS: dict[str, ToolSpec] = {
             },
         },
         handler=_get_reading_list,
+    ),
+    "read_memory": ToolSpec(
+        name="read_memory",
+        description=(
+            "读取你的长期记忆：用户画像、兴趣、跟踪任务、阅读偏好、需要避免的内容、反馈整改。"
+            "当用户问「你记得我什么」「我的偏好吗」，或需要确认记忆时调用。"
+        ),
+        parameters={"type": "object", "properties": {}},
+        handler=_read_memory,
+        kind="read",
+    ),
+    "remember": ToolSpec(
+        name="remember",
+        description=(
+            "把用户明确要求记住的信息写入长期记忆（所有 Agent 共用）。"
+            "用户说「记住 / 以后多给我… / 跟踪… / 不要再… / 我喜欢…」时必须调用，并在回答里简短确认。"
+            "section 选择：profile=身份与背景，interests=兴趣主题，watch=跟踪任务，"
+            "preferences=阅读偏好，avoid=需要避免，notes=其他笔记。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "一条简洁、可执行的记忆，不超过 200 字"},
+                "section": {
+                    "type": "string",
+                    "enum": ["profile", "interests", "watch", "preferences", "avoid", "notes"],
+                    "default": "notes",
+                },
+            },
+            "required": ["content"],
+        },
+        handler=_remember,
+        kind="memory",
+    ),
+    "forget_memory": ToolSpec(
+        name="forget_memory",
+        description="删除长期记忆中与 query 匹配的条目。用户说「忘掉…」「不要再记着…」时调用。",
+        parameters={
+            "type": "object",
+            "properties": {"query": {"type": "string", "description": "要删除的记忆关键词"}},
+            "required": ["query"],
+        },
+        handler=_forget_memory,
+        kind="memory",
+    ),
+    "get_user_profile": ToolSpec(
+        name="get_user_profile",
+        description=(
+            "读取基于真实行为计算的用户画像：已读/收藏数量、偏好标签、常看来源、关注话题、"
+            "最近读过什么、负反馈原因。适合回答「我喜欢什么」「我最近在看什么」这类问题。"
+        ),
+        parameters={"type": "object", "properties": {}},
+        handler=_get_user_profile,
+        kind="read",
+    ),
+    "get_recommendations": ToolSpec(
+        name="get_recommendations",
+        description=(
+            "按用户阅读习惯、收藏、停留时长和反馈，推荐当前未读新闻，并返回每条推荐的理由。"
+            "用户说「给我推荐点新闻」「有什么值得看的」时优先调用，而不是随机列新闻。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 15, "default": 8}
+            },
+        },
+        handler=_get_recommendations,
+        kind="read",
+    ),
+    "submit_feedback": ToolSpec(
+        name="submit_feedback",
+        description=(
+            "记录用户对回答或新闻的反馈（满意/不满意 + 原因）。"
+            "用户抱怨「不相关 / 太浅 / 重复 / 过时 / 有错误 / 来源不可靠」时调用，"
+            "并说明后续会如何调整。不要只道歉。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "target_type": {
+                    "type": "string",
+                    "enum": ["news", "message", "recommend", "chat"],
+                    "default": "chat",
+                },
+                "target_id": {"type": "integer", "description": "新闻 ID 或助手消息 ID，可留空"},
+                "rating": {"type": "integer", "enum": [-1, 0, 1], "default": -1},
+                "reason": {
+                    "type": "string",
+                    "description": "irrelevant / shallow / duplicate / outdated / inaccurate / source / too_long / helpful / other",
+                },
+                "comment": {"type": "string", "description": "用户的原话或补充说明"},
+            },
+        },
+        handler=_submit_feedback,
+        kind="memory",
     ),
     "search_web": ToolSpec(
         name="search_web",
@@ -506,10 +801,10 @@ TOOLS: dict[str, ToolSpec] = {
         parameters={
             "type": "object",
             "properties": {
-                "categories": {
+                "tags": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "可选，只采集这些分类；不传则沿用「自动任务配置」里选中的分类",
+                    "description": "可选，只围绕这些标签采集；不传则沿用关注标签与长期记忆",
                 },
                 "hours": {
                     "type": "integer",
@@ -527,7 +822,8 @@ TOOLS: dict[str, ToolSpec] = {
         name="delegate_brief",
         description=(
             "把「生成每日简报」任务委派给简报 Agent。用户说“给我一份简报/总结今天的新闻/出一份日报”时调用。"
-            "简报 Agent 会按分类汇总当日新闻并写入简报页。完成后告知生成了哪些分类，并可用 get_daily_brief 读取正文。"
+            "简报 Agent 会把当日全部新闻汇总成一篇统一的每日简报并写入简报页。"
+            "完成后告知已生成，并可用 get_daily_brief 读取正文。"
         ),
         parameters={"type": "object", "properties": {}},
         handler=_delegate_brief,
@@ -591,6 +887,8 @@ async def execute_tool(name: str, arguments: Any, emit=None) -> ToolResult:
         return _error(f"未知工具：{name}")
     if spec.kind == "write" and read_env_file().get("AGENT_ALLOW_WRITE_TOOLS", "") != "true":
         return _error(f"工具 {name} 当前未启用（写操作需先开启 AGENT_ALLOW_WRITE_TOOLS）")
+    if spec.kind == "memory" and not memory_service.enabled():
+        return _error(f"工具 {name} 当前未启用（记忆系统已关闭）")
     if spec.kind == "delegate" and not _delegation_enabled():
         return _error(f"工具 {name} 当前未启用（Agent 委派需开启 AGENT_ALLOW_DELEGATION）")
 

@@ -3,232 +3,626 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>定时资讯</title>
+    <title>定时资讯 · 你的私人资讯台</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=44">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v=47">
 </head>
-<body class="home-split">
+<body class="home-full">
     {% include "_header.html" %}
 
-    <div class="home-layout" id="homeLayout">
-        <main class="home-feed" id="homeFeed">
-            {% for cat in categories %}
-            <section class="ticker-section" data-cat="{{ cat }}" id="ticker-{{ cat }}" style="--cat: {{ cat_colors.get(cat, '#8a8690') }}">
-                <div class="ticker-label">
-                    <span class="ticker-cat-name">{{ cat }}</span>
-                    <span class="ticker-cat-en">
-                        {% if cat == '科技' %}TECHNOLOGY
-                        {% elif cat == '军事' %}MILITARY
-                        {% elif cat == '政治' %}POLITICS
-                        {% elif cat == '经济' %}ECONOMY
-                        {% endif %}
-                    </span>
+    <main class="dash" id="dash">
+        <section class="dash-hero">
+            <div class="dash-hero-copy">
+                <div class="dash-eyebrow" id="dashEyebrow">正在读取今天的资讯…</div>
+                <h1 class="dash-greeting" id="dashGreeting">你好</h1>
+                <p class="dash-lede" id="dashLede">
+                    正在汇总你的新闻库、推荐与每日简报。
+                </p>
+                <div class="dash-actions">
+                    <button type="button" class="dash-btn dash-btn-primary" data-assistant-open="今天有什么值得关注的新闻？">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.8l1.4 3.2 3.6.4-2.7 2.4.7 3.6L8 9.7l-3 1.7.7-3.6L3 5.4l3.6-.4L8 1.8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+                        问问资讯助手
+                    </button>
+                    <button type="button" class="dash-btn dash-btn-ghost" id="dashCollectBtn">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.5v7M5 6.5l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                        立即采集
+                    </button>
+                    <a class="dash-btn dash-btn-ghost" href="/brief">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2h6l2.5 2.5V14H4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M5.5 6.5h5M5.5 9h5M5.5 11.5h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                        今日简报
+                    </a>
                 </div>
-                <div class="ticker-track-wrapper">
-                    <div class="ticker-track" data-cat="{{ cat }}">
+            </div>
+            <div class="dash-hero-side">
+                <div class="dash-stats">
+                    <div class="dash-stat">
+                        <div class="dash-stat-label">今日新增</div>
+                        <div class="dash-stat-value gold" id="statToday">—</div>
+                        <div class="dash-stat-sub" id="statTodaySub">等待采集</div>
                     </div>
+                    <div class="dash-stat">
+                        <div class="dash-stat-label">未读</div>
+                        <div class="dash-stat-value" id="statUnread">—</div>
+                        <div class="dash-stat-sub" id="statUnreadSub">待你翻阅</div>
+                    </div>
+                    <div class="dash-stat">
+                        <div class="dash-stat-label">下一轮</div>
+                        <div class="dash-stat-value dash-stat-value-sm" id="statNext">—</div>
+                        <div class="dash-stat-sub" id="statNextSub">定时采集</div>
+                    </div>
+                </div>
+                <div class="dash-status-line">
+                    <span class="dash-dot" id="dashStatusDot"></span>
+                    <span id="dashStatusText">正在检查 Agent 状态…</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="dash-section">
+            <div class="dash-section-head">
+                <div>
+                    <div class="dash-section-title">为你推荐</div>
+                    <div class="dash-section-sub" id="dashPickSub">结合你的阅读习惯、收藏与反馈，从上一批新闻里挑选</div>
+                </div>
+                <a class="dash-section-link" href="/my/recommend">全部推荐 →</a>
+            </div>
+            <div class="dash-picks" id="dashPicks">
+                <div class="dash-skeleton"></div>
+                <div class="dash-skeleton"></div>
+                <div class="dash-skeleton"></div>
+            </div>
+        </section>
+
+        <div class="dash-grid">
+            <section class="dash-feed">
+                <div class="dash-section-head">
+                    <div>
+                        <div class="dash-section-title">最新采集</div>
+                        <div class="dash-section-sub" id="dashFeedSub">正在读取上一批新闻…</div>
+                    </div>
+                    <div class="dash-tag-add">
+                        <input type="text" id="dashTagInput" maxlength="30" placeholder="关注新标签">
+                        <button type="button" id="dashTagAdd" title="关注标签">+</button>
+                    </div>
+                </div>
+
+                <div class="dash-tagbar" id="dashTags"></div>
+                <div class="dash-news-grid" id="dashNews"></div>
+                <div class="dash-feed-foot">
+                    <button type="button" class="dash-btn dash-btn-ghost" id="dashMoreBtn" hidden>显示更多</button>
                 </div>
             </section>
-            {% endfor %}
-        </main>
 
-        <aside class="home-agent" id="homeAgent" aria-label="AI 资讯助手">
-            <div class="home-agent-head">
-                <div class="home-agent-title">
-                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                        <path d="M8 1.6l1.4 3.3 3.5.4-2.6 2.4.7 3.5L8 9.5l-3 1.7.7-3.5L3.1 5.3l3.5-.4L8 1.6z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
-                    </svg>
-                    AI 助手
-                </div>
-                <div class="home-agent-actions">
-                    <button type="button" class="home-agent-btn" id="homeNewChat" title="新对话">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    </button>
-                    <button type="button" class="home-agent-btn" id="homeAgentExpand" title="全屏对话">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                </div>
-            </div>
-
-            <div class="chat-messages home-agent-messages" id="chatMessages">
-                <div class="chat-empty" id="chatEmpty">
-                    <div class="chat-empty-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 2.5l2.1 4.9 5.4.6-4 3.7 1.1 5.3L12 14.4 7.4 17l1.1-5.3-4-3.7 5.4-.6L12 2.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-                            <path d="M4 20.5h16" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-                        </svg>
+            <aside class="dash-rail">
+                <section class="dash-panel dash-assistant-panel">
+                    <div class="dash-panel-head">
+                        <div class="dash-panel-title">
+                            <span class="dash-assistant-mark">
+                                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.6l1.4 3.3 3.5.4-2.6 2.4.7 3.5L8 9.5l-3 1.7.7-3.5L3.1 5.3l3.5-.4L8 1.6z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+                            </span>
+                            资讯助手
+                        </div>
+                        <a class="dash-section-link" href="/chat">完整对话 →</a>
                     </div>
-                    <h2>问问你的新闻库</h2>
-                    <p>先检索、再回答，并标注来源。</p>
-                    <div class="chat-suggestions">
-                        <button type="button" data-q="今天有什么值得关注的新闻？">今天有什么值得关注的？</button>
-                        <button type="button" data-q="帮我梳理最近一周最重要的科技新闻">最近一周的科技大事</button>
+                    <div class="dash-panel-sub">记得你的阅读习惯、跟踪任务与反馈。先查库，再回答。</div>
+                    <form class="dash-assistant-form" id="dashAskForm">
+                        <textarea class="dash-assistant-input" id="dashAskInput" rows="1" maxlength="8000" placeholder="问点什么，或说「记住……」"></textarea>
+                        <button type="submit" class="dash-assistant-send" id="dashAskSend" title="发送">
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 8l12-6-4 12-2.5-5L2 8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                        </button>
+                    </form>
+                    <div class="dash-suggest">
+                        <button type="button" data-ask="今天有什么值得关注的新闻？">今天值得关注什么</button>
+                        <button type="button" data-ask="给我推荐几条值得看的新闻">按我的习惯推荐</button>
+                        <button type="button" data-ask="帮我采集最新新闻">采集最新资讯</button>
+                        <button type="button" data-ask="给我一份今天的简报">总结今天</button>
                     </div>
-                </div>
-            </div>
+                </section>
 
-            <form class="chat-composer" id="chatForm">
-                <textarea id="chatInput" rows="1" placeholder="问点什么…" maxlength="8000"></textarea>
-                <div class="chat-composer-actions">
-                    <button type="button" class="chat-stop-btn" id="stopBtn" hidden>停止</button>
-                    <button type="submit" class="chat-send-btn" id="sendBtn">
-                        发送
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8l12-6-4 12-2.5-5L2 8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
-                    </button>
-                </div>
-            </form>
-        </aside>
-    </div>
+                <section class="dash-panel dash-brief-panel">
+                    <div class="dash-panel-head">
+                        <div class="dash-panel-title">今日简报</div>
+                        <a class="dash-section-link" href="/brief">打开 →</a>
+                    </div>
+                    <div class="dash-brief-date" id="dashBriefDate">—</div>
+                    <div class="dash-brief-text" id="dashBriefText">正在读取今日简报…</div>
+                </section>
 
-    <button type="button" class="home-feed-toggle" id="homeFeedToggle" title="显示新闻列表">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-        新闻
-    </button>
+                <section class="dash-panel">
+                    <div class="dash-panel-head">
+                        <div class="dash-panel-title">采集状态</div>
+                        <span class="dash-panel-tag" id="dashRunState">空闲</span>
+                    </div>
+                    <div class="dash-status-rows">
+                        <div class="dash-status-row"><span>上次采集</span><strong id="dashLastRun">—</strong></div>
+                        <div class="dash-status-row"><span>本轮新增</span><strong id="dashBatchCount">—</strong></div>
+                        <div class="dash-status-row"><span>词库规模</span><strong id="dashTotalCount">—</strong></div>
+                    </div>
+                    <div class="dash-collect-log" id="dashCollectLog"></div>
+                    <div class="dash-panel-links">
+                        <a href="/my/favorites">收藏</a>
+                        <a href="/my/later">稍后再读</a>
+                        <a href="/stats">阅读统计</a>
+                    </div>
+                </section>
+            </aside>
+        </div>
 
-    <footer class="site-footer">
-        <span>定时资讯 &copy; 2026 &mdash; AI 新闻聚合平台</span>
-    </footer>
+        <footer class="site-footer dash-footer">
+            <span>定时资讯 &copy; 2026 &mdash; 为你推荐 · 对话助手 · 自动采集</span>
+        </footer>
+    </main>
 
     <script>
-        const CATEGORIES = {{ categories | tojson }};
-
-        function formatDate(dateStr) {
-            if (!dateStr) return '-';
-            const d = new Date(dateStr);
-            const pad = n => String(n).padStart(2, '0');
-            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-        }
+        const HOME = {
+            data: { items: [], tags: [], recommendations: [], followed: [] },
+            stats: null,
+            scheduler: null,
+            activeTag: '',
+            tagsExpanded: false,
+            visible: 12,
+            pageSize: 12,
+            collecting: false
+        };
+        const $ = (id) => document.getElementById(id);
+        const PAGE_SIZE = 12;
 
         function escapeHtml(text) {
             const div = document.createElement('div');
-            div.textContent = text || '';
+            div.textContent = text == null ? '' : String(text);
             return div.innerHTML;
         }
 
-        async function loadCategoryNews(cat) {
+        function escapeAttr(text) {
+            return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function pad2(n) { return String(n).padStart(2, '0'); }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '—';
+            const d = new Date(dateStr);
+            if (Number.isNaN(d.getTime())) return '—';
+            const now = new Date();
+            const sameDay = d.toDateString() === now.toDateString();
+            const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+            return sameDay ? `今天 ${time}` : `${d.getMonth() + 1}-${pad2(d.getDate())} ${time}`;
+        }
+
+        function formatNext(dateStr) {
+            if (!dateStr) return '未启用';
+            const d = new Date(dateStr);
+            if (Number.isNaN(d.getTime())) return '—';
+            return `${d.getMonth() + 1}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+        }
+
+        function weekdayName(iso) {
+            const names = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+            return names[new Date(iso + 'T00:00:00').getDay()];
+        }
+
+        function todayIso() {
+            const d = new Date();
+            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        }
+
+        function tagColor(tag) {
+            const found = (HOME.data.tags || []).find(item => item.tag === tag);
+            if (found && found.color) return found.color;
+            let hash = 0;
+            for (let i = 0; i < tag.length; i += 1) hash = (hash * 31 + tag.charCodeAt(i)) >>> 0;
+            const palette = ['#d4a853', '#4a8fd4', '#c75050', '#4aad6a', '#c47ddc', '#e88b5a', '#5aa0a0', '#b07a4a'];
+            return palette[hash % palette.length];
+        }
+
+        function tagChips(tags, className = 'dash-tag-chip') {
+            return (tags || []).slice(0, 4).map(tag =>
+                `<a class="${className}" href="/tag/${encodeURIComponent(tag)}" style="--tag-color:${tagColor(tag)}" onclick="event.stopPropagation()">${escapeHtml(tag)}</a>`
+            ).join('');
+        }
+
+        function toast(message, type = 'success') {
+            if (window.showToast) window.showToast(message, type);
+        }
+
+        /* ===== 数据加载 ===== */
+        async function loadAll() {
+            await Promise.all([loadHome(), loadStats(), loadScheduler(), loadBrief()]);
+            renderHero();
+            renderTags();
+            renderNews();
+            renderPicks();
+        }
+
+        async function loadHome() {
             try {
-                const resp = await fetch(`/api/news?category=${encodeURIComponent(cat)}&page_size=20&today_only=true`);
-                const data = await resp.json();
-                return data.items || [];
+                const resp = await fetch('/api/home?limit=80');
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                HOME.data = await resp.json();
             } catch (e) {
-                console.error(`Failed to load ${cat}:`, e);
-                return [];
+                HOME.data = { items: [], tags: [], recommendations: [], followed: [] };
             }
         }
 
-        function createTickerItem(item) {
-            const el = document.createElement('div');
-            el.className = 'ticker-item';
+        async function loadStats() {
+            try {
+                const resp = await fetch('/api/stats');
+                HOME.stats = resp.ok ? await resp.json() : null;
+            } catch (e) { HOME.stats = null; }
+        }
 
-            const coverHtml = item.cover_url
-                ? `<div class="ticker-cover"><img src="${escapeHtml(item.cover_url)}" alt="" loading="lazy"></div>`
-                : `<div class="ticker-cover ticker-cover-placeholder"><span>CN</span></div>`;
+        async function loadScheduler() {
+            try {
+                const resp = await fetch('/api/scheduler/status');
+                HOME.scheduler = resp.ok ? await resp.json() : null;
+            } catch (e) { HOME.scheduler = null; }
+        }
 
-            const sourceHtml = item.source_url
-                ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener" class="ticker-source-link" onclick="event.stopPropagation()">${escapeHtml(item.source || '来源')}</a>`
-                : `<span class="ticker-source-text">${escapeHtml(item.source || '来源')}</span>`;
+        async function loadBrief() {
+            try {
+                const resp = await fetch('/api/brief/daily');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    $('dashBriefDate').textContent = data.date || '';
+                    $('dashBriefText').textContent = plainPreview(data.content || '', 360) || '今日简报暂时为空。';
+                    return;
+                }
+            } catch (e) { /* ignore */ }
+            $('dashBriefDate').textContent = todayIso();
+            $('dashBriefText').textContent = '今日简报尚未生成。采集完成后，Agent 会把当天全部新闻汇总成一篇简报。';
+        }
 
-            const readStatus = item.is_read
-                ? '<span class="ticker-read-status read">已读</span>'
-                : (item.is_reading ? '<span class="ticker-read-status reading">在读</span>' : '<span class="ticker-read-status unread">未读</span>');
+        function plainPreview(markdown, limit) {
+            return String(markdown || '')
+                .replace(/^#{1,6}\s*/gm, '')
+                .replace(/^>\s?/gm, '')
+                .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+                .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+                .replace(/[*_`]/g, '')
+                .replace(/^每日简报\s*[·\-—]\s*\d{4}-\d{2}-\d{2}\s*/, '')
+                .replace(/\n{2,}/g, '\n')
+                .trim()
+                .slice(0, limit);
+        }
 
-            const laterBtn = `
-                <button type="button" class="card-later-btn ticker-later-btn ${item.is_later ? 'active' : ''}" data-id="${item.id}" title="稍后再读">
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-                    <span>稍后再看</span>
-                </button>`;
+        /* ===== 顶部 ===== */
+        async function renderHero() {
+            const now = new Date();
+            let nickname = '';
+            try {
+                const resp = await fetch('/api/config');
+                if (resp.ok) nickname = (await resp.json()).nickname || '';
+            } catch (e) { /* ignore */ }
+            const hour = now.getHours();
+            const hello = hour < 6 ? '夜深了' : hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
+            $('dashEyebrow').textContent = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 · ${weekdayName(todayIso())}`;
+            $('dashGreeting').innerHTML = nickname
+                ? `${hello}，<em>${escapeHtml(nickname)}</em>`
+                : hello;
 
-            el.innerHTML = `
-                ${coverHtml}
-                ${laterBtn}
-                <div class="ticker-body">
-                    <div class="ticker-item-title">${escapeHtml(item.title)}</div>
-                    <div class="ticker-item-meta">
-                        ${sourceHtml}
-                        <span class="ticker-time">${formatDate(item.collected_at)}</span>
-                        ${readStatus}
+            const stats = HOME.stats || {};
+            const today = Number(stats.today_count || 0);
+            const unread = Number(stats.unread_count || 0);
+            const total = Number(stats.total || 0);
+            const picks = (HOME.data.recommendations || []).length;
+            $('statToday').textContent = today;
+            $('statUnread').textContent = unread;
+
+            $('dashLede').innerHTML = today
+                ? `今天已经收录 <strong>${today}</strong> 条资讯，为你挑出 <strong>${picks}</strong> 条值得先读的；新闻库共 <strong>${total}</strong> 条。`
+                : `新闻库共 <strong>${total}</strong> 条资讯。还没有今天的新内容，点「立即采集」让 Agent 去转转。`;
+
+            const sched = HOME.scheduler || {};
+            const lastSearch = sched.last_run || sched.last_search_time;
+            $('statNext').textContent = formatNext(sched.next_run);
+            $('statNextSub').textContent = sched.running ? '正在采集' : (sched.next_run ? '定时采集' : '未启用');
+
+            const running = !!sched.running;
+            $('dashStatusDot').classList.toggle('idle', !running);
+            $('dashStatusText').textContent = running
+                ? '采集 Agent 正在工作…'
+                : (lastSearch ? `上次采集 ${formatDate(lastSearch)}` : '等待第一次采集');
+            $('dashRunState').textContent = running ? '运行中' : '空闲';
+            $('dashRunState').classList.toggle('running', running);
+            $('dashLastRun').textContent = formatDate(lastSearch);
+            $('dashBatchCount').textContent = `${HOME.data.batch_count || 0} 条`;
+            $('dashTotalCount').textContent = `${total} 条`;
+        }
+
+        /* ===== 推荐 ===== */
+        function renderPicks() {
+            const box = $('dashPicks');
+            if (!box) return;
+            const items = (HOME.data.recommendations || []).slice(0, 6);
+            if (!items.length) {
+                box.innerHTML = `<div class="dash-empty">上一批新闻还没有可推荐的内容。等采集 Agent 更新一轮，或直接问助手。</div>`;
+                return;
+            }
+            const hint = HOME.data.recommend_hint;
+            if (hint) $('dashPickSub').textContent = hint;
+            box.innerHTML = '';
+            items.forEach((item, index) => box.appendChild(createPick(item, index)));
+        }
+
+        function createPick(item, index) {
+            const card = document.createElement('article');
+            card.className = 'dash-pick';
+            card.tabIndex = 0;
+            card.setAttribute('role', 'link');
+            const cover = item.cover_url
+                ? `<div class="dash-pick-cover"><img src="${escapeAttr(item.cover_url)}" alt="" loading="lazy"></div>`
+                : '';
+            card.innerHTML = `
+                ${cover}
+                <span class="dash-pick-rank">${String(index + 1).padStart(2, '0')}</span>
+                <div class="dash-pick-meta">${tagChips(item.tags)}<span class="dash-pick-source">${escapeHtml(item.source || '来源')}</span></div>
+                <div class="dash-pick-title">${escapeHtml(item.title)}</div>
+                <div class="dash-pick-summary">${escapeHtml(item.short_summary || item.summary || '')}</div>
+                <div class="dash-pick-reason">${escapeHtml(item.reason || '为你挑选')}</div>
+            `;
+            card.addEventListener('click', (event) => {
+                if (event.target.closest('a')) return;
+                window.location.href = `/news/${item.id}`;
+            });
+            card.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    window.location.href = `/news/${item.id}`;
+                }
+            });
+            return card;
+        }
+
+        /* ===== 标签 ===== */
+        function renderTags() {
+            const box = $('dashTags');
+            if (!box) return;
+            const tags = HOME.data.tags || [];
+            const followed = new Set(HOME.data.followed || []);
+            if (!tags.length) {
+                box.innerHTML = '<span class="dash-tag-empty">还没有标签，采集一轮后会自动生成。</span>';
+                return;
+            }
+            box.innerHTML = '';
+            const all = document.createElement('button');
+            all.type = 'button';
+            all.className = 'dash-tag' + (HOME.activeTag ? '' : ' active');
+            all.dataset.tag = '';
+            all.textContent = `全部 ${HOME.data.items.length}`;
+            all.addEventListener('click', () => setActiveTag(''));
+            box.appendChild(all);
+
+            const LIMIT = 12;
+            const expanded = !!HOME.tagsExpanded;
+            let visible = expanded ? tags : tags.slice(0, LIMIT);
+            // 当前筛选标签无论排第几都要显示，避免「选了却看不到」
+            if (HOME.activeTag && !visible.some(item => item.tag === HOME.activeTag)) {
+                const active = tags.find(item => item.tag === HOME.activeTag);
+                if (active) visible = [active, ...visible];
+            }
+            visible.forEach(item => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'dash-tag' + (HOME.activeTag === item.tag ? ' active' : '') + (followed.has(item.tag) ? ' followed' : '');
+                chip.style.setProperty('--tag-color', item.color || tagColor(item.tag));
+                chip.innerHTML = `<span>${escapeHtml(item.tag)}</span><em>${item.count || 0}</em>`;
+                chip.addEventListener('click', () => setActiveTag(HOME.activeTag === item.tag ? '' : item.tag));
+                box.appendChild(chip);
+            });
+            if (tags.length > LIMIT) {
+                const more = document.createElement('button');
+                more.type = 'button';
+                more.className = 'dash-tag dash-tag-more';
+                more.textContent = expanded ? '收起标签' : `更多标签 +${tags.length - LIMIT}`;
+                more.addEventListener('click', () => {
+                    HOME.tagsExpanded = !expanded;
+                    renderTags();
+                });
+                box.appendChild(more);
+            }
+        }
+
+        function setActiveTag(tag) {
+            HOME.activeTag = tag || '';
+            HOME.visible = PAGE_SIZE;
+            renderTags();
+            renderNews();
+        }
+
+        /* ===== 新闻流 ===== */
+        function currentItems() {
+            const items = HOME.data.items || [];
+            if (!HOME.activeTag) return items;
+            return items.filter(item => (item.tags || []).includes(HOME.activeTag));
+        }
+
+        function renderNews() {
+            const box = $('dashNews');
+            if (!box) return;
+            const items = currentItems();
+            $('dashFeedSub').textContent = HOME.activeTag
+                ? `「${HOME.activeTag}」${items.length} 条 · 上一批采集`
+                : `上一批 ${HOME.data.batch_count || 0} 条 · 共 ${items.length} 条可浏览`;
+            box.innerHTML = '';
+            if (!items.length) {
+                box.innerHTML = `<div class="dash-empty">这里还没有新闻。试试下面的「立即采集」或问助手。</div>`;
+                $('dashMoreBtn').hidden = true;
+                return;
+            }
+            items.slice(0, HOME.visible).forEach(item => box.appendChild(createNewsCard(item)));
+            $('dashMoreBtn').hidden = items.length <= HOME.visible;
+        }
+
+        function createNewsCard(item) {
+            const card = document.createElement('article');
+            card.className = 'dash-card';
+            card.tabIndex = 0;
+            card.setAttribute('role', 'link');
+            const cover = item.cover_url
+                ? `<div class="dash-card-cover"><img src="${escapeAttr(item.cover_url)}" alt="" loading="lazy"></div>`
+                : `<div class="dash-card-cover dash-card-cover-empty"><span>CN</span></div>`;
+            const read = item.is_read
+                ? '<span class="dash-read read">已读</span>'
+                : '<span class="dash-read unread">未读</span>';
+            card.innerHTML = `
+                ${cover}
+                <div class="dash-card-body">
+                    <div class="dash-card-tags">${tagChips(item.tags)}</div>
+                    <div class="dash-card-title">${escapeHtml(item.title)}</div>
+                    <div class="dash-card-summary">${escapeHtml(item.short_summary || item.summary || '')}</div>
+                    <div class="dash-card-meta">
+                        <span>${escapeHtml(item.source || '来源')}</span>
+                        <span>·</span>
+                        <span>${formatDate(item.collected_at)}</span>
+                        ${read}
                     </div>
                 </div>
             `;
-            el.addEventListener('click', (e) => {
-                if (e.target.closest('a')) return;
-                const lb = e.target.closest('.card-later-btn');
-                if (lb) { toggleCardLater(lb); return; }
+            card.addEventListener('click', (event) => {
+                if (event.target.closest('a')) return;
                 window.location.href = `/news/${item.id}`;
             });
-            return el;
-        }
-
-        async function toggleCardLater(btn) {
-            try {
-                const resp = await fetch(`/api/news/${btn.dataset.id}/later`, { method: 'POST' });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    btn.classList.toggle('active', !!data.is_later);
+            card.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    window.location.href = `/news/${item.id}`;
                 }
-            } catch (e) { /* ignore */ }
-        }
-
-        async function initTicker(cat) {
-            const track = document.querySelector(`.ticker-track[data-cat="${cat}"]`);
-            if (!track) return;
-
-            const items = await loadCategoryNews(cat);
-            if (items.length === 0) {
-                track.innerHTML = '<div class="empty-state"><p>暂无新闻</p></div>';
-                return;
-            }
-
-            const allItems = [...items, ...items];
-            allItems.forEach(item => {
-                track.appendChild(createTickerItem(item));
             });
-
-            track.style.animationDuration = `${Math.max(30, items.length * 10)}s`;
+            return card;
         }
 
-        CATEGORIES.forEach(cat => initTicker(cat));
+        $('dashMoreBtn').addEventListener('click', () => {
+            HOME.visible += HOME.pageSize;
+            renderNews();
+        });
 
-        /* ===== 首页分栏：新闻 / 助手 切换 ===== */
-        const layout = document.getElementById('homeLayout');
-        const feed = document.getElementById('homeFeed');
-        const agent = document.getElementById('homeAgent');
-        const feedToggle = document.getElementById('homeFeedToggle');
-        const expandBtn = document.getElementById('homeAgentExpand');
-        const LAYOUT_KEY = 'cronnews.homeLayout';
-
-        function applyLayout(mode) {
-            // mode: split | agent | feed
-            layout.dataset.mode = mode;
-            const isSplit = mode === 'split';
-            agent.style.display = mode === 'feed' ? 'none' : '';
-            feed.style.display = mode === 'agent' ? 'none' : '';
-            feedToggle.style.display = isSplit ? 'none' : '';
-            expandBtn.title = mode === 'agent' ? '恢复分栏' : '全屏对话';
-            try { localStorage.setItem(LAYOUT_KEY, mode); } catch (e) { /* ignore */ }
-            // 切换后让跑马灯重新计算宽度
-            window.dispatchEvent(new Event('resize'));
+        /* ===== 关注标签 ===== */
+        async function followTag(tag, follow) {
+            try {
+                const resp = await fetch('/api/tags/follow', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tag, follow })
+                });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                const set = new Set(HOME.data.followed || []);
+                if (data.followed) set.add(data.tag); else set.delete(data.tag);
+                HOME.data.followed = Array.from(set);
+                renderTags();
+                toast(data.followed ? `已关注「${data.tag}」` : `已取消关注「${data.tag}」`);
+            } catch (e) {
+                toast('关注失败，请稍后再试', 'error');
+            }
         }
 
-        expandBtn.addEventListener('click', () => {
-            applyLayout(layout.dataset.mode === 'agent' ? 'split' : 'agent');
+        $('dashTagAdd').addEventListener('click', () => {
+            const input = $('dashTagInput');
+            const tag = (input.value || '').trim().replace(/^#/, '');
+            if (!tag) return;
+            followTag(tag, true).then(() => { input.value = ''; });
+        });
+        $('dashTagInput').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') { event.preventDefault(); $('dashTagAdd').click(); }
         });
 
-        feedToggle.addEventListener('click', () => applyLayout('split'));
+        /* ===== 助手 ===== */
+        function askAssistant(text) {
+            if (window.CronNewsAssistant && window.CronNewsAssistant.send) {
+                window.CronNewsAssistant.send(text);
+            } else {
+                window.location.href = '/chat';
+            }
+        }
 
-        // 窄屏默认只显示助手，宽屏默认分栏
-        let saved = '';
-        try { saved = localStorage.getItem(LAYOUT_KEY) || ''; } catch (e) { /* ignore */ }
-        if (!saved) saved = window.innerWidth < 1000 ? 'agent' : 'split';
-        applyLayout(saved);
-
-        window.addEventListener('resize', () => {
-            if (window.innerWidth < 1000 && layout.dataset.mode === 'split') applyLayout('agent');
+        $('dashAskForm').addEventListener('submit', (event) => {
+            event.preventDefault();
+            const input = $('dashAskInput');
+            const text = (input.value || '').trim();
+            if (!text) return;
+            input.value = '';
+            autoGrowAsk();
+            askAssistant(text);
         });
+
+        $('dashAskInput').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                $('dashAskForm').requestSubmit();
+            }
+        });
+        $('dashAskInput').addEventListener('input', autoGrowAsk);
+
+        function autoGrowAsk() {
+            const input = $('dashAskInput');
+            input.style.height = 'auto';
+            input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+        }
+
+        document.querySelectorAll('[data-ask]').forEach(button => {
+            button.addEventListener('click', () => askAssistant(button.dataset.ask));
+        });
+
+        /* ===== 立即采集 ===== */
+        let collectSource = null;
+
+        function appendCollectLog(text) {
+            const log = $('dashCollectLog');
+            log.classList.add('show');
+            const line = document.createElement('div');
+            line.textContent = text;
+            log.appendChild(line);
+            while (log.children.length > 12) log.removeChild(log.firstChild);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function finishCollect(success) {
+            if (collectSource) { collectSource.close(); collectSource = null; }
+            HOME.collecting = false;
+            const btn = $('dashCollectBtn');
+            btn.disabled = false;
+            btn.classList.remove('loading');
+            btn.innerHTML = COLLECT_BTN_HTML;
+            if (success) {
+                toast('采集完成，正在刷新首页…');
+                setTimeout(loadAll, 600);
+            } else {
+                toast('采集任务异常结束，请稍后重试', 'error');
+            }
+            loadScheduler().then(renderHero);
+        }
+
+        const COLLECT_BTN_HTML = $('dashCollectBtn').innerHTML;
+
+        $('dashCollectBtn').addEventListener('click', () => {
+            if (HOME.collecting) { toast('采集正在进行中'); return; }
+            HOME.collecting = true;
+            const btn = $('dashCollectBtn');
+            btn.disabled = true;
+            btn.classList.add('loading');
+            btn.textContent = '采集中…';
+            $('dashCollectLog').innerHTML = '';
+            appendCollectLog('建立连接，准备执行采集任务…');
+            $('dashRunState').textContent = '运行中';
+            $('dashRunState').classList.add('running');
+
+            collectSource = new EventSource('/api/scheduler/trigger/stream');
+            collectSource.onmessage = (event) => {
+                let data;
+                try { data = JSON.parse(event.data); } catch (e) { return; }
+                if (data.type === 'done') { finishCollect(true); return; }
+                if (data.text) appendCollectLog(data.text);
+            };
+            collectSource.onerror = () => {
+                if (!collectSource) return;
+                if (collectSource.readyState === EventSource.CLOSED) return;
+                appendCollectLog('与服务器的连接中断');
+                finishCollect(false);
+            };
+        });
+
+        loadAll();
     </script>
-    <script src="/static/js/chat.js?v=44" defer></script>
 </body>
 </html>
