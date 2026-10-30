@@ -104,3 +104,10 @@ def test_json_local_paths_are_prefixed():
     assert result["items"][0]["cover_url"] == "/proxy/8000/images/cover/1.png"
     assert result["items"][0]["source_url"] == "https://example.com/a"
     assert result["items"][1]["cover_url"] == "/proxy/8000/images/cover/2.png"
+
+
+def test_json_api_paths_are_prefixed():
+    data = {"url": "/api/skill?path=SKILL.md", "external": "https://example.com/api"}
+    result = rewrite_json_value(data, BASE)
+    assert result["url"] == "/proxy/8000/api/skill?path=SKILL.md"
+    assert result["external"] == "https://example.com/api"

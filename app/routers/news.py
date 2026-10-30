@@ -1,13 +1,15 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas.news import NewsCreate, NewsResponse, NewsListResponse
+from app.models import News
+from app.schemas.news import NewsCreate, NewsUpdate, NewsResponse, NewsListResponse
 from app.crud import news as news_crud
 from app.env_store import read_env_file
+from app.services import dedup
 
 router = APIRouter(prefix="/api", tags=["news"])
 
@@ -37,6 +39,98 @@ async def list_news(
     return NewsListResponse(total=total, items=items)
 
 
+@router.get("/news/check")
+async def check_news_duplicate(
+    url: str | None = Query(None, max_length=500, description="待检查的原文链接"),
+    title: str | None = Query(None, max_length=255, description="待检查的标题"),
+    days: int = Query(30, ge=1, le=365, description="回看天数"),
+    db: AsyncSession = Depends(get_db),
+):
+    """推送前查重：按规范化 URL + 标题相似度判断平台是否已有同一事件。
+
+    外部 Agent 推送前调用本接口，可避免重复入库。标题阈值沿用
+    `AGENT_TITLE_DUP_THRESHOLD`（默认 0.82）。
+    """
+    if not (url or "").strip() and not (title or "").strip():
+        raise HTTPException(status_code=400, detail="url 与 title 至少提供一个")
+
+    try:
+        threshold = float(read_env_file().get("AGENT_TITLE_DUP_THRESHOLD", "") or 0.82)
+    except (TypeError, ValueError):
+        threshold = 0.82
+
+    since = datetime.now() - timedelta(days=days)
+    if url:
+        exact = (
+            await db.execute(
+                select(News)
+                .where(News.is_deleted == 0, News.source_url == url.strip())
+                .order_by(News.collected_at.desc())
+                .limit(1)
+            )
+        ).scalars().first()
+        if exact:
+            return {
+                "exists": True,
+                "match": "url",
+                "news_id": exact.id,
+                "title": exact.title,
+                "score": 1.0,
+                "checked": 0,
+                "truncated": False,
+            }
+
+    rows = (
+        await db.execute(
+            select(News)
+            .where(News.is_deleted == 0, News.collected_at >= since)
+            .order_by(News.collected_at.desc())
+            .limit(2000)
+        )
+    ).scalars().all()
+
+    normalized_url = dedup.normalize_url(url) if url else ""
+    best_title: tuple[float, News | None] = (0.0, None)
+    for news in rows:
+        if normalized_url and news.source_url:
+            if dedup.normalize_url(news.source_url) == normalized_url:
+                return {
+                    "exists": True,
+                    "match": "url",
+                    "news_id": news.id,
+                    "title": news.title,
+                    "score": 1.0,
+                    "checked": len(rows),
+                    "truncated": len(rows) >= 2000,
+                }
+        if title:
+            score = dedup.title_similarity(title, news.title)
+            if score > best_title[0]:
+                best_title = (score, news)
+
+    if best_title[1] is not None and best_title[0] >= threshold:
+        news = best_title[1]
+        return {
+            "exists": True,
+            "match": "title",
+            "news_id": news.id,
+            "title": news.title,
+            "score": round(best_title[0], 4),
+            "checked": len(rows),
+            "truncated": len(rows) >= 2000,
+        }
+
+    return {
+        "exists": False,
+        "match": "",
+        "news_id": None,
+        "title": "",
+        "score": round(best_title[0], 4),
+        "checked": len(rows),
+        "truncated": len(rows) >= 2000,
+    }
+
+
 @router.get("/news/{news_id}", response_model=NewsResponse)
 async def get_news(
     news_id: int,
@@ -46,6 +140,33 @@ async def get_news(
     if not news:
         raise HTTPException(status_code=404, detail="新闻不存在")
     return news
+
+
+@router.patch("/news/{news_id}", response_model=NewsResponse)
+async def update_news(
+    news_id: int,
+    body: NewsUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """更正已推送的内容（标题、正文、标签、分析等），未传字段保持不变。"""
+    changes = body.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status_code=400, detail="没有需要更新的字段")
+    if "title" in changes and not str(changes.get("title") or "").strip():
+        raise HTTPException(status_code=400, detail="标题不能为空")
+    news = await news_crud.update_news(db, news_id, changes)
+    if not news:
+        raise HTTPException(status_code=404, detail="新闻不存在")
+    return news
+
+
+@router.delete("/news/{news_id}")
+async def delete_news(news_id: int, db: AsyncSession = Depends(get_db)):
+    """逻辑删除（撤回误推/失效内容）；数据仍保留在库中用于审计。"""
+    ok = await news_crud.soft_delete_news(db, news_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="新闻不存在")
+    return {"ok": True, "id": news_id, "deleted": True}
 
 
 @router.get("/news/{news_id}/related", response_model=NewsListResponse)

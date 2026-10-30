@@ -32,8 +32,8 @@ TEXT_CONTENT_TYPES = (
     "application/x-javascript",
 )
 
-# 这些 URL 一定指向本应用的静态资源，JSON 响应里也值得改写
-LOCAL_PREFIXES = ("/images/", "/static/")
+# 这些 URL 一定指向本应用的静态资源 / 接口，JSON 响应里也值得改写
+LOCAL_PREFIXES = ("/images/", "/static/", "/api/")
 
 
 def normalize_base_path(value: str) -> str:

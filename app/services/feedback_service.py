@@ -6,7 +6,7 @@ import asyncio
 import os
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.env_store import read_env_file
@@ -103,7 +103,14 @@ async def create_feedback(
 
 
 def schedule_reflection() -> None:
-    """反馈后异步触发记忆反思；不阻塞用户请求。"""
+    """反馈后异步触发记忆反思；不阻塞用户请求。辅助模式下不做平台反思。"""
+    try:
+        from app.services.assist_service import is_assist
+
+        if is_assist():
+            return
+    except Exception:
+        pass
     if not memory_service.enabled() or not _env_bool("AGENT_FEEDBACK_REFLECT", True):
         return
     task = asyncio.create_task(memory_service.reflect_pending_feedback_background())
@@ -148,10 +155,16 @@ async def list_feedback(
                 "processed_at": item.processed_at.isoformat() if item.processed_at else None,
             }
         )
+    pending = int(
+        await db.scalar(
+            select(func.count()).where(Feedback.status.in_(["new", "noted"]))
+        )
+        or 0
+    )
     return {
         "items": items,
         "total": len(items),
-        "pending": sum(1 for item in rows if item.status in {"new", "noted"}),
+        "pending": pending,
         "labels": _reason_labels,
     }
 

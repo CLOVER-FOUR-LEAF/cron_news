@@ -583,6 +583,8 @@ class Scheduler:
             await self._save_run(lines, status)
 
     async def trigger_now(self):
+        if self._work_mode() != "autonomous":
+            raise RuntimeError("辅助模式下平台不执行内置采集；请由外部 Agent 推送新闻")
         logger.info("手动触发「立即执行」按钮")
         await self._run_search("手动")
         return self._last_result

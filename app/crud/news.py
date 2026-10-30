@@ -1,6 +1,6 @@
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 import json
-import os
 import re
 import shutil
 from pathlib import Path
@@ -8,6 +8,7 @@ from pathlib import Path
 from sqlalchemy import select, func, case, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.news import News
 from app.models.news_tag import NewsTag
 from app.schemas.news import NewsCreate
@@ -149,9 +150,23 @@ async def get_related_news(db: AsyncSession, news_id: int, limit: int = 10, reco
     return list(result.scalars().all())
 
 
+def _normalize_collected_at(value: datetime | None) -> datetime:
+    """统一为服务器本地 naive 时间，避免带时区的 ISO 字符串被 SQLite 原样存下。"""
+    collected = value or datetime.now()
+    if collected.tzinfo is None:
+        return collected
+    try:
+        tz = ZoneInfo(settings.APP_TIMEZONE)
+    except Exception:
+        tz = None
+    converted = collected.astimezone(tz) if tz else collected.astimezone()
+    return converted.replace(tzinfo=None)
+
+
 async def create_news(db: AsyncSession, news_in: NewsCreate) -> News:
     tags = tag_service.normalize_tags(news_in.tags or [])
     summary = normalize_summary(news_in.summary, news_in.content)
+    batch_id = (news_in.batch_id or "").strip()[:40] or None
     news = News(
         title=news_in.title,
         summary=summary or None,
@@ -159,7 +174,8 @@ async def create_news(db: AsyncSession, news_in: NewsCreate) -> News:
         source_url=news_in.source_url,
         source=news_in.source,
         cover_url=news_in.cover_url,
-        collected_at=news_in.collected_at or datetime.now(),
+        collected_at=_normalize_collected_at(news_in.collected_at),
+        batch_id=batch_id,
         tags=json.dumps(tags, ensure_ascii=False) if tags else None,
         credibility=news_in.credibility,
         analysis=json.dumps(news_in.analysis, ensure_ascii=False) if news_in.analysis else None,
@@ -178,21 +194,90 @@ async def create_news(db: AsyncSession, news_in: NewsCreate) -> News:
     return news
 
 
-async def finalize_cover(news: News, cover_url: str) -> str | None:
-    """外部 Agent 提供的封面图落盘改名：把 images 目录下的图片改名保存到 cover/{新闻id}.{扩展名}。
+async def update_news(db: AsyncSession, news_id: int, changes: dict) -> News | None:
+    """增量更新新闻；tags 变化时同步标签索引，本地封面会重新归档。"""
+    news = await get_news_by_id(db, news_id)
+    if not news:
+        return None
 
-    - 仅接受 `/images/` 开头的本地路径（外部 Agent 已把图片放进挂载的 images 目录，容器内可读）；
-    - 校验路径位于 images 目录内，防止路径穿越；
-    - 文件不存在时返回 None（保留原链接，由前端兜底），并确保返回的新链接真实存在。
+    if "title" in changes and changes["title"] is not None:
+        news.title = str(changes["title"]).strip()[:255]
+    if "summary" in changes:
+        news.summary = normalize_summary(changes.get("summary"), changes.get("content", news.content))
+    if "content" in changes:
+        news.content = changes["content"]
+    if "source_url" in changes:
+        news.source_url = changes["source_url"]
+    if "source" in changes:
+        news.source = changes["source"]
+    if "credibility" in changes:
+        news.credibility = changes["credibility"]
+    if "analysis" in changes:
+        analysis = changes["analysis"]
+        news.analysis = (
+            json.dumps(analysis, ensure_ascii=False) if isinstance(analysis, dict) and analysis else None
+        )
+    if "related_ids" in changes:
+        related = changes["related_ids"]
+        news.related_ids = (
+            json.dumps([int(item) for item in related], ensure_ascii=False)
+            if isinstance(related, list) and related
+            else None
+        )
+    if "tags" in changes and changes["tags"] is not None:
+        tags = tag_service.normalize_tags(changes["tags"])
+        news.tags = json.dumps(tags, ensure_ascii=False) if tags else None
+        await tag_service.sync_news_tags(db, news)
+    if "cover_url" in changes:
+        cover_url = changes["cover_url"]
+        news.cover_url = cover_url
+        if cover_url:
+            final = await finalize_cover(news, cover_url)
+            if final:
+                news.cover_url = final
+
+    await db.flush()
+    await db.refresh(news)
+    return news
+
+
+async def soft_delete_news(db: AsyncSession, news_id: int) -> bool:
+    """逻辑删除：保留数据用于审计，列表/检索/统计不再展示。"""
+    news = await get_news_by_id(db, news_id)
+    if not news:
+        return False
+    news.is_deleted = 1
+    await db.flush()
+    return True
+
+
+async def finalize_cover(news: News, cover_url: str) -> str | None:
+    """外部 Agent 提供的封面图归档：把上传/待处理图片复制到 cover/{新闻id}.{扩展名}。
+
+    - 仅接受 `/images/uploads/...`，或 `/images/cover/` 下非保留、非新闻 id 命名的文件；
+    - 拒绝 `images/sign.png`、`images/avatar/`、`images/cover/default/`、`images/cover/{已有新闻id}.png`；
+    - 使用复制而不是移动，重试同一头像时源文件仍在；
+    - 校验路径位于 images 目录内，防止路径穿越；文件不存在时返回 None。
     """
     if not cover_url or not cover_url.startswith("/images/"):
         return None
     images_dir = IMAGES_DIR.resolve()
     try:
         old_path = (IMAGES_DIR / cover_url[len("/images/"):]).resolve()
-    except OSError:
+        relative = old_path.relative_to(images_dir)
+    except (OSError, ValueError):
         return None
-    if not str(old_path).startswith(str(images_dir) + os.sep):
+    parts = relative.parts
+    if not parts:
+        return None
+    top = parts[0]
+    if top == "cover":
+        # 默认封面与其他新闻的已归档封面不能被外部 cover_url 覆盖/移走
+        if len(parts) > 1 and parts[1] == "default":
+            return None
+        if old_path.stem.isdigit():
+            return None
+    elif top != "uploads":
         return None
     if not old_path.is_file():
         return None
@@ -202,7 +287,7 @@ async def finalize_cover(news: News, cover_url: str) -> str | None:
         if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
             suffix = ".png"
         new_path = COVER_DIR / f"{news.id}{suffix}"
-        shutil.move(str(old_path), str(new_path))
+        shutil.copy2(str(old_path), str(new_path))
         return f"/images/cover/{news.id}{suffix}"
     except OSError:
         return None

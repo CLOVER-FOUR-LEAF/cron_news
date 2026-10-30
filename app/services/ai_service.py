@@ -782,8 +782,10 @@ async def run_search_task(
         reason = errors[0] if errors else "无结果"
         await _emit("error", f"本轮没有可用候选：{reason}")
 
-    env_vars["LAST_SEARCH_TIME"] = datetime.now().isoformat()
-    write_env_file(env_vars)
+    # 长任务期间用户可能切换模式或改配置；写回前重新读取，只更新本次自己的键
+    latest_env = read_env_file()
+    latest_env["LAST_SEARCH_TIME"] = datetime.now().isoformat()
+    write_env_file(latest_env)
 
     try:
         await memory_service.ensure_profile_fresh(db)

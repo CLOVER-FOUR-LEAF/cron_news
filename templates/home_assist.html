@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>定时资讯 · 资讯墙</title>
+    <link rel="icon" href="/images/sign.png" type="image/png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=49">
+</head>
+<body class="wall-page">
+    {% include "_header.html" %}
+
+    <main class="wall" id="wall">
+        <section class="wall-hero">
+            <div class="wall-hero-main">
+                <div class="wall-eyebrow">
+                    <span class="wall-mode-dot" aria-hidden="true"></span>
+                    辅助模式 · 外部 Agent 供数
+                </div>
+                <h1 class="wall-title">资讯墙</h1>
+                <p class="wall-lede" id="wallLede">正在读取最新一批资讯…</p>
+                <div class="wall-actions">
+                    <a class="wall-btn wall-btn-primary" href="/brief">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2h6l2.5 2.5V14H4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M5.5 6.5h5M5.5 9h5M5.5 11.5h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                        今日简报
+                    </a>
+                    <button type="button" class="wall-btn" id="wallRefresh">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 11-1.6-3.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M13.4 2.6v3.2h-3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        刷新
+                    </button>
+                    <a class="wall-btn" href="/skill">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3" y="4" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="6.2" cy="8" r="1" fill="currentColor"/><circle cx="9.8" cy="8" r="1" fill="currentColor"/><path d="M8 4V2M5.5 2h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                        外部接入
+                    </a>
+                </div>
+            </div>
+            <div class="wall-stats" aria-label="资讯概况">
+                <div class="wall-stat">
+                    <span>今日新增</span>
+                    <b id="wallToday">—</b>
+                </div>
+                <div class="wall-stat">
+                    <span>窗口内</span>
+                    <b id="wallBatch">—</b>
+                </div>
+                <div class="wall-stat">
+                    <span>未读</span>
+                    <b id="wallUnread">—</b>
+                </div>
+                <div class="wall-stat">
+                    <span>关注标签</span>
+                    <b id="wallFollowedCount">—</b>
+                </div>
+            </div>
+        </section>
+
+        <section class="wall-statusbar" aria-live="polite">
+            <div class="wall-status-left">
+                <span class="wall-pulse" id="wallPulse" aria-hidden="true"></span>
+                <span id="wallStatusText">正在检查外部 Agent 状态…</span>
+            </div>
+            <div class="wall-status-right">
+                <span id="wallLastPush"></span>
+                <span class="wall-status-sep" aria-hidden="true">·</span>
+                <span id="wallFeedback"></span>
+                <a href="/api/skill" target="_blank" rel="noopener">SKILL.md</a>
+            </div>
+        </section>
+
+        <section class="wall-toolbar">
+            <div class="wall-tagbar" id="wallTagbar" aria-label="标签筛选"></div>
+            <div class="wall-toolbar-actions">
+                <div class="wall-window-seg" id="wallWindowSeg" aria-label="时间范围">
+                    <button type="button" data-days="1" aria-pressed="false">近 24 小时</button>
+                    <button type="button" data-days="7" class="active" aria-pressed="true">近 7 天</button>
+                    <button type="button" data-days="30" aria-pressed="false">近 30 天</button>
+                </div>
+                <div class="wall-follow-box">
+                    <input type="text" id="wallTagInput" maxlength="30" placeholder="关注新标签" aria-label="关注新标签">
+                    <button type="button" id="wallTagAdd" title="关注标签">+</button>
+                </div>
+                <button type="button" class="wall-pause-btn" id="wallPauseBtn" aria-pressed="false">暂停滚动</button>
+            </div>
+        </section>
+
+        <section class="wall-lanes" id="wallLanes" aria-label="按标签浏览资讯">
+            <div class="wall-loading">
+                <span class="wall-loading-dot"></span>
+                <span class="wall-loading-dot"></span>
+                <span class="wall-loading-dot"></span>
+                正在整理资讯…
+            </div>
+        </section>
+
+        <section class="wall-empty" id="wallEmpty" hidden>
+            <div class="wall-empty-mark" aria-hidden="true">
+                <svg width="42" height="42" viewBox="0 0 24 24" fill="none">
+                    <path d="M4 5h16v13H4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                    <path d="M7 8.5h10M7 12h10M7 15.5h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <div class="wall-empty-copy">
+                <div class="wall-empty-eyebrow" id="wallEmptyEyebrow">等待第一条新闻</div>
+                <h2 id="wallEmptyTitle">这座资讯墙由外部 Agent 供数</h2>
+                <p id="wallEmptyText">
+                    辅助模式下，平台不主动采集、不调用模型。让外部 Agent 加载接入 Skill，它会在首次连接时询问你的兴趣与节奏，
+                    再把新闻推送到 <code>POST /api/news</code>。数据一到位，这里会自动出现。
+                </p>
+                <ol class="wall-empty-steps" id="wallEmptySteps">
+                    <li><span>01</span>确认当前为辅助模式（设置 → 工作模式）</li>
+                    <li><span>02</span>把 <a href="/skill">接入说明</a>交给外部 Agent，或让它读取 <code id="wallSkillUrl">/api/skill</code></li>
+                    <li><span>03</span>完成首次访谈后，让 Agent 推送第一批新闻</li>
+                </ol>
+                <div class="wall-empty-actions">
+                    <button type="button" class="wall-btn wall-btn-primary" id="wallEmptyWiden" hidden>看近 30 天</button>
+                    <a class="wall-btn wall-btn-primary" href="/skill" id="wallEmptySkillLink">查看接入说明</a>
+                    <a class="wall-btn" href="/api/skill" target="_blank" rel="noopener">下载 SKILL.md</a>
+                    <code class="wall-empty-api" id="wallApiBase">POST /api/news</code>
+                </div>
+            </div>
+        </section>
+
+        <section class="wall-empty wall-error" id="wallError" hidden>
+            <div class="wall-empty-mark" aria-hidden="true">
+                <svg width="42" height="42" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3.2L21 19.5H3L12 3.2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                    <path d="M12 9v4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    <circle cx="12" cy="16.6" r="0.9" fill="currentColor"/>
+                </svg>
+            </div>
+            <div class="wall-empty-copy">
+                <div class="wall-empty-eyebrow">连接失败</div>
+                <h2>资讯加载失败</h2>
+                <p id="wallErrorText">请确认平台服务正在运行，然后重试。</p>
+                <div class="wall-empty-actions">
+                    <button type="button" class="wall-btn wall-btn-primary" id="wallErrorRetry">重试</button>
+                    <a class="wall-btn" href="/skill">外部接入</a>
+                </div>
+            </div>
+        </section>
+
+        <footer class="site-footer wall-footer">
+            <span>定时资讯 &copy; 2026 &mdash; 辅助模式 · 数据由外部 Agent 提供</span>
+            <span class="wall-footer-mode">新闻、记忆与图片在两种模式间共用，切换不会丢失</span>
+        </footer>
+    </main>
+
+    <script>
+        const WALL = {
+            data: { items: [], tags: [], followed: [], batch_id: '', batch_count: 0, total: 0 },
+            status: null,
+            brief: null,
+            days: 7,
+            activeTag: '__all__',
+            fingerprint: '',
+            loading: false,
+            paused: false,
+            firstLoad: true,
+            laneIndex: new Map()
+        };
+        const $ = (id) => document.getElementById(id);
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const PALETTE = ['#d4a853', '#4a8fd4', '#c75050', '#4aad6a', '#c47ddc', '#e88b5a', '#5aa0a0', '#b07a4a'];
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text == null ? '' : String(text);
+            return div.innerHTML;
+        }
+
+        function escapeAttr(text) {
+            return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function pad2(n) { return String(n).padStart(2, '0'); }
+
+        function formatDate(value) {
+            if (!value) return '—';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return '—';
+            const now = new Date();
+            const sameDay = d.toDateString() === now.toDateString();
+            const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+            return sameDay ? `今天 ${time}` : `${d.getMonth() + 1}-${pad2(d.getDate())} ${time}`;
+        }
+
+        function tagColor(tag) {
+            const found = (WALL.data.tags || []).find(item => item.tag === tag);
+            if (found && found.color) return found.color;
+            let hash = 0;
+            for (let i = 0; i < tag.length; i += 1) hash = (hash * 31 + tag.charCodeAt(i)) >>> 0;
+            return PALETTE[hash % PALETTE.length];
+        }
+
+        function toast(message, type = 'success') {
+            if (window.showToast) window.showToast(message, type);
+        }
+
+        function appOrigin() {
+            // 兼容反向代理子路径（如 /proxy/8000/），pathname 已包含前缀
+            const path = window.location.pathname.replace(/\/+$/, '');
+            return window.location.origin + path;
+        }
+
+        async function readJson(resp) {
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        }
+
+        /* ===== 加载 ===== */
+        async function loadHome() {
+            try {
+                const data = await readJson(await fetch(`/api/assist/feed?days=${WALL.days}&limit=300`));
+                WALL.data = data;
+                WALL.data.items = WALL.data.items || [];
+                WALL.data.tags = WALL.data.tags || [];
+                WALL.data.followed = WALL.data.followed || [];
+                WALL.data.total = WALL.data.total == null ? WALL.data.items.length : WALL.data.total;
+                WALL.homeError = false;
+                return true;
+            } catch (e) {
+                WALL.homeError = true;
+                return false;
+            }
+        }
+
+        async function loadStatus() {
+            try {
+                WALL.status = await readJson(await fetch('/api/assist/status'));
+                if (WALL.status) {
+                    WALL.brief = WALL.status.brief || null;
+                    if (!WALL.data.followed.length && WALL.status.tags) {
+                        WALL.data.followed = WALL.status.tags.followed || [];
+                    }
+                }
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        async function loadAll(options = {}) {
+            if (WALL.loading) return;
+            WALL.loading = true;
+            const btn = $('wallRefresh');
+            const first = WALL.firstLoad;
+            if (options.manual) btn.classList.add('spinning');
+            try {
+                const [homeOk] = await Promise.all([loadHome(), loadStatus()]);
+                if (!homeOk) {
+                    if (WALL.data.items.length) {
+                        if (options.manual) toast('刷新失败，继续显示上次数据', 'error');
+                        return;
+                    }
+                    renderLoadError();
+                    if (options.manual) toast('刷新失败，请检查平台服务后重试', 'error');
+                    return;
+                }
+                $('wallError').hidden = true;
+                const fingerprint = JSON.stringify([
+                    WALL.days,
+                    WALL.data.batch_id,
+                    WALL.data.total,
+                    WALL.data.items[0] ? WALL.data.items[0].id : null,
+                    WALL.status && WALL.status.latest_news ? WALL.status.latest_news.id : null,
+                    WALL.status && WALL.status.feedback ? WALL.status.feedback.pending : null
+                ]);
+                const changed = WALL.fingerprint && fingerprint !== WALL.fingerprint;
+                WALL.fingerprint = fingerprint;
+                renderHero();
+                if (first || changed || options.manual) {
+                    const focus = captureFocus();
+                    renderTagbar();
+                    renderLanes();
+                    restoreFocus(focus);
+                }
+                if (changed && !options.manual) toast('资讯墙已更新');
+                if (options.manual) toast('已刷新');
+            } finally {
+                WALL.loading = false;
+                WALL.firstLoad = false;
+                btn.classList.remove('spinning');
+            }
+        }
+
+        function renderLoadError() {
+            $('wallLanes').hidden = true;
+            $('wallEmpty').hidden = true;
+            $('wallError').hidden = false;
+            $('wallLede').textContent = '资讯加载失败，请检查平台服务后重试。';
+            $('wallStatusText').textContent = '无法连接资讯服务';
+            $('wallPulse').classList.remove('live', 'waiting');
+        }
+
+        function captureFocus() {
+            const el = document.activeElement;
+            if (!el) return null;
+            if (el.classList.contains('wall-tag-chip')) {
+                return { type: 'tag', value: el.dataset.tag || '__all__' };
+            }
+            const card = el.closest('.wall-card');
+            if (card) return { type: 'card', value: card.dataset.id };
+            if (el.id === 'wallPauseBtn') return { type: 'id', value: 'wallPauseBtn' };
+            return null;
+        }
+
+        function restoreFocus(state) {
+            if (!state) return;
+            let el = null;
+            if (state.type === 'tag') {
+                el = document.querySelector(`.wall-tag-chip[data-tag="${CSS.escape(state.value)}"]`);
+            } else if (state.type === 'card') {
+                el = document.querySelector(`.wall-card[data-id="${CSS.escape(state.value)}"]`);
+            } else if (state.type === 'id') {
+                el = document.getElementById(state.value);
+            }
+            if (el) el.focus({ preventScroll: true });
+        }
+
+        /* ===== 顶部 ===== */
+        function renderHero() {
+            const items = WALL.data.items || [];
+            const stats = (WALL.status && WALL.status.stats) || {};
+            const latest = WALL.status && WALL.status.latest_news;
+            const onboarded = !!(WALL.status && WALL.status.onboarded);
+            const windowLabel = WALL.days === 1 ? '近 24 小时' : `近 ${WALL.days} 天`;
+
+            $('wallToday').textContent = stats.today == null ? '—' : stats.today;
+            $('wallBatch').textContent = WALL.data.total == null ? '—' : WALL.data.total;
+            $('wallUnread').textContent = stats.unread == null ? '—' : stats.unread;
+            $('wallFollowedCount').textContent = (WALL.data.followed || []).length;
+
+            if (items.length) {
+                const total = stats.total == null ? items.length : stats.total;
+                $('wallLede').innerHTML = `${windowLabel}收录 <strong>${WALL.data.total}</strong> 条 · 新闻库共 <strong>${total}</strong> 条 · 最近更新 <strong>${formatDate(latest && latest.collected_at)}</strong>`;
+            } else if (onboarded) {
+                $('wallLede').textContent = '外部 Agent 已接入，正在等待第一批新闻推送。';
+            } else {
+                $('wallLede').textContent = '等待外部 Agent 初始化。把接入说明交给你的 Agent，它会先询问你的兴趣与阅读节奏。';
+            }
+
+            const statusText = $('wallStatusText');
+            const pulse = $('wallPulse');
+            const isLive = items.length > 0 && !!latest;
+            if (isLive) {
+                statusText.textContent = `最近更新：${formatDate(latest.collected_at)}`;
+            } else if (onboarded) {
+                statusText.textContent = '外部 Agent 已接入，等待推送';
+            } else {
+                statusText.textContent = '等待外部 Agent 初始化';
+            }
+            pulse.classList.toggle('live', isLive);
+            pulse.classList.toggle('waiting', !isLive);
+            $('wallLastPush').textContent = latest ? `最近更新 ${formatDate(latest.collected_at)}` : '尚无推送';
+            const pending = WALL.status && WALL.status.feedback ? WALL.status.feedback.pending : 0;
+            $('wallFeedback').textContent = pending ? `反馈待处理 ${pending} 条` : '反馈已同步';
+            $('wallSkillUrl').textContent = `${appOrigin()}/api/skill`;
+            $('wallApiBase').textContent = `POST ${appOrigin()}/api/news`;
+        }
+
+        /* ===== 标签栏 ===== */
+        function orderedTags() {
+            const tags = [...(WALL.data.tags || [])];
+            const followed = new Set(WALL.data.followed || []);
+            const byName = new Map(tags.map(item => [item.tag, item]));
+            const ordered = [];
+            WALL.data.followed.forEach(tag => {
+                if (ordered.some(item => item.tag === tag)) return;
+                const found = byName.get(tag);
+                ordered.push(found || { tag, count: 0, color: tagColor(tag), followed: true });
+            });
+            tags
+                .filter(item => (item.count || 0) > 0)
+                .sort((a, b) => (b.count || 0) - (a.count || 0))
+                .forEach(item => {
+                    if (ordered.some(existing => existing.tag === item.tag)) return;
+                    ordered.push(item);
+                });
+            return ordered.map(item => ({ ...item, followed: followed.has(item.tag) }));
+        }
+
+        function renderTagbar() {
+            const box = $('wallTagbar');
+            const tags = orderedTags().filter(item => (item.count || 0) > 0 || item.followed);
+            box.innerHTML = '';
+            const all = document.createElement('button');
+            all.type = 'button';
+            all.dataset.tag = '__all__';
+            all.className = 'wall-tag-chip' + (WALL.activeTag === '__all__' ? ' active' : '');
+            all.setAttribute('aria-pressed', String(WALL.activeTag === '__all__'));
+            all.innerHTML = `<span>全部</span><em>${WALL.data.total == null ? WALL.data.items.length : WALL.data.total}</em>`;
+            all.addEventListener('click', () => setActiveTag('__all__'));
+            box.appendChild(all);
+
+            tags.slice(0, 40).forEach(item => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.dataset.tag = item.tag;
+                chip.className = 'wall-tag-chip' + (item.followed ? ' followed' : '') + (WALL.activeTag === item.tag ? ' active' : '');
+                chip.setAttribute('aria-pressed', String(WALL.activeTag === item.tag));
+                chip.style.setProperty('--tag-color', item.color || tagColor(item.tag));
+                chip.innerHTML = `<span>${escapeHtml(item.tag)}</span><em>${item.count || 0}</em>${item.followed ? '<i title="已关注">★</i>' : ''}`;
+                chip.addEventListener('click', () => setActiveTag(item.tag));
+                box.appendChild(chip);
+            });
+        }
+
+        function setActiveTag(tag) {
+            WALL.activeTag = tag;
+            document.querySelectorAll('.wall-tag-chip').forEach(el => {
+                const active = el.dataset.tag === tag;
+                el.classList.toggle('active', active);
+                el.setAttribute('aria-pressed', String(active));
+            });
+            if (WALL.laneIndex.has(tag)) scrollToLane(tag);
+            else if (tag !== '__all__') window.location.href = `/tag/${encodeURIComponent(tag)}`;
+        }
+
+        function scrollToLane(tag) {
+            const index = WALL.laneIndex.get(tag);
+            if (index == null) return;
+            const lane = document.querySelector(`.wall-lane[data-lane-index="${index}"]`);
+            if (!lane) return;
+            lane.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+            lane.classList.add('flash');
+            setTimeout(() => lane.classList.remove('flash'), 1200);
+        }
+
+        /* ===== 资讯车道 ===== */
+        function laneDefinitions() {
+            const windowLabel = WALL.days === 1 ? '近 24 小时' : `近 ${WALL.days} 天`;
+            const definitions = [{
+                tag: '__all__',
+                label: '最新',
+                color: '#c8a852',
+                followed: false,
+                items: WALL.data.items.slice(),
+                caption: `${windowLabel} · ${WALL.data.total} 条${WALL.data.truncated ? `（显示前 ${WALL.data.items.length}）` : ''}`
+            }];
+            orderedTags()
+                .filter(item => (item.count || 0) > 0)
+                .slice(0, 8)
+                .forEach(item => {
+                    const items = WALL.data.items.filter(news => (news.tags || []).includes(item.tag));
+                    if (!items.length) return;
+                    definitions.push({
+                        tag: item.tag,
+                        label: item.tag,
+                        color: item.color || tagColor(item.tag),
+                        followed: !!item.followed,
+                        items,
+                        caption: `${items.length} 条`
+                    });
+                });
+            return definitions;
+        }
+
+        function renderLanes() {
+            const box = $('wallLanes');
+            const empty = $('wallEmpty');
+            $('wallError').hidden = true;
+            WALL.laneIndex.clear();
+            box.innerHTML = '';
+            if (!WALL.data.items.length) {
+                box.hidden = true;
+                empty.hidden = false;
+                renderEmptyState();
+                return;
+            }
+            box.hidden = false;
+            empty.hidden = true;
+            const canAnimate = !reduceMotion && !window.matchMedia('(max-width: 760px)').matches;
+            $('wallPauseBtn').hidden = !canAnimate;
+
+            laneDefinitions().forEach((lane, index) => {
+                WALL.laneIndex.set(lane.tag, index);
+                box.appendChild(createLane(lane, index));
+            });
+            document.body.classList.toggle('wall-paused', WALL.paused);
+        }
+
+        function renderEmptyState() {
+            const stats = (WALL.status && WALL.status.stats) || {};
+            const total = Number(stats.total || 0);
+            const onboarded = !!(WALL.status && WALL.status.onboarded);
+            const eyebrow = $('wallEmptyEyebrow');
+            const title = $('wallEmptyTitle');
+            const text = $('wallEmptyText');
+            const steps = $('wallEmptySteps');
+            const widen = $('wallEmptyWiden');
+            const skillLink = $('wallEmptySkillLink');
+
+            if (total > 0) {
+                eyebrow.textContent = '当前时间范围没有新闻';
+                title.textContent = '换个时间范围看看';
+                text.textContent = `新闻库里已有 ${total} 条历史资讯。试试「近 30 天」，或等待外部 Agent 推送新内容。`;
+                steps.hidden = true;
+                widen.hidden = WALL.days >= 30;
+                widen.textContent = WALL.days >= 30 ? '已是最宽范围' : '看近 30 天';
+                skillLink.hidden = true;
+            } else if (onboarded) {
+                eyebrow.textContent = '等待推送';
+                title.textContent = '外部 Agent 已接入';
+                text.textContent = '它会在约定时间推送新闻；也可以让它现在跑一轮，或把接入提示词重新发给它。';
+                steps.hidden = false;
+                widen.hidden = true;
+                skillLink.hidden = false;
+            } else {
+                eyebrow.textContent = '等待第一条新闻';
+                title.textContent = '这座资讯墙由外部 Agent 供数';
+                text.textContent = '辅助模式下，平台不主动采集、不调用模型。让外部 Agent 加载接入 Skill，它会在首次连接时询问你的兴趣与节奏，再把新闻推送到 POST /api/news。数据一到位，这里会自动出现。';
+                steps.hidden = false;
+                widen.hidden = true;
+                skillLink.hidden = false;
+            }
+        }
+
+        function createLane(lane, index) {
+            const section = document.createElement('section');
+            section.className = 'wall-lane';
+            section.dataset.laneIndex = String(index);
+            section.dataset.tag = lane.tag;
+            section.style.setProperty('--lane-color', lane.color);
+
+            const label = document.createElement('div');
+            label.className = 'wall-lane-label';
+            const name = document.createElement('div');
+            name.className = 'wall-lane-name';
+            name.textContent = lane.label;
+            const count = document.createElement('div');
+            count.className = 'wall-lane-count';
+            count.textContent = lane.caption;
+            label.appendChild(name);
+            label.appendChild(count);
+
+            if (lane.tag !== '__all__') {
+                const follow = document.createElement('button');
+                follow.type = 'button';
+                follow.className = 'wall-lane-follow' + (lane.followed ? ' active' : '');
+                follow.textContent = lane.followed ? '已关注' : '关注';
+                follow.title = lane.followed ? `取消关注「${lane.label}」` : `关注「${lane.label}」`;
+                follow.addEventListener('click', () => toggleFollow(lane.tag, !lane.followed));
+                label.appendChild(follow);
+            } else {
+                const hint = document.createElement('a');
+                hint.className = 'wall-lane-link';
+                hint.href = '/brief';
+                hint.textContent = '今日简报 →';
+                label.appendChild(hint);
+            }
+            section.appendChild(label);
+
+            const viewport = document.createElement('div');
+            viewport.className = 'wall-lane-viewport';
+            const track = document.createElement('div');
+            track.className = 'wall-lane-track';
+            const isMobile = window.matchMedia('(max-width: 760px)').matches;
+            const maxItems = lane.tag === '__all__' ? 300 : 40;
+            const items = lane.items.slice(0, maxItems);
+            if (lane.items.length > items.length) {
+                count.textContent = `${lane.caption}（显示前 ${items.length}）`;
+            }
+            // 移动端 CSS 已关闭 marquee；不要复制卡片，避免同一新闻出现两份
+            const animate = !reduceMotion && !isMobile && items.length >= 4 && items.length <= 18;
+            const copies = animate ? 2 : 1;
+            for (let copy = 0; copy < copies; copy += 1) {
+                items.forEach((item, itemIndex) => {
+                    track.appendChild(createCard(item, copy > 0, itemIndex));
+                });
+            }
+            if (animate) {
+                track.style.setProperty('--lane-duration', `${Math.max(36, items.length * 9)}s`);
+                track.classList.add('is-animated');
+            } else {
+                track.classList.add('is-static');
+                viewport.classList.add('is-static');
+                if (items.length > 1) {
+                    const step = () => Math.max(280, Math.round((track.clientWidth || 900) * 0.8));
+                    const prev = document.createElement('button');
+                    prev.type = 'button';
+                    prev.className = 'wall-lane-nav prev';
+                    prev.textContent = '‹';
+                    prev.setAttribute('aria-label', '向前浏览');
+                    prev.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        track.scrollBy({ left: -step(), behavior: reduceMotion ? 'auto' : 'smooth' });
+                    });
+                    const next = document.createElement('button');
+                    next.type = 'button';
+                    next.className = 'wall-lane-nav next';
+                    next.textContent = '›';
+                    next.setAttribute('aria-label', '向后浏览');
+                    next.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        track.scrollBy({ left: step(), behavior: reduceMotion ? 'auto' : 'smooth' });
+                    });
+                    viewport.appendChild(prev);
+                    viewport.appendChild(next);
+                }
+            }
+            viewport.appendChild(track);
+            section.appendChild(viewport);
+            return section;
+        }
+
+        function tagChips(tags, limit = 3) {
+            return (tags || []).slice(0, limit).map(tag => {
+                const color = tagColor(tag);
+                return `<a class="wall-card-tag" href="/tag/${encodeURIComponent(tag)}" style="--tag-color:${color}" data-stop>${escapeHtml(tag)}</a>`;
+            }).join('');
+        }
+
+        function createCard(item, duplicate, itemIndex) {
+            const card = document.createElement('article');
+            card.className = 'wall-card';
+            card.dataset.id = String(item.id);
+            card.style.setProperty('--card-color', tagColor((item.tags || [])[0] || ''));
+            if (!duplicate) {
+                card.tabIndex = 0;
+                card.setAttribute('role', 'link');
+                card.setAttribute('aria-label', item.title || '新闻');
+            } else {
+                card.setAttribute('aria-hidden', 'true');
+                card.tabIndex = -1;
+            }
+            const cover = item.cover_url
+                ? `<div class="wall-card-cover"><img src="${escapeAttr(item.cover_url)}" alt="" loading="lazy"></div>`
+                : `<div class="wall-card-cover wall-card-cover-empty"><span>CN</span></div>`;
+            const read = item.is_read
+                ? '<span class="wall-read read">已读</span>'
+                : (item.is_reading ? '<span class="wall-read reading">在读</span>' : '<span class="wall-read unread">未读</span>');
+            const credibility = item.credibility == null
+                ? ''
+                : `<span class="wall-cred" title="来源可信度">${Number(item.credibility)}</span>`;
+            const source = item.source_url
+                ? `<a class="wall-card-source" href="${escapeAttr(item.source_url)}" target="_blank" rel="noopener" data-stop>${escapeHtml(item.source || '来源')}</a>`
+                : `<span class="wall-card-source">${escapeHtml(item.source || '来源')}</span>`;
+            const summary = item.short_summary || item.summary || '';
+            const later = item.is_later ? ' active' : '';
+            card.innerHTML = `
+                ${cover}
+                <div class="wall-card-body">
+                    <div class="wall-card-tags">${tagChips(item.tags)}</div>
+                    <h3 class="wall-card-title">${escapeHtml(item.title)}</h3>
+                    <p class="wall-card-summary">${escapeHtml(summary)}</p>
+                    <div class="wall-card-meta">
+                        ${source}
+                        <span class="wall-card-time">${formatDate(item.collected_at)}</span>
+                        ${credibility}
+                        ${read}
+                    </div>
+                </div>
+                <button type="button" class="wall-card-later${later}" data-later title="稍后再读" aria-label="稍后再读">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2.5h8V14l-4-2.6L4 14V2.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+                </button>
+            `;
+            if (!duplicate) {
+                card.dataset.itemIndex = String(itemIndex);
+            } else {
+                card.querySelectorAll('a, button').forEach(el => { el.tabIndex = -1; });
+            }
+            return card;
+        }
+
+        /* ===== 交互 ===== */
+        async function toggleFollow(tag, follow) {
+            try {
+                const data = await readJson(await fetch('/api/tags/follow', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tag, follow })
+                }));
+                const set = new Set(WALL.data.followed || []);
+                if (data.followed) set.add(data.tag); else set.delete(data.tag);
+                WALL.data.followed = Array.from(set);
+                renderTagbar();
+                renderLanes();
+                toast(data.followed ? `已关注「${data.tag}」` : `已取消关注「${data.tag}」`);
+                return true;
+            } catch (e) {
+                toast('操作失败，请稍后再试', 'error');
+                return false;
+            }
+        }
+
+        async function toggleLater(button) {
+            const card = button.closest('.wall-card');
+            if (!card) return;
+            const id = card.dataset.id;
+            try {
+                const data = await readJson(await fetch(`/api/news/${id}/later`, { method: 'POST' }));
+                document.querySelectorAll('.wall-card').forEach(item => {
+                    if (item.dataset.id !== id) return;
+                    const target = item.querySelector('.wall-card-later');
+                    if (target) target.classList.toggle('active', !!data.is_later);
+                });
+                toast(data.is_later ? '已加入稍后再读' : '已移出稍后再读');
+            } catch (e) {
+                toast('操作失败，请稍后再试', 'error');
+            }
+        }
+
+        $('wallLanes').addEventListener('click', (event) => {
+            const later = event.target.closest('[data-later]');
+            if (later) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleLater(later);
+                return;
+            }
+            if (event.target.closest('[data-stop]')) return;
+            const card = event.target.closest('.wall-card');
+            if (!card) return;
+            const id = card.dataset.id;
+            if (id) window.location.href = `/news/${id}`;
+        });
+
+        $('wallLanes').addEventListener('keydown', (event) => {
+            const card = event.target.closest('.wall-card');
+            if (!card) return;
+            // 只让卡片自身响应 Enter/Space；内部链接、稍后再读按钮用浏览器原生激活
+            if (event.target !== card) return;
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                window.location.href = `/news/${card.dataset.id}`;
+            }
+        });
+
+        $('wallRefresh').addEventListener('click', () => loadAll({ manual: true }));
+        $('wallErrorRetry').addEventListener('click', () => loadAll({ manual: true }));
+
+        function setWindowDays(days) {
+            if (!days || days === WALL.days) return;
+            WALL.days = days;
+            document.querySelectorAll('#wallWindowSeg button').forEach(item => {
+                const active = Number(item.dataset.days) === days;
+                item.classList.toggle('active', active);
+                item.setAttribute('aria-pressed', String(active));
+            });
+            loadAll({ manual: true });
+        }
+
+        document.querySelectorAll('#wallWindowSeg button').forEach(btn => {
+            btn.addEventListener('click', () => setWindowDays(Number(btn.dataset.days)));
+        });
+        $('wallEmptyWiden').addEventListener('click', () => setWindowDays(30));
+
+        $('wallPauseBtn').addEventListener('click', () => {
+            WALL.paused = !WALL.paused;
+            document.body.classList.toggle('wall-paused', WALL.paused);
+            const btn = $('wallPauseBtn');
+            btn.textContent = WALL.paused ? '继续滚动' : '暂停滚动';
+            btn.setAttribute('aria-pressed', String(WALL.paused));
+        });
+
+        $('wallTagAdd').addEventListener('click', () => {
+            const input = $('wallTagInput');
+            const tag = (input.value || '').trim().replace(/^#/, '');
+            if (!tag) return;
+            toggleFollow(tag, true).then(ok => { if (ok) input.value = ''; });
+        });
+        $('wallTagInput').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                $('wallTagAdd').click();
+            }
+        });
+
+        /* ===== 轮询 ===== */
+        loadAll();
+        let wallResizeTimer = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(wallResizeTimer);
+            wallResizeTimer = setTimeout(() => {
+                if (!WALL.data.items.length || WALL.homeError) return;
+                const focus = captureFocus();
+                renderLanes();
+                restoreFocus(focus);
+            }, 220);
+        });
+        setInterval(() => {
+            if (!document.hidden) loadAll({ silent: true });
+        }, 45000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) loadAll({ silent: true });
+        });
+    </script>
+</body>
+</html>

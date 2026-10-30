@@ -17,6 +17,10 @@ from app.routers import news, config, db as db_router, agent as agent_router, sc
 from app.routers import chat as chat_router, retrieval as retrieval_router
 from app.routers import memory as memory_router
 from app.routers import tags as tags_router
+from app.routers import assist as assist_router
+from app.routers import skill as skill_router
+from app.routers import media as media_router
+from app.services import assist_service
 from app.services import db_service
 from app.services.embeddings import indexer as embedding_indexer
 from app.services.scheduler import scheduler as scheduler_service
@@ -81,7 +85,7 @@ def ensure_runtime_image_dirs():
     images_dir = BASE_DIR / "images"
     cover_dir = images_dir / "cover"
     default_dir = cover_dir / "default"
-    for d in (images_dir, cover_dir, default_dir, images_dir / "avatar"):
+    for d in (images_dir, cover_dir, default_dir, images_dir / "avatar", images_dir / "uploads"):
         try:
             d.mkdir(parents=True, exist_ok=True)
         except OSError:
@@ -167,7 +171,17 @@ install_base_path_middleware(app)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/images", StaticFiles(directory=BASE_DIR / "images"), name="images")
 
-templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
+def _template_context(request: Request) -> dict:
+    """所有模板都能读到当前工作模式，用于服务端隐藏/切换自主模式专属入口。"""
+    mode = assist_service.work_mode()
+    return {"work_mode": mode, "is_assist": mode == "assist"}
+
+
+templates = Jinja2Templates(
+    directory=BASE_DIR / "templates",
+    context_processors=[_template_context],
+)
 
 app.include_router(news.router)
 app.include_router(config.router)
@@ -179,6 +193,9 @@ app.include_router(chat_router.router)
 app.include_router(retrieval_router.router)
 app.include_router(memory_router.router)
 app.include_router(tags_router.router)
+app.include_router(assist_router.router)
+app.include_router(skill_router.router)
+app.include_router(media_router.router)
 
 
 @app.get("/health")
@@ -187,13 +204,15 @@ async def health_check():
         "status": "ok",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "features": ["tags", "memory", "feedback", "timeline"],
+        "work_mode": assist_service.work_mode(),
+        "features": ["tags", "memory", "feedback", "timeline", "assist"],
     }
 
 
 @app.get("/")
 async def home(request: Request):
-    return templates.TemplateResponse(request, "home.html", {"active_page": "home"})
+    template = "home_assist.html" if assist_service.is_assist() else "home.html"
+    return templates.TemplateResponse(request, template, {"active_page": "home"})
 
 
 @app.get("/tag")
@@ -231,7 +250,14 @@ async def stats_page(request: Request):
 
 @app.get("/chat")
 async def chat_page(request: Request):
+    if assist_service.is_assist():
+        return templates.TemplateResponse(request, "assist_chat.html", {"active_page": "chat"})
     return templates.TemplateResponse(request, "chat.html", {"active_page": "chat"})
+
+
+@app.get("/skill")
+async def skill_page(request: Request):
+    return templates.TemplateResponse(request, "skill.html", {"active_page": "skill"})
 
 
 @app.get("/brief")

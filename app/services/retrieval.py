@@ -60,6 +60,9 @@ def to_item(news: News, match: str, score: float | None = None) -> dict[str, Any
         "collected_at": news.collected_at.isoformat() if news.collected_at else None,
         "batch_id": news.batch_id,
         "is_read": news.is_read,
+        "is_reading": news.is_reading,
+        "is_fav": news.is_fav,
+        "is_later": news.is_later,
         "credibility": news.credibility,
         "match": match,
     }
@@ -320,6 +323,19 @@ async def _rank_window(
     return ranked[:limit], snapshot
 
 
+def _effective_mode(mode: str) -> str:
+    """辅助模式下平台不调用模型：混合/语义检索统一降级为词法。"""
+    if mode in {"hybrid", "semantic"}:
+        try:
+            from app.services.assist_service import is_assist
+
+            if is_assist():
+                return "lexical"
+        except Exception:
+            pass
+    return mode
+
+
 async def search_news(
     db: AsyncSession,
     query: str,
@@ -332,6 +348,7 @@ async def search_news(
     mode: str = "hybrid",
 ) -> dict[str, Any]:
     """mode: hybrid | lexical | semantic（默认 hybrid，语义不可用时自动降级）。"""
+    mode = _effective_mode(mode)
     terms = fts.split_terms(query)
     limit = max(1, min(int(limit or 8), 60))
     if not terms:
@@ -429,6 +446,7 @@ async def search_timeline(
     mode: str = "hybrid",
 ) -> dict[str, Any]:
     """按时间桶召回，返回按日期排序的事件时间线与覆盖情况。"""
+    mode = _effective_mode(mode)
     now = datetime.now()
     if until > now:
         until = now

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>定时资讯 · 辅助模式</title>
+    <link rel="icon" href="/images/sign.png" type="image/png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=49">
+</head>
+<body class="home-full">
+    {% include "_header.html" %}
+
+    <main class="assist-notice">
+        <section class="assist-notice-card">
+            <div class="assist-notice-mark" aria-hidden="true">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                    <rect x="4" y="5" width="16" height="12" rx="2.5" stroke="currentColor" stroke-width="1.3"/>
+                    <circle cx="9" cy="11" r="1.2" fill="currentColor"/>
+                    <circle cx="15" cy="11" r="1.2" fill="currentColor"/>
+                    <path d="M9 15.2h6M12 3v2M8.5 21h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <div class="assist-notice-eyebrow">辅助模式</div>
+            <h1>内置对话助手已关闭</h1>
+            <p>
+                辅助模式下，平台不调用任何模型，只负责接收、存储与展示数据。
+                问答、推荐、记忆整理和每日简报都由你接入的外部 Agent 完成。
+            </p>
+            <ul class="assist-notice-list">
+                <li>外部 Agent 可以读取平台的新闻库、长期记忆与反馈</li>
+                <li>把偏好、跟踪任务和阅读节奏写入平台，双方共享同一份数据</li>
+                <li>切换回自主模式后，内置对话助手会恢复，数据不会丢失</li>
+            </ul>
+            <div class="assist-notice-actions">
+                <a class="wall-btn wall-btn-primary" href="/skill">外部 Agent 接入</a>
+                <a class="wall-btn" href="/">返回资讯墙</a>
+                <a class="wall-btn" href="/brief">查看每日简报</a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <span>定时资讯 &copy; 2026 &mdash; 辅助模式 · 外部 Agent 供数</span>
+    </footer>
+</body>
+</html>

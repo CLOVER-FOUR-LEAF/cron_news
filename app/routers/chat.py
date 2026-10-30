@@ -13,7 +13,7 @@ from fastapi import Depends
 
 from app.database import get_db
 from app.logging_setup import get_logger
-from app.services import conversation_service
+from app.services import assist_service, conversation_service
 from app.services.agent import runtime
 
 logger = get_logger("chat")
@@ -132,6 +132,11 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
 ):
     """非流式一轮对话（供脚本/外部集成使用）。"""
+    if assist_service.is_assist():
+        raise HTTPException(
+            status_code=409,
+            detail="辅助模式下平台不运行对话助手；请由外部 Agent 处理问答。",
+        )
     conversation = await conversation_service.get_conversation(db, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="会话不存在")
@@ -144,6 +149,11 @@ async def send_message(
 @router.post("/stream")
 async def chat_stream(body: ChatRequest, request: Request):
     """SSE 流式对话。注意：不要用 Depends(get_db)，否则会持有 session 到流结束。"""
+    if assist_service.is_assist():
+        raise HTTPException(
+            status_code=409,
+            detail="辅助模式下平台不运行对话助手；请由外部 Agent 处理问答。",
+        )
 
     async def event_gen():
         queue: asyncio.Queue = asyncio.Queue()

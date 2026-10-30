@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "agent": "OpenClaw",
+  "nickname": "小明",
+  "sections": {
+    "profile": "- 科技行业从业者，长期关注 AI 与半导体。\n- 阅读时间集中在早晚通勤与睡前。",
+    "interests": "- AI 大模型\n- 半导体/芯片\n- 地缘政治\n- 美股科技公司",
+    "watch": "- 跟踪英伟达与 OpenAI 的产品发布\n- 跟踪国产 GPU 进展",
+    "preferences": "- 每天 08:00 / 20:00 各一轮，每次 10-15 条\n- 偏深度，正文 600-900 字\n- 优先路透/彭博/财新/官方公告",
+    "avoid": "- 娱乐八卦\n- 营销软文\n- 标题党\n- 纯榜单/盘点",
+    "notes": "- [2026-10-30] 外部 Agent 完成首次访谈；采集节奏 08:00 / 20:00"
+  },
+  "tags": ["AI大模型", "半导体", "地缘政治", "美股科技"],
+  "schedule": {
+    "timezone": "Asia/Shanghai",
+    "times": ["08:00", "20:00"],
+    "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+    "items_per_run": 12,
+    "brief_time": "21:00",
+    "quiet_hours": ["23:00", "07:00"],
+    "catch_up": true
+  },
+  "editorial": {
+    "language": "zh-CN",
+    "depth": "deep",
+    "article_length": [600, 900],
+    "summary_length": [60, 150],
+    "tone": "objective",
+    "sources_include": ["reuters.com", "bloomberg.com", "caixin.com", "gov.cn"],
+    "sources_exclude": ["营销号", "低质聚合"],
+    "cover": "off",
+    "brief_style": "five-section",
+    "translation": "zh-only",
+    "duplicates": "best-only",
+    "quality_floor": 55,
+    "allow_unverified": false
+  },
+  "replace_sections": false
+}

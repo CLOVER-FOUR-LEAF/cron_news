@@ -12,6 +12,7 @@ from app.env_store import read_env_file, write_env_file
 from app.logging_setup import get_logger
 from app.services.prompts import build_base_prompt, DEFAULT_EXT_PROMPT
 from app.services import preferences
+from app.services import assist_service
 from app.services.model_configs import (
     config_to_dict,
     decrypt_api_key,
@@ -292,7 +293,10 @@ async def update_config(config: ConfigUpdate):
     if config.onboarding_done is not None:
         env_vars["ONBOARDING_DONE"] = "true" if config.onboarding_done else "false"
     if config.work_mode is not None:
-        env_vars["WORK_MODE"] = config.work_mode
+        work_mode = (config.work_mode or "").strip().lower()
+        if work_mode not in {"assist", "autonomous", ""}:
+            raise HTTPException(status_code=400, detail="工作模式只能是 assist（辅助）或 autonomous（自主）")
+        env_vars["WORK_MODE"] = work_mode
 
     if config.nickname is not None:
         env_vars["NICKNAME"] = config.nickname
@@ -332,6 +336,11 @@ class PreferencesAnalyzeBody(BaseModel):
 @router.post("/preferences/analyze")
 async def analyze_preferences(body: PreferencesAnalyzeBody, db: AsyncSession = Depends(get_db)):
     """把自然语言兴趣/时间描述解析成标签、排程与每次采集量并写回 .env。"""
+    if assist_service.is_assist():
+        raise HTTPException(
+            status_code=409,
+            detail="辅助模式下平台不调用模型；兴趣与节奏请由外部 Agent 访谈后写入 /api/assist/onboarding。",
+        )
     if not body.interests_text.strip() and not body.schedule_text.strip():
         raise HTTPException(status_code=400, detail="请至少描述兴趣或时间偏好")
     result = await preferences.analyze_and_save(

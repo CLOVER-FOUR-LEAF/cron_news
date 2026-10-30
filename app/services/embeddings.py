@@ -87,6 +87,13 @@ async def pending_count(db: AsyncSession) -> int:
 
 async def backfill(limit: int | None = None) -> dict:
     """为缺失或内容变化的新闻补向量。返回本次处理统计。"""
+    try:
+        from app.services.assist_service import is_assist
+
+        if is_assist():
+            return {"embedded": 0, "reason": "assist_mode"}
+    except Exception:
+        pass
     if not indexer_enabled():
         return {"embedded": 0, "reason": "disabled"}
 

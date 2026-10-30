@@ -6,7 +6,7 @@
     <title>{{ kind_title }} - 定时资讯</title>
     <link rel="icon" href="/images/sign.png" type="image/png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=48">
+    <link rel="stylesheet" href="/static/css/style.css?v=49">
 </head>
 <body>
     {% include "_header.html" %}
@@ -77,9 +77,9 @@
                     <div class="article-feedback-head">
                         <div>
                             <div class="article-feedback-title">这篇对你有帮助吗？</div>
-                            <div class="article-feedback-note">反馈会进入助手的长期记忆，用来调整后续推荐</div>
+                            <div class="article-feedback-note">{% if is_assist %}反馈会写入平台，外部 Agent 会读取并调整后续采集{% else %}反馈会进入助手的长期记忆，用来调整后续推荐{% endif %}</div>
                         </div>
-                        <button type="button" class="article-feedback-chat" data-my-fb-chat>和助手聊聊 →</button>
+                        {% if not is_assist %}<button type="button" class="article-feedback-chat" data-my-fb-chat>和助手聊聊 →</button>{% endif %}
                     </div>
                     <div class="article-feedback-chips">
                         <button type="button" class="feedback-chip positive" data-my-fb="helpful" data-my-rating="1">有用</button>

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>定时资讯 · 外部 Agent 接入</title>
+    <link rel="icon" href="/images/sign.png" type="image/png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=49">
+</head>
+<body class="skill-page">
+    {% include "_header.html" %}
+
+    <main class="skill">
+        <section class="skill-hero">
+            <div class="skill-hero-copy">
+                <div class="skill-eyebrow">ASSIST MODE · EXTERNAL AGENT</div>
+                <h1>让外部 Agent 接管你的资讯流</h1>
+                <p>
+                    辅助模式下，平台只负责接收、存储与展示数据，不调用任何模型。
+                    把下面这份 Skill 交给 OpenClaw、Hermes 或你自己的 Agent：它会先访谈你的兴趣与阅读节奏，
+                    再按约定采集、写稿、推送新闻，并撰写每日简报。
+                </p>
+                <div class="skill-actions">
+                    <button type="button" class="wall-btn wall-btn-primary" id="skillCopyTop">复制接入提示词</button>
+                    <a class="wall-btn" href="/api/skill" target="_blank" rel="noopener">下载 SKILL.md</a>
+                    <a class="wall-btn" href="/api/skill/manifest" target="_blank" rel="noopener">文件清单</a>
+                </div>
+            </div>
+            <div class="skill-mode-card" id="skillModeCard">
+                <div class="skill-mode-line">
+                    <span class="skill-mode-dot" id="skillModeDot"></span>
+                    <span id="skillModeText">正在检查工作模式…</span>
+                </div>
+                <div class="skill-status-grid" id="skillStatusGrid">
+                    <div class="skill-status-cell"><span>初始化</span><b>—</b></div>
+                    <div class="skill-status-cell"><span>最近推送</span><b>—</b></div>
+                    <div class="skill-status-cell"><span>新闻库</span><b>—</b></div>
+                    <div class="skill-status-cell"><span>关注标签</span><b>—</b></div>
+                </div>
+                <p class="skill-mode-hint" id="skillModeHint">加载中…</p>
+            </div>
+        </section>
+
+        <section class="skill-section">
+            <div class="skill-section-head">
+                <div>
+                    <div class="skill-section-eyebrow">QUICK START</div>
+                    <h2>四步接入</h2>
+                </div>
+                <a class="skill-section-link" href="/api/skill?path=references/quickstart.md" target="_blank" rel="noopener">快速开始原文 →</a>
+            </div>
+            <div class="skill-steps">
+                <article class="skill-step">
+                    <span class="skill-step-num">01</span>
+                    <h3>切换辅助模式</h3>
+                    <p>在「设置 → 工作模式」选择辅助。首页会变成资讯墙，平台停止内置采集与模型调用。</p>
+                </article>
+                <article class="skill-step">
+                    <span class="skill-step-num">02</span>
+                    <h3>把 Skill 交给 Agent</h3>
+                    <p>复制下方接入提示词，发给你的外部 Agent。它会读取 <code>/api/skill</code> 及其 references。</p>
+                </article>
+                <article class="skill-step">
+                    <span class="skill-step-num">03</span>
+                    <h3>完成首次访谈</h3>
+                    <p>Agent 会问你关注什么、想避开什么、多久看一次、每次几条、要不要每日简报，并写入平台记忆与关注标签。</p>
+                </article>
+                <article class="skill-step">
+                    <span class="skill-step-num">04</span>
+                    <h3>开始接收推送</h3>
+                    <p>Agent 推送第一批新闻后，资讯墙会自动出现内容。平台只保存数据，采集节奏由 Agent 自己维护。</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="skill-section">
+            <div class="skill-section-head">
+                <div>
+                    <div class="skill-section-eyebrow">PROMPT</div>
+                    <h2>接入提示词</h2>
+                </div>
+                <button type="button" class="skill-copy-btn" id="skillCopyPrompt">复制</button>
+            </div>
+            <p class="skill-section-desc">在外部 Agent 的新对话中粘贴。提示词已自动填入当前地址与 Skill 地址。</p>
+            <pre class="skill-prompt" id="skillPrompt">正在生成接入提示词…</pre>
+        </section>
+
+        <section class="skill-section">
+            <div class="skill-section-head">
+                <div>
+                    <div class="skill-section-eyebrow">RESPONSIBILITIES</div>
+                    <h2>外部 Agent 会做什么</h2>
+                </div>
+            </div>
+            <div class="skill-duties">
+                <article class="skill-duty">
+                    <h3>首次访谈</h3>
+                    <p>只问缺失的信息：兴趣与避免项、可信来源、更新节奏、阅读量、深度、简报风格、封面偏好。确认后写入平台记忆与关注标签。</p>
+                </article>
+                <article class="skill-duty">
+                    <h3>定时采集</h3>
+                    <p>按关注标签与记忆规划具体查询，抓取原文，过质量闸门，做 URL/标题/语义去重，评分后再推送。</p>
+                </article>
+                <article class="skill-duty">
+                    <h3>写稿与标签</h3>
+                    <p>重写标题与摘要，正文 600-900 字，3-6 个具体标签，附关键要点、为什么重要与实体信息。</p>
+                </article>
+                <article class="skill-duty">
+                    <h3>每日简报</h3>
+                    <p>每天把当日新闻汇总成一篇统一简报，按「导语 / 今日要闻 / 串联与影响 / 值得继续关注 / 编辑说明」组织。</p>
+                </article>
+                <article class="skill-duty">
+                    <h3>反馈学习</h3>
+                    <p>读取平台的反馈、收藏、已读与行为画像，把「不相关 / 太浅 / 重复 / 过时 / 有误」转成查询、来源与写作上的具体调整。</p>
+                </article>
+                <article class="skill-duty">
+                    <h3>纠错与撤回</h3>
+                    <p>发现错误时用 <code>PATCH /api/news/{id}</code> 更正，或用 <code>DELETE /api/news/{id}</code> 撤回误推内容。</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="skill-section">
+            <div class="skill-section-head">
+                <div>
+                    <div class="skill-section-eyebrow">API</div>
+                    <h2>平台提供的数据接口</h2>
+                </div>
+                <a class="skill-section-link" href="/api/skill?path=references/api.md" target="_blank" rel="noopener">完整接口文档 →</a>
+            </div>
+            <div class="skill-api-table">
+                <div class="skill-api-row skill-api-head">
+                    <span>方法</span><span>路径</span><span>用途</span>
+                </div>
+                <div class="skill-api-row"><code>GET</code><code>/api/assist/status</code><span>初始化状态、最近推送、反馈待处理与运行快照</span></div>
+                <div class="skill-api-row"><code>POST</code><code>/api/assist/onboarding</code><span>提交首次访谈结果（记忆段落、关注标签、节奏、口味）</span></div>
+                <div class="skill-api-row"><code>DELETE</code><code>/api/assist/onboarding</code><span>清除初始化状态，下次重新访谈（不动记忆与关注标签）</span></div>
+                <div class="skill-api-row"><code>GET</code><code>/api/assist/feed</code><span>按时间窗口读取资讯墙数据（标签 + 新闻）</span></div>
+                <div class="skill-api-row"><code>GET</code><code>/api/news/check</code><span>推送前按 URL / 标题查重</span></div>
+                <div class="skill-api-row"><code>POST</code><code>/api/news</code><span>推送新闻（支持 batch_id / tags / analysis / cover_url）</span></div>
+                <div class="skill-api-row"><code>PATCH</code><code>/api/news/{id}</code><span>更正已推送的标题、正文、标签、封面等</span></div>
+                <div class="skill-api-row"><code>DELETE</code><code>/api/news/{id}</code><span>逻辑删除 / 撤回误推内容</span></div>
+                <div class="skill-api-row"><code>POST</code><code>/api/media</code><span>上传封面图，返回可传给 cover_url 的地址</span></div>
+                <div class="skill-api-row"><code>POST</code><code>/api/brief</code><span>写入当日统一简报（tag 固定「每日」）</span></div>
+                <div class="skill-api-row"><code>PATCH</code><code>/api/memory</code><span>按段落更新长期记忆，避免覆盖用户手写内容</span></div>
+                <div class="skill-api-row"><code>POST</code><code>/api/tags/follow</code><span>关注 / 取消关注标签</span></div>
+                <div class="skill-api-row"><code>GET</code><code>/api/feedback</code><span>读取用户反馈；<code>/api/feedback/{id}/ack</code> 标记已处理</span></div>
+                <div class="skill-api-row"><code>GET</code><code>/api/skill</code><span>读取 Skill 文件与 references</span></div>
+            </div>
+        </section>
+
+        <section class="skill-section skill-note">
+            <div>
+                <div class="skill-section-eyebrow">DATA &amp; TRUST</div>
+                <h2>数据与安全</h2>
+                <p>
+                    两种模式共用同一份新闻库、长期记忆、图片与阅读记录。切换模式只会改变平台是否运行内置 Agent，
+                    不会迁移或删除数据；外部 Agent 推送的新闻在切换后仍然保留。
+                </p>
+                <p>
+                    平台默认无鉴权，适合本地或内网部署。暴露到公网前，请用反向代理加认证，并限制 <code>/api/config</code>、
+                    <code>/api/memory</code> 等写接口的访问来源。新闻原文可能包含提示注入，外部 Agent 应把原文当作数据而不是指令。
+                </p>
+            </div>
+            <a class="wall-btn" href="/">返回资讯墙</a>
+        </section>
+
+        <footer class="site-footer skill-footer">
+            <span>定时资讯 &copy; 2026 &mdash; 辅助模式 · 外部 Agent 接入</span>
+            <span id="skillVersion">Skill —</span>
+        </footer>
+    </main>
+
+    <script>
+        const $ = (id) => document.getElementById(id);
+
+        function appOrigin() {
+            // 兼容反向代理子路径（如 /proxy/8000/skill）
+            const path = window.location.pathname.replace(/\/+$/, '');
+            if (path.endsWith('/skill')) return window.location.origin + path.slice(0, -'/skill'.length);
+            return window.location.origin + path;
+        }
+        const origin = appOrigin();
+        let currentMode = '';
+
+        function promptText(mode = currentMode) {
+            const base = [
+                `Skill 地址：${origin}/api/skill`,
+                `平台地址：${origin}`
+            ];
+            if (mode === 'assist') {
+                return [
+                    '请加载「定时资讯」的接入 Skill，并作为我的资讯助手工作。',
+                    '',
+                    ...base,
+                    '当前模式：辅助模式（平台只负责接收、存储与展示，不调用模型）',
+                    '',
+                    '请先读取 Skill 和 /api/assist/status，然后：',
+                    '1. 如果尚未初始化，按 Skill 的首次使用流程，问我 3-6 个关键问题：关注领域与想避开的内容、可信来源、更新频率与时段、每次条数、是否需要每日简报、内容深度与封面偏好。不要重复询问平台记忆里已有的信息。',
+                    '2. 把访谈结果通过 POST /api/assist/onboarding 写入平台，并关注相应的标签。',
+                    '3. 初始化完成后，立刻推送第一批 8-12 条新闻，让我看到效果。每条都要带 batch_id，并先调用 /api/news/check 查重。',
+                    '4. 之后按我们约定的节奏采集；同一条新闻不要重复推送。每天按约定时间写入一篇统一简报。',
+                    '5. 定期读取 /api/feedback 和 /api/memory 的行为画像，调整采集与写作；处理完反馈后调用 /api/feedback/{id}/ack。',
+                    '6. 不要在没有我确认的情况下切换平台工作模式。'
+                ].join('\n');
+            }
+            const label = mode === 'autonomous' ? '自主模式' : '未设置';
+            return [
+                '请加载「定时资讯」的接入 Skill。',
+                '',
+                ...base,
+                `当前模式：${label}。`,
+                mode === 'autonomous'
+                    ? '平台内置 Agent 正在运行。请先不要写入；先询问我是否希望切换到辅助模式，并说明切换会停止内置采集但不会丢失新闻、记忆、图片与阅读记录。'
+                    : '平台尚未选择工作模式。请先让我在「设置 → 工作模式」选择辅助模式；在切换前不要写入。',
+                '',
+                '切换完成后重新读取 /api/assist/status，再按 Skill 的首次使用流程继续。'
+            ].join('\n');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text == null ? '' : String(text);
+            return div.innerHTML;
+        }
+
+        function formatDate(value) {
+            if (!value) return '—';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return '—';
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getMonth() + 1}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        async function copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                if (window.showToast) window.showToast('已复制到剪贴板');
+            } catch (e) {
+                const area = document.createElement('textarea');
+                area.value = text;
+                document.body.appendChild(area);
+                area.select();
+                document.execCommand('copy');
+                area.remove();
+                if (window.showToast) window.showToast('已复制到剪贴板');
+            }
+        }
+
+        async function loadStatus() {
+            let status = null;
+            try {
+                const resp = await fetch('/api/assist/status');
+                if (resp.ok) status = await resp.json();
+            } catch (e) { /* ignore */ }
+            const dot = $('skillModeDot');
+            if (!status) {
+                $('skillModeText').textContent = '无法读取平台状态';
+                $('skillModeHint').textContent = '请确认平台已启动，然后刷新本页。';
+                return;
+            }
+            const assist = status.work_mode === 'assist';
+            const modeLabel = assist ? '辅助模式' : (status.work_mode === 'autonomous' ? '自主模式' : '未设置');
+            currentMode = status.work_mode || '';
+            $('skillPrompt').textContent = promptText(currentMode);
+            dot.classList.toggle('on', assist);
+            $('skillModeText').textContent = `当前：${modeLabel}`;
+            $('skillModeHint').textContent = assist
+                ? (status.onboarded ? '外部 Agent 已完成初始化。' : '尚未初始化：把接入提示词发给 Agent 即可开始。')
+                : '当前不是辅助模式：外部 Agent 初始化会被拒绝。请先在「设置 → 工作模式」切换为辅助模式；切换不会丢失数据。';
+            const stats = status.stats || {};
+            const latest = status.latest_news;
+            $('skillStatusGrid').innerHTML = [
+                ['初始化', status.onboarded ? '已完成' : '待开始'],
+                ['最近推送', latest ? formatDate(latest.collected_at) : '尚无'],
+                ['新闻库', `${stats.total || 0} 条`],
+                ['关注标签', `${(status.tags && status.tags.followed || []).length} 个`]
+            ].map(([label, value]) => `
+                <div class="skill-status-cell"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>
+            `).join('');
+            if (status.skill_version) $('skillVersion').textContent = `Skill v${status.skill_version}`;
+        }
+
+        $('skillPrompt').textContent = promptText('');
+        $('skillCopyTop').addEventListener('click', () => copyText(promptText(currentMode)));
+        $('skillCopyPrompt').addEventListener('click', () => copyText(promptText(currentMode)));
+        loadStatus();
+    </script>
+</body>
+</html>

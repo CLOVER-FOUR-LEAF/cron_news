@@ -705,6 +705,14 @@ async def reflect_pending_feedback_background() -> None:
     from app.database import get_session
 
     try:
+        from app.services.assist_service import is_assist
+
+        if is_assist():
+            return
+    except Exception:
+        pass
+
+    try:
         async with get_session() as db:
             result = await reflect_pending_feedback(db)
             await db.commit()

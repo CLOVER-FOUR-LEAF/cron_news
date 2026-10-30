@@ -10,6 +10,9 @@
             </div>
             <nav class="main-nav">
                 <a href="/" class="nav-link {{ 'active' if active_page == 'home' else '' }}">首页</a>
+                {% if work_mode == 'assist' %}
+                <a href="/skill" class="nav-link {{ 'active' if active_page == 'skill' else '' }}">外部接入</a>
+                {% endif %}
             </nav>
         </div>
         <div class="header-right">
@@ -27,12 +30,14 @@
                     <path d="M5.5 7h7M5.5 10h7M5.5 13h4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                 </svg>
             </button>
+            {% if work_mode != 'assist' %}
             <a href="/chat" class="header-icon-btn {{ 'active' if active_page == 'chat' else '' }}" title="AI 助手">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                     <path d="M9 2.2l1.5 3.6 3.9.4-2.9 2.7.8 3.9L9 10.9l-3.3 1.9.8-3.9-2.9-2.7 3.9-.4L9 2.2z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
                     <path d="M4 15.6h10" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
                 </svg>
             </a>
+            {% endif %}
             <a href="/stats" class="header-icon-btn {{ 'active' if active_page == 'stats' else '' }}" title="阅读统计">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                     <rect x="2" y="10" width="3" height="6" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
@@ -66,6 +71,7 @@
                             个人资料
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
+                        {% if work_mode != 'assist' %}
                         <button type="button" class="panel-item agent-only" data-action="my-recommend">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -75,6 +81,7 @@
                             推荐阅读
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
+                        {% endif %}
                         <button type="button" class="panel-item" data-action="my-favorites">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -149,6 +156,7 @@
                             关注标签
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
+                        {% if work_mode != 'assist' %}
                         <button type="button" class="panel-item agent-only" data-action="agent">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -161,6 +169,8 @@
                             Agent 管理
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
+                        {% endif %}
+                        {% if work_mode != 'assist' %}
                         <button type="button" class="panel-item agent-only" data-action="llm">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -178,6 +188,7 @@
                             </span>
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
+                        {% endif %}
                         <button type="button" class="panel-item" data-action="onboarding">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -187,6 +198,7 @@
                             配置向导
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
+                        {% if work_mode != 'assist' %}
                         <button type="button" class="panel-item agent-only" data-action="task">
                             <span class="panel-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -197,6 +209,20 @@
                             自动任务配置
                             <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                         </button>
+                        {% else %}
+                        <a class="panel-item" href="/skill">
+                            <span class="panel-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <rect x="3" y="4" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/>
+                                    <circle cx="6.2" cy="8" r="1" fill="currentColor"/>
+                                    <circle cx="9.8" cy="8" r="1" fill="currentColor"/>
+                                    <path d="M8 4V2M5.5 2h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            外部 Agent 接入
+                            <span class="panel-item-arrow"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -1049,6 +1075,14 @@
 
     const $ = id => document.getElementById(id);
 
+    function appBaseOrigin() {
+        // 从已由服务端改写的样式表地址推断反向代理前缀，适配 /proxy/8000/ 等子路径
+        const link = document.querySelector('link[href*="/static/css/style.css"]');
+        const href = link ? link.getAttribute('href') : '';
+        const index = href.indexOf('/static/');
+        return window.location.origin + (index > 0 ? href.slice(0, index) : '');
+    }
+
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text || '';
@@ -1190,15 +1224,34 @@
         document.querySelectorAll('.onboarding-step-dot').forEach(dot => {
             const n = Number(dot.dataset.step);
             dot.classList.toggle('active', n === ONBOARDING.step);
-            dot.classList.toggle('done', n < ONBOARDING.step);
+            const skippedAssistStep = ONBOARDING.mode === 'assist' && n < ONBOARDING.step;
+            dot.classList.toggle('done', n < ONBOARDING.step || skippedAssistStep);
         });
-        $('onboardingPrevBtn').style.visibility = ONBOARDING.step === 1 ? 'hidden' : '';
+        $('onboardingPrevBtn').style.visibility = (
+            ONBOARDING.step === 1 || (ONBOARDING.mode === 'assist' && ONBOARDING.step === 4)
+        ) ? 'hidden' : '';
         $('onboardingNextBtn').textContent = ONBOARDING.step === ONBOARDING.total ? '开始使用' : '下一步';
         if (ONBOARDING.step === ONBOARDING.total) renderOnboardingSummary();
     }
 
     function renderOnboardingSummary() {
         const rows = [];
+        if (ONBOARDING.mode === 'assist') {
+            const base = appBaseOrigin();
+            rows.push(['工作模式', '辅助模式', false]);
+            rows.push(['接入页面', `${base}/skill`, false]);
+            rows.push(['数据接口', `${base}/api/news`, false]);
+            rows.push(['Skill 地址', `${base}/api/skill`, false]);
+            rows.push(['偏好与节奏', '由外部 Agent 首次连接时访谈，写入平台记忆与关注标签', false]);
+            rows.push(['数据保留', '切换模式不会丢失新闻、记忆、图片与阅读记录', false]);
+            $('onboardingSummary').innerHTML = rows.map(([label, value, missing]) => `
+                <div class="onboarding-summary-row">
+                    <span>${escapeHtml(label)}</span>
+                    <span class="v ${missing ? 'missing' : ''}">${escapeHtml(value)}</span>
+                </div>`).join('') + `
+                <p class="onboarding-status ok">下一步：打开「外部接入」页面，把接入提示词发给你的外部 Agent。它会先询问你的习惯，再开始推送新闻。</p>`;
+            return;
+        }
         const hasLlm = state.hasLlmKey || ONBOARDING.savedLlm;
         const hasSearch = state.searchReady || ONBOARDING.savedSearch;
         rows.push(['工作模式', ONBOARDING.mode === 'assist' ? '辅助模式' : '自主模式', !ONBOARDING.mode]);
@@ -1482,7 +1535,9 @@
                 payload.task_start_hour = ONBOARDING.start;
             }
         }
-        if (ONBOARDING.cover === 'image' && !imageConfigReady()) {
+        if (ONBOARDING.mode === 'assist') {
+            payload.agent_cover_mode = 'off';
+        } else if (ONBOARDING.cover === 'image' && !imageConfigReady()) {
             payload.agent_cover_mode = 'off';
         } else {
             payload.agent_cover_mode = ONBOARDING.cover;
@@ -1490,6 +1545,7 @@
         const nickname = $('onboardingNickname').value.trim();
         if (nickname) payload.nickname = nickname;
 
+        const modeChanged = !!ONBOARDING.mode && ONBOARDING.mode !== state.workMode;
         try {
             await fetch('/api/config', {
                 method: 'PUT',
@@ -1500,12 +1556,21 @@
         closeModal('onboardingModal');
         await refreshConfig();
         showToast('配置已保存，开始使用吧', 'success');
+        if (modeChanged) {
+            // 模式决定首页模板；回到首页让新布局立即生效，数据不会丢失
+            setTimeout(() => { window.location.href = '/'; }, 450);
+        }
     }
 
     async function onboardingNext() {
         if (ONBOARDING.step === 1) {
             if (!ONBOARDING.mode) {
                 showToast('请选择工作模式', 'error');
+                return;
+            }
+            if (ONBOARDING.mode === 'assist') {
+                // 辅助模式不需要平台配置模型；偏好由外部 Agent 访谈，直接进入确认页
+                onboardingShowStep(4);
                 return;
             }
             onboardingShowStep(2);
@@ -1576,19 +1641,36 @@
         });
     });
 
-    $('onboardingNextBtn').addEventListener('click', onboardingNext);
-    $('onboardingPrevBtn').addEventListener('click', () => onboardingShowStep(ONBOARDING.step - 1));
-    $('onboardingSkipBtn').addEventListener('click', async () => {
+    async function ensureModeOnDismiss(markDone) {
+        // 全新安装时跳过/关闭向导不能留下空 WORK_MODE，否则平台既不采集也无法被外部 Agent 初始化
+        const wasEmpty = !state.workMode;
+        const target = state.workMode || ONBOARDING.mode || 'autonomous';
+        const payload = {};
+        if (markDone) payload.onboarding_done = true;
+        if (wasEmpty) payload.work_mode = target;
+        if (!Object.keys(payload).length) return;
         try {
             await fetch('/api/config', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ onboarding_done: true })
+                body: JSON.stringify(payload)
             });
-        } catch (e) { /* ignore */ }
+            state.workMode = target;
+            renderWorkmode();
+        } catch (e) { /* 保持原状 */ }
+        if (wasEmpty && target === 'assist') {
+            setTimeout(() => window.location.reload(), 350);
+        }
+    }
+
+    $('onboardingNextBtn').addEventListener('click', onboardingNext);
+    $('onboardingPrevBtn').addEventListener('click', () => onboardingShowStep(ONBOARDING.step - 1));
+    $('onboardingSkipBtn').addEventListener('click', async () => {
+        await ensureModeOnDismiss(true);
         closeModal('onboardingModal');
     });
-    $('onboardingCloseBtn').addEventListener('click', () => {
+    $('onboardingCloseBtn').addEventListener('click', async () => {
+        await ensureModeOnDismiss(false);
         closeModal('onboardingModal');
     });
 
@@ -1649,17 +1731,18 @@
 
     /* ===== 工作模式 ===== */
     const WORKMODE_TIPS = {
-        assist: '辅助模式：作为资讯展示平台，为服务器上的其他 Agent（如 OpenClaw、Hermes）提供新闻数据与展示接口，项目本身不主动调用模型。',
+        assist: '辅助模式：作为资讯展示平台，为服务器上的其他 Agent（如 OpenClaw、Hermes）提供新闻数据与展示接口，项目本身不主动调用模型。外部 Agent 通过 /skill 页面加载接入 Skill。',
         autonomous: '自主模式：项目内置 Agent 自主调用搜索与大模型 API，按设定频率自动采集、撰写新闻并计算智能推荐。'
     };
 
     const WORKMODE_CONFIRM = {
-        'autonomous>assist': '切换到辅助模式？\n\n将关闭项目内置的 Agent（自动采集、智能推荐等），项目作为传统资讯平台运行，仅对外提供数据接口。',
-        'assist>autonomous': '切换到自主模式？\n\n将启动项目内置的 Agent，按已配置的搜索服务、大模型与自动任务设置，自主调用 API 进行新闻采集与整理。'
+        'autonomous>assist': '切换到辅助模式？\n\n将关闭项目内置的 Agent（自动采集、智能推荐等），项目作为传统资讯平台运行，首页会切换为资讯墙，并对外提供数据接口。\n\n新闻、记忆、图片与阅读记录都保存在同一份数据里，切换不会丢失。',
+        'assist>autonomous': '切换到自主模式？\n\n将启用项目内置的 Agent，按已配置的搜索服务、大模型与自动任务设置自主采集与整理，首页会切换为工作台。\n\n外部 Agent 推送的新闻、记忆与图片都会保留。'
     };
 
     function renderWorkmode() {
         const mode = state.workMode;
+        document.body.classList.toggle('mode-assist', mode === 'assist');
 
         document.querySelectorAll('#workmodeSeg .workmode-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.mode === mode);
@@ -1754,9 +1837,12 @@
             if (resp.ok) {
                 state.workMode = mode;
                 renderWorkmode();
-                showToast(mode === 'assist' ? '已切换到辅助模式' : '已切换到自主模式', 'success');
+                showToast(mode === 'assist' ? '已切换到辅助模式，正在刷新页面' : '已切换到自主模式，正在刷新页面', 'success');
+                // 首页布局由服务端按模式渲染；刷新后立即呈现对应界面，数据不受影响
+                setTimeout(() => window.location.reload(), 450);
             } else {
-                showToast('切换失败', 'error');
+                const data = await resp.json().catch(() => ({}));
+                showToast(data.detail || '切换失败', 'error');
             }
         } catch (e) {
             showToast('切换失败', 'error');
@@ -3397,4 +3483,6 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+{% if work_mode != 'assist' %}
 <script src="/static/js/chat.js?v=45" defer></script>
+{% endif %}

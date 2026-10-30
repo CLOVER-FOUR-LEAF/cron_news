@@ -1,0 +1,14 @@
+Editorial illustration for a news article about: {headline}
+
+Style: muted editorial illustration, dark charcoal background, warm gold and cool blue accents, subtle paper grain, clean geometric shapes, cinematic lighting, no photorealism, no logos, no brand marks.
+
+Composition: a single clear focal subject related to the headline, generous negative space, 16:9 landscape, 1024x576.
+
+Negative constraints:
+- no text, no letters, no numbers, no captions, no watermarks
+- no logos, no flags, no recognizable faces, no photorealistic people
+- no clutter, no collage, no UI screenshots
+- no copyrighted characters or trademarks
+- avoid saturated neon colors and generic AI gradients
+
+If the article is sensitive (war, disaster, crime), keep the image abstract and non-graphic: maps, silhouettes, infrastructure, or symbolic objects rather than victims.

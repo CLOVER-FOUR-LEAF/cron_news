@@ -40,6 +40,22 @@ def busy() -> bool:
     return _job_lock.locked()
 
 
+def _assist_blocked() -> dict | None:
+    """辅助模式下平台不运行内置 Agent；对话委派等入口也要拦住。"""
+    try:
+        from app.services.assist_service import is_assist
+
+        if is_assist():
+            return {
+                "ok": False,
+                "assist_blocked": True,
+                "error": "辅助模式下平台不运行内置 Agent；请由外部 Agent 通过 /api/news、/api/brief 处理。",
+            }
+    except Exception:
+        return None
+    return None
+
+
 def status() -> dict:
     return {"busy": busy(), "current": _current_job, "last": _last_job}
 
@@ -100,6 +116,9 @@ async def run_collection(
     interval_hours: int | None = None,
 ) -> dict:
     """委派给采集 Agent：搜索 → 撰稿 → 封面 → 向量索引。"""
+    blocked = _assist_blocked()
+    if blocked:
+        return blocked
 
     async def worker():
         async with get_session() as session:
@@ -115,6 +134,9 @@ async def run_collection(
 
 async def run_brief(emit=None) -> dict:
     """委派给简报 Agent：把当日全部新闻汇总成一篇统一简报。"""
+    blocked = _assist_blocked()
+    if blocked:
+        return blocked
 
     async def worker():
         async with get_session() as session:
@@ -127,6 +149,9 @@ async def run_brief(emit=None) -> dict:
 
 async def run_recommend(emit=None) -> dict:
     """委派给推荐 Agent：计算新闻相关性。"""
+    blocked = _assist_blocked()
+    if blocked:
+        return blocked
 
     async def worker():
         async with get_session() as session:

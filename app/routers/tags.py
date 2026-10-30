@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import News
 from app.services import recommend_service, retrieval, tag_service
 
 router = APIRouter(prefix="/api", tags=["tags"])
@@ -40,6 +42,10 @@ async def follow_tag(body: FollowModel, db: AsyncSession = Depends(get_db)):
 @router.get("/home")
 async def home_feed(
     limit: int = Query(60, ge=1, le=200),
+    include_recommendations: bool = Query(
+        True,
+        description="是否计算个性化推荐；辅助模式首页可传 false 以跳过推荐计算",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     batch_id, news_items = await tag_service.batch_news(db, limit=limit)
@@ -51,10 +57,24 @@ async def home_feed(
         if tag not in {item["tag"] for item in tags}:
             tags.append({"tag": tag, "count": 0, "color": tag_service.tag_color(tag), "followed": True})
     items = [retrieval.to_item(news, "batch") for news in news_items]
-    recommendations = await recommend_service.personalized_recommendations(db, 10)
+    if batch_id:
+        batch_count = int(
+            await db.scalar(
+                select(func.count()).where(
+                    News.is_deleted == 0, News.batch_id == batch_id
+                )
+            )
+            or 0
+        )
+    else:
+        batch_count = len(items)
+    if include_recommendations:
+        recommendations = await recommend_service.personalized_recommendations(db, 10)
+    else:
+        recommendations = {"items": [], "hint": ""}
     return {
         "batch_id": batch_id,
-        "batch_count": len(items),
+        "batch_count": batch_count,
         "items": items,
         "tags": tags,
         "followed": sorted(followed),
