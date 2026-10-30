@@ -11,7 +11,14 @@ from app.database import get_db
 from app.env_store import read_env_file, write_env_file
 from app.logging_setup import get_logger
 from app.services.prompts import build_base_prompt, DEFAULT_EXT_PROMPT
-from app.services.model_configs import get_configs, get_enabled_config, config_to_dict, decrypt_api_key
+from app.services import preferences
+from app.services.model_configs import (
+    config_to_dict,
+    decrypt_api_key,
+    get_configs,
+    get_enabled_config,
+    search_endpoint_status,
+)
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -35,7 +42,11 @@ class ConfigUpdate(BaseModel):
     search_api_key: str | None = None
     task_interval_hours: int | None = None
     task_start_hour: int | None = None
+    task_schedule_mode: str | None = None
+    task_smart_lead_minutes: int | None = None
     task_selected_tags: list | None = None
+    agent_interests_text: str | None = None
+    agent_schedule_text: str | None = None
     agent_ext_mode: str | None = None
     agent_ext_prompt: str | None = None
     agent_recommend_enabled: bool | None = None
@@ -62,9 +73,22 @@ class ConfigResponse(BaseModel):
     search_base_url: str = ""
     has_llm_key: bool = False
     has_search_key: bool = False
+    search_ready: bool = False
+    search_source: str = "none"
+    search_label: str = ""
+    llm_native_search: bool = False
+    llm_native_search_label: str = ""
     task_interval_hours: int = 8
     task_start_hour: int = 0
+    task_schedule_mode: str = "fixed"
+    task_smart_lead_minutes: int = 45
     task_selected_tags: list = []
+    agent_interests_text: str = ""
+    agent_interests_tags: list = []
+    agent_schedule_text: str = ""
+    agent_schedule_plan: dict = {}
+    agent_items_per_run: int = 12
+    agent_preferences_analyzed_at: str = ""
     agent_base_prompt: str = ""
     agent_ext_preset: str = ""
     agent_ext_mode: str = "preset"
@@ -131,6 +155,24 @@ async def get_config(db: AsyncSession = Depends(get_db)):
     search_enabled = await get_enabled_config(db, "search")
     embedding_enabled = await get_enabled_config(db, "embedding")
 
+    search_state = await search_endpoint_status(db)
+    pref = preferences.snapshot()
+    llm_native_search = False
+    llm_native_label = ""
+    if llm_enabled:
+        from app.services.native_search import capability_available, resolve_spec
+
+        llm_native_search = bool(llm_enabled.api_key_enc) and capability_available(
+            llm_enabled.provider,
+            llm_enabled.base_url,
+            llm_enabled.model_id,
+            bool(llm_enabled.native_search),
+            llm_enabled.native_search_checked_at,
+        )
+        if llm_native_search:
+            spec = resolve_spec(llm_enabled.provider, llm_enabled.base_url, llm_enabled.model_id)
+            llm_native_label = spec.label if spec else (llm_enabled.native_search_kind or "大模型内置搜索")
+
     return ConfigResponse(
         llm_configs=llm_configs,
         image_configs=image_configs,
@@ -147,9 +189,26 @@ async def get_config(db: AsyncSession = Depends(get_db)):
         search_base_url=search_enabled.base_url if search_enabled else "",
         has_llm_key=bool(llm_enabled and decrypt_api_key(llm_enabled.api_key_enc)),
         has_search_key=bool(search_enabled and decrypt_api_key(search_enabled.api_key_enc)),
+        search_ready=bool(search_state["ready"]),
+        search_source=search_state["source"],
+        search_label=search_state.get("label", ""),
+        llm_native_search=llm_native_search,
+        llm_native_search_label=llm_native_label,
         task_interval_hours=interval_hours,
         task_start_hour=_parse_int(env_vars.get("TASK_START_HOUR", ""), 0),
+        task_schedule_mode=(
+            "smart" if (env_vars.get("TASK_SCHEDULE_MODE", "") or "").strip().lower() == "smart" else "fixed"
+        ),
+        task_smart_lead_minutes=max(
+            5, min(_parse_int(env_vars.get("TASK_SMART_LEAD_MINUTES", ""), 45), 180)
+        ),
         task_selected_tags=selected_tags,
+        agent_interests_text=pref["interests_text"],
+        agent_interests_tags=pref["interests_tags"],
+        agent_schedule_text=pref["schedule_text"],
+        agent_schedule_plan=pref["schedule_plan"],
+        agent_items_per_run=pref["items_per_run"],
+        agent_preferences_analyzed_at=pref["analyzed_at"],
         agent_base_prompt=build_base_prompt(interval_hours, selected_tags),
         agent_ext_preset=DEFAULT_EXT_PROMPT,
         agent_ext_mode=env_vars.get("AGENT_EXT_MODE", "preset"),
@@ -173,12 +232,15 @@ async def update_config(config: ConfigUpdate):
     # 详细日志：记录收到的配置项（便于排查自动任务设置是否真正生效）
     task_changed = any(v is not None for v in (
         config.task_interval_hours, config.task_start_hour, config.task_selected_tags,
+        config.task_schedule_mode, config.task_smart_lead_minutes,
     ))
     if task_changed:
         logger.info(
-            "收到自动任务配置保存请求：时间间隔=%s，每日开始=%s，标签=%s",
+            "收到自动任务配置保存请求：时间间隔=%s，每日开始=%s，调度方式=%s，智能提前量=%s，标签=%s",
             config.task_interval_hours,
             config.task_start_hour,
+            config.task_schedule_mode,
+            config.task_smart_lead_minutes,
             (config.task_selected_tags or []) if config.task_selected_tags is not None else "（未修改）",
         )
     if config.work_mode is not None:
@@ -194,8 +256,19 @@ async def update_config(config: ConfigUpdate):
         env_vars["TASK_INTERVAL_HOURS"] = str(max(1, config.task_interval_hours))
     if config.task_start_hour is not None:
         env_vars["TASK_START_HOUR"] = str(config.task_start_hour % 24)
+    if config.task_schedule_mode is not None:
+        mode = (config.task_schedule_mode or "").strip().lower()
+        if mode not in {"fixed", "smart"}:
+            raise HTTPException(status_code=400, detail="不支持的调度方式")
+        env_vars["TASK_SCHEDULE_MODE"] = mode
+    if config.task_smart_lead_minutes is not None:
+        env_vars["TASK_SMART_LEAD_MINUTES"] = str(max(5, min(int(config.task_smart_lead_minutes), 180)))
     if config.task_selected_tags is not None:
         env_vars["TASK_SELECTED_TAGS"] = json.dumps(config.task_selected_tags, ensure_ascii=False)
+    if config.agent_interests_text is not None:
+        env_vars[preferences.INTERESTS_TEXT_ENV] = " ".join(config.agent_interests_text.split())[:2000]
+    if config.agent_schedule_text is not None:
+        env_vars[preferences.SCHEDULE_TEXT_ENV] = " ".join(config.agent_schedule_text.split())[:2000]
 
     if config.agent_ext_mode is not None:
         env_vars["AGENT_EXT_MODE"] = config.agent_ext_mode
@@ -240,13 +313,41 @@ async def update_config(config: ConfigUpdate):
 
     if task_changed:
         logger.info(
-            "自动任务配置已保存生效：间隔=%s 小时，每日开始=%s 点，标签=%s",
+            "自动任务配置已保存生效：间隔=%s 小时，每日开始=%s 点，调度方式=%s，标签=%s",
             env_vars.get("TASK_INTERVAL_HOURS"),
             env_vars.get("TASK_START_HOUR"),
+            env_vars.get("TASK_SCHEDULE_MODE", "fixed"),
             env_vars.get("TASK_SELECTED_TAGS"),
         )
 
     return {"message": "ok"}
+
+
+class PreferencesAnalyzeBody(BaseModel):
+    interests_text: str = ""
+    schedule_text: str = ""
+    mode: str = "smart"
+
+
+@router.post("/preferences/analyze")
+async def analyze_preferences(body: PreferencesAnalyzeBody, db: AsyncSession = Depends(get_db)):
+    """把自然语言兴趣/时间描述解析成标签、排程与每次采集量并写回 .env。"""
+    if not body.interests_text.strip() and not body.schedule_text.strip():
+        raise HTTPException(status_code=400, detail="请至少描述兴趣或时间偏好")
+    result = await preferences.analyze_and_save(
+        db,
+        body.interests_text,
+        body.schedule_text,
+        body.mode,
+    )
+    # 智能调度的画像缓存需要失效，否则要等 10 分钟才用上新的时段描述
+    try:
+        from app.services.scheduler import scheduler
+
+        scheduler.invalidate_smart_profile()
+    except Exception:
+        pass
+    return result
 
 
 @router.post("/avatar")

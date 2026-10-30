@@ -12,6 +12,7 @@ from app.models import AgentRun
 from app.services.ai_service import run_search_task
 from app.services.recommend_service import run_recommend_task
 from app.services.brief_service import run_brief_task
+from app.services import smart_schedule
 
 logger = get_logger("scheduler")
 
@@ -23,15 +24,34 @@ def _parse_int(raw: str, default: int) -> int:
         return default
 
 
+def _parse_datetime(raw: str) -> datetime | None:
+    """解析 LAST_SEARCH_TIME；统一转成 naive 本地时间，避免 aware/naive 相减报错。"""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        value = datetime.fromisoformat(text)
+    except (ValueError, TypeError):
+        return None
+    if value.tzinfo is not None:
+        value = value.astimezone().replace(tzinfo=None)
+    return value
+
+
 class Scheduler:
     def __init__(self):
         self._task: asyncio.Task | None = None
         self._running = False
         self._last_run: datetime | None = None
+        self._last_attempt: datetime | None = None
         self._next_run: float | None = None
         self._last_result: dict | None = None
         self._last_skip: dict | None = None
         self._caught_up = False
+        self._next_reason: str = ""
+        self._smart_profile: smart_schedule.ActivityProfile | None = None
+        self._smart_profile_at: float = 0.0
+        self._smart_fingerprint: str = ""
 
     @property
     def status(self) -> dict:
@@ -42,19 +62,64 @@ class Scheduler:
             except (ValueError, TypeError):
                 pass
 
+        last_run = self._last_run_dt()
         return {
             "running": self._running,
             "schedule": self._schedule_desc(),
-            "last_run": self._last_run.isoformat() if self._last_run else None,
+            "schedule_mode": self._schedule_mode(),
+            "next_reason": self._next_reason,
+            "smart": self._smart_status(),
+            "last_run": last_run.isoformat() if last_run else None,
             "last_search_time": read_env_file().get("LAST_SEARCH_TIME") or None,
             "next_run": next_run_dt,
             "last_result": self._last_result,
             "last_skip": self._last_skip,
         }
 
+    def _smart_status(self) -> dict | None:
+        if self._schedule_mode() != "smart":
+            return None
+        profile = self._smart_profile
+        if profile is None:
+            # 调度循环还没跑第一轮时，先按向导里的时间描述展示一个临时画像
+            try:
+                from app.services import preferences
+
+                plan = preferences.schedule_plan()
+                if plan.get("preferred_hours"):
+                    profile = smart_schedule.build_profile(
+                        [], datetime.now(), preferred_hours=plan["preferred_hours"]
+                    )
+            except Exception:
+                profile = None
+        if profile is None:
+            return {
+                "ready": False,
+                "source": "none",
+                "events": 0,
+                "active_days": 0,
+                "windows": [],
+                "reason": "正在学习站内阅读与操作习惯",
+                "lead_minutes": self._lead_minutes(),
+                "next_reason": self._next_reason,
+            }
+        data = profile.to_dict()
+        data["lead_minutes"] = self._lead_minutes()
+        data["next_reason"] = self._next_reason
+        return data
+
     def _schedule_desc(self) -> str:
         interval, start = self._read_task_settings()
-        return f"每 {interval} 小时 · 每日 {start} 点起"
+        return smart_schedule.describe_mode(
+            self._schedule_mode(), interval, start, self._lead_minutes()
+        )
+
+    def _schedule_mode(self) -> str:
+        raw = (read_env_file().get("TASK_SCHEDULE_MODE", "") or "").strip().lower()
+        return "smart" if raw == "smart" else "fixed"
+
+    def _lead_minutes(self) -> int:
+        return max(5, min(_parse_int(read_env_file().get("TASK_SMART_LEAD_MINUTES", ""), 45), 180))
 
     def _read_task_settings(self) -> tuple[int, int]:
         env = read_env_file()
@@ -82,6 +147,101 @@ class Scheduler:
                 if t > now and (best is None or t < best):
                     best = t
         return best or (now + timedelta(hours=interval))
+
+    def _last_run_dt(self) -> datetime | None:
+        """最近一次采集时间：取进程内记录与 LAST_SEARCH_TIME 中较新的一个。
+
+        对话 Agent 委派的采集、或采集后简报失败时，只有 LAST_SEARCH_TIME 会更新；
+        只看 self._last_run 会漏掉这些情况，导致智能模式重复采集。
+        """
+        candidates: list[datetime] = []
+        if self._last_run:
+            candidates.append(self._last_run)
+        parsed = _parse_datetime(read_env_file().get("LAST_SEARCH_TIME", ""))
+        if parsed:
+            candidates.append(parsed)
+        return max(candidates) if candidates else None
+
+    def invalidate_smart_profile(self) -> None:
+        """偏好描述变化后立即失效画像缓存，让下一次调度重算。"""
+        self._smart_profile = None
+        self._smart_profile_at = 0.0
+        self._smart_fingerprint = ""
+
+    async def _get_smart_profile(self) -> smart_schedule.ActivityProfile:
+        """行为画像缓存 10 分钟，避免调度循环每 30 秒查库。"""
+        from app.services import preferences
+
+        now = datetime.now()
+        plan = preferences.schedule_plan()
+        preferred = plan.get("preferred_hours") or []
+        fingerprint = json.dumps(plan, ensure_ascii=False, sort_keys=True)
+        if (
+            self._smart_profile is not None
+            and time.time() - self._smart_profile_at < 600
+            and fingerprint == self._smart_fingerprint
+        ):
+            return self._smart_profile
+        try:
+            async with get_session() as session:
+                events = await smart_schedule.collect_activity(session, now)
+            profile = smart_schedule.build_profile(events, now, preferred_hours=preferred)
+        except Exception as exc:
+            logger.warning("学习用户活跃时段失败，回退固定频率：%s", exc)
+            profile = smart_schedule.build_profile([], now, preferred_hours=preferred)
+        self._smart_profile = profile
+        self._smart_profile_at = time.time()
+        self._smart_fingerprint = fingerprint
+        logger.info(
+            "智能调度画像已刷新：来源=%s，%s 次行为，%s 个活跃日，窗口=%s",
+            profile.source,
+            profile.events,
+            profile.active_days,
+            [item["label"] for item in profile.windows],
+        )
+        return profile
+
+    async def _compute_target(self, now: datetime) -> datetime:
+        interval, start = self._read_task_settings()
+        if self._schedule_mode() != "smart":
+            self._next_reason = "固定频率"
+            return self._next_from_preset(now, interval, start)
+
+        profile = await self._get_smart_profile()
+        # 失败的任务也会更新 _last_attempt；把它纳入最小间隔，避免模型/网络异常时
+        # 因为「从未成功过」而立刻重试、形成高频调用。
+        candidates = [dt for dt in (self._last_run, self._last_attempt, self._last_run_dt()) if dt]
+        last_activity = max(candidates) if candidates else None
+        if last_activity and last_activity > now:
+            # 时钟回拨或未来时间不应把后续采集一直推到未来
+            last_activity = now
+        target, reason = smart_schedule.next_smart_run(
+            profile,
+            now,
+            interval,
+            start,
+            last_activity,
+            self._lead_minutes(),
+        )
+        self._next_reason = reason
+        return target
+
+    async def _search_ready(self) -> tuple[bool, str]:
+        """检查是否存在可用搜索能力：独立搜索服务或大模型内置联网。"""
+        try:
+            from app.services.model_configs import get_effective_search_endpoint
+
+            async with get_session() as session:
+                endpoint = await get_effective_search_endpoint(session)
+                if not endpoint:
+                    return False, (
+                        "未配置可用的搜索服务，且当前大语言模型没有检测到内置联网搜索"
+                        "（请在「模型与服务配置」中配置，或测试大模型的内置联网能力）"
+                    )
+                return True, ""
+        except Exception as e:
+            logger.error("检查搜索服务配置失败：%s", e)
+            return False, f"检查搜索服务配置失败：{e}"
 
     def _recommend_enabled(self) -> bool:
         return read_env_file().get("AGENT_RECOMMEND_ENABLED", "") == "true"
@@ -156,6 +316,7 @@ class Scheduler:
         logger.info("任务开始执行（触发来源=%s）", source)
         try:
             self._running = True
+            self._last_attempt = datetime.now()
             # 与对话助手的委派任务共用一把锁，避免同时采集/重复调用模型
             async with job_slot("定时采集"):
                 async with get_session() as session:
@@ -204,31 +365,17 @@ class Scheduler:
     def _work_mode(self) -> str:
         return read_env_file().get("WORK_MODE", "")
 
-    async def _search_ready(self) -> tuple[bool, str]:
-        """检查搜索服务是否就绪，返回 (是否就绪, 未就绪原因)。"""
-        try:
-            from app.services.model_configs import get_active_endpoint
-
-            async with get_session() as session:
-                endpoint = await get_active_endpoint(session, "search")
-                if not endpoint:
-                    return False, "未启用任何搜索服务配置（请在「模型与服务配置」中新增并启用）"
-                if not endpoint["api_key"]:
-                    return False, f"搜索服务「{endpoint['provider_name']}」未填写 API Key"
-                return True, ""
-        except Exception as e:
-            logger.error("检查搜索服务配置失败：%s", e)
-            return False, f"检查搜索服务配置失败：{e}"
-
     def _stale_since_last_run(self, interval_hours: int) -> bool:
         env = read_env_file()
         raw = env.get("LAST_SEARCH_TIME", "")
         if not raw:
             return True
-        try:
-            last = datetime.fromisoformat(raw)
-        except (ValueError, TypeError):
+        last = _parse_datetime(raw)
+        if last is None:
             return True
+        if last > datetime.now():
+            # 时钟回拨 / 手工填了未来时间：视为刚刚采集过，避免长时间不执行
+            return False
         return (datetime.now() - last) > timedelta(hours=interval_hours)
 
     def _next_run_human(self) -> str:
@@ -291,7 +438,8 @@ class Scheduler:
 
                 last_skip_reason = None
                 interval, start = self._read_task_settings()
-                target = self._next_from_preset(datetime.now(), interval, start)
+                settings = (interval, start, self._schedule_mode(), self._lead_minutes())
+                target = await self._compute_target(datetime.now())
                 catch_up = False
 
                 # 启动补跑：若距上次采集超过一个周期，立即补跑一次，避免刚部署/重启后干等半天
@@ -300,10 +448,16 @@ class Scheduler:
                     if self._stale_since_last_run(interval):
                         logger.info("距上次采集已超过 %s 小时，启动后 30 秒内补跑一次", interval)
                         target = datetime.now() + timedelta(seconds=30)
+                        self._next_reason = "启动补跑（距上次采集过久）"
                         catch_up = True
 
                 self._next_run = target.timestamp()
-                logger.info("定时任务下次执行：%s（目标时间）", target.strftime("%Y-%m-%d %H:%M:%S"))
+                logger.info(
+                    "定时任务下次执行：%s（%s）",
+                    target.strftime("%Y-%m-%d %H:%M:%S"),
+                    self._next_reason,
+                )
+                last_smart_check = time.time()
 
                 while datetime.now() < target:
                     if self._work_mode() != "autonomous":
@@ -311,14 +465,39 @@ class Scheduler:
                     remaining = (target - datetime.now()).total_seconds()
                     await asyncio.sleep(min(30, max(1, remaining)))
                     if not catch_up:
-                        # 仅当「时间间隔/开始时间」真实变化时才重算目标，避免到点瞬间被
-                        # _next_run_datetime()（严格大于当前时刻的下一个槽位）误覆盖而跳过一次执行
+                        # 仅当「时间间隔/开始时间/调度方式/提前量」真实变化时才重算目标，
+                        # 避免到点瞬间被严格大于当前时刻的下一个槽位误覆盖而跳过一次执行
                         cur_interval, cur_start = self._read_task_settings()
-                        if (cur_interval, cur_start) != (interval, start):
+                        cur_settings = (
+                            cur_interval,
+                            cur_start,
+                            self._schedule_mode(),
+                            self._lead_minutes(),
+                        )
+                        if cur_settings != settings:
                             interval, start = cur_interval, cur_start
-                            target = self._next_from_preset(datetime.now(), interval, start)
+                            settings = cur_settings
+                            target = await self._compute_target(datetime.now())
                             self._next_run = target.timestamp()
-                            logger.info("任务配置变化，下次执行调整为：%s", target.strftime("%Y-%m-%d %H:%M:%S"))
+                            logger.info(
+                                "任务配置变化，下次执行调整为：%s（%s）",
+                                target.strftime("%Y-%m-%d %H:%M:%S"),
+                                self._next_reason,
+                            )
+                            last_smart_check = time.time()
+                        elif settings[2] == "smart" and time.time() - last_smart_check >= 300:
+                            # 智能模式：用户行为画像可能变化，每 5 分钟重算一次目标
+                            last_smart_check = time.time()
+                            new_target = await self._compute_target(datetime.now())
+                            if abs((new_target - target).total_seconds()) > 300:
+                                logger.info(
+                                    "智能调度目标变化：%s → %s（%s）",
+                                    target.strftime("%Y-%m-%d %H:%M:%S"),
+                                    new_target.strftime("%Y-%m-%d %H:%M:%S"),
+                                    self._next_reason,
+                                )
+                                target = new_target
+                                self._next_run = target.timestamp()
 
                 if self._work_mode() != "autonomous":
                     self._next_run = None
@@ -328,7 +507,7 @@ class Scheduler:
                 if ready:
                     await self._run_search("定时")
                 else:
-                    logger.warning("搜索服务未配置，跳过本次执行")
+                    logger.warning("搜索能力未就绪，跳过本次执行")
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -365,6 +544,7 @@ class Scheduler:
 
         try:
             self._running = True
+            self._last_attempt = datetime.now()
             async with job_slot("手动采集"):
                 async with get_session() as session:
                     logger.info("—— 阶段：新闻采集（搜索 + 撰稿）开始")

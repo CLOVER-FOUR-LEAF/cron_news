@@ -18,6 +18,7 @@ from app.services import (
     credibility,
     dedup,
     memory_service,
+    preferences,
     search_planner,
     tag_service,
 )
@@ -30,7 +31,7 @@ from app.services.cover_service import (
     cover_mode,
 )
 from app.services.llm_client import chat_text
-from app.services.model_configs import get_active_endpoint
+from app.services.model_configs import get_active_endpoint, get_effective_search_endpoint
 from app.services.search_providers import run_search
 
 logger = get_logger("ai_service")
@@ -78,9 +79,25 @@ async def search_news(
     max_results: int = 10,
     hours: int | None = None,
 ) -> list[dict[str, Any]]:
-    endpoint = await get_active_endpoint(db, "search")
-    if not endpoint or not endpoint["api_key"]:
-        raise ValueError("搜索服务未配置")
+    endpoint = await get_effective_search_endpoint(db)
+    if not endpoint:
+        raise ValueError(
+            "搜索服务未配置，且当前大语言模型没有检测到内置联网搜索；"
+            "请在「设置 → 模型与服务配置」中配置搜索服务，或测试大模型的内置联网能力"
+        )
+
+    if endpoint.get("source") == "native":
+        from app.services.native_search import run_native_search
+
+        return await run_native_search(
+            provider=endpoint.get("provider", ""),
+            base_url=endpoint["base_url"],
+            api_key=endpoint["api_key"],
+            model_id=endpoint.get("model_id", ""),
+            query=query,
+            max_results=max_results,
+            hours=hours,
+        )
 
     return await run_search(
         provider=endpoint.get("provider", ""),
@@ -90,6 +107,16 @@ async def search_news(
         max_results=max_results,
         hours=hours,
     )
+
+
+async def search_source_label(db: AsyncSession) -> str:
+    """给采集日志用的人类可读搜索来源说明。"""
+    endpoint = await get_effective_search_endpoint(db)
+    if not endpoint:
+        return "调用搜索服务（未就绪）"
+    if endpoint.get("source") == "native":
+        return f"调用模型内置搜索（{endpoint.get('label') or '大模型联网'}）"
+    return f"调用搜索服务（{endpoint.get('label') or '独立搜索'}）"
 
 
 async def generate_news_content(db, title: str, summary: str) -> str:
@@ -683,10 +710,19 @@ async def run_search_task(
         except Exception:
             selected = []
 
+    # 配置向导里用自然语言描述的兴趣，是采集主题的主要来源之一；与关注标签合并
+    interest_tags = preferences.interests_tags()
+    if interest_tags:
+        before = set(selected)
+        selected = tag_service.normalize_tags(selected + interest_tags, limit=10)
+        added = [tag for tag in selected if tag not in before]
+        if added:
+            await _emit("info", f"根据兴趣描述补充主题({len(added)})：{'、'.join(added)}")
+
     if selected:
-        await _emit("info", f"关注标签({len(selected)}): {'、'.join(selected)}")
+        await _emit("info", f"本轮采集主题({len(selected)}): {'、'.join(selected)}")
     else:
-        await _emit("info", "未设置关注标签，本轮执行泛热点搜索；入库时会自动打标签")
+        await _emit("info", "未设置兴趣主题，本轮执行泛热点搜索；入库时会自动打标签")
 
     try:
         planned = await search_planner.plan_tag_queries(db, selected, interval_hours)
@@ -703,10 +739,11 @@ async def run_search_task(
     batch_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
     merged: dict[str, dict[str, Any]] = {}
     errors: list[str] = []
+    search_label = await search_source_label(db)
 
     for group, queries in planned.items():
         for query in queries:
-            await _emit("tool", f'search("{query}") → 调用搜索服务')
+            await _emit("tool", f'search("{query}") → {search_label}')
             try:
                 hits = await search_news(db, query, max_results=12, hours=interval_hours)
                 await _emit("result", f'"{query}" 返回 {len(hits)} 条')

@@ -269,15 +269,17 @@
             </section>
 
             <section class="onboarding-panel" data-panel="2">
-                <p class="onboarding-hint">填写后立即保存并启用。至少配置一个大语言模型；自主模式还需要搜索服务。也可以先跳过，稍后在设置里补全。</p>
+                <p class="onboarding-hint">填写后立即保存并启用。至少配置一个大语言模型；自主模式还需要搜索能力（独立搜索服务，或大模型自带的联网搜索）。也可以先跳过，稍后在设置里补全。</p>
 
                 <div class="onboarding-field">
                     <label>大语言模型</label>
                     <div class="onboarding-presets" data-target="llm">
-                        <button type="button" class="onboarding-preset" data-provider="deepseek" data-url="https://api.deepseek.com/v1" data-model="deepseek-chat">DeepSeek</button>
-                        <button type="button" class="onboarding-preset" data-provider="kimi" data-url="https://api.moonshot.cn/v1" data-model="moonshot-v1-8k">Kimi</button>
-                        <button type="button" class="onboarding-preset" data-provider="zhipu" data-url="https://open.bigmodel.cn/api/paas/v4" data-model="glm-4-flash">智谱</button>
-                        <button type="button" class="onboarding-preset" data-provider="bailian" data-url="https://dashscope.aliyuncs.com/compatible-mode/v1" data-model="qwen-plus">阿里百炼</button>
+                        <button type="button" class="onboarding-preset" data-provider="deepseek" data-url="https://api.deepseek.com/v1" data-model="deepseek-flash">DeepSeek</button>
+                        <button type="button" class="onboarding-preset" data-provider="mimo" data-url="https://api.xiaomimimo.com/v1" data-model="mimo-v2.6-pro">MiMo</button>
+                        <button type="button" class="onboarding-preset" data-provider="kimi" data-url="https://api.moonshot.cn/v1" data-model="kimi-k3.1-pro">Kimi</button>
+                        <button type="button" class="onboarding-preset" data-provider="zhipu" data-url="https://open.bigmodel.cn/api/paas/v4" data-model="glm-5.3">智谱</button>
+                        <button type="button" class="onboarding-preset" data-provider="bailian" data-url="https://dashscope.aliyuncs.com/compatible-mode/v1" data-model="qwen3.8-max">阿里百炼</button>
+                        <button type="button" class="onboarding-preset" data-provider="opencodego" data-url="https://opencode.ai/inference/go/openai/v1" data-model="deepseek-v4-pro">OpenCode Go</button>
                     </div>
                     <div class="onboarding-row">
                         <input type="text" id="onboardingLlmName" placeholder="服务商名称">
@@ -288,14 +290,18 @@
                         <input type="password" id="onboardingLlmKey" placeholder="API Key">
                     </div>
                     <p class="onboarding-status" id="onboardingLlmStatus"></p>
+                    <p class="onboarding-preset-note">DeepSeek / Kimi / 智谱 / MiMo 自带联网搜索，保存后会自动检测；检测通过时可以不配置搜索服务。</p>
                 </div>
 
                 <div class="onboarding-field">
-                    <label>搜索服务（自主模式需要）</label>
+                    <label>搜索服务（可使用大模型内置联网，或单独配置）</label>
                     <div class="onboarding-presets" data-target="search">
                         <button type="button" class="onboarding-preset" data-provider="tavily" data-url="https://api.tavily.com">Tavily</button>
                         <button type="button" class="onboarding-preset" data-provider="bocha" data-url="https://api.bochaai.com">博查</button>
                         <button type="button" class="onboarding-preset" data-provider="searxng" data-url="">SearXNG</button>
+                        <button type="button" class="onboarding-preset" data-provider="brave" data-url="https://api.search.brave.com">Brave</button>
+                        <button type="button" class="onboarding-preset" data-provider="serper" data-url="https://google.serper.dev">Serper</button>
+                        <button type="button" class="onboarding-preset" data-provider="exa" data-url="https://api.exa.ai">Exa</button>
                     </div>
                     <div class="onboarding-row">
                         <input type="text" id="onboardingSearchName" placeholder="服务商名称">
@@ -305,32 +311,54 @@
                         <input type="password" id="onboardingSearchKey" placeholder="API Key（SearXNG 可留空）">
                     </div>
                     <p class="onboarding-status" id="onboardingSearchStatus"></p>
+                    <p class="onboarding-preset-note">如果上一步的大模型已检测到内置联网，这里可以留空并直接跳过。</p>
                 </div>
             </section>
 
             <section class="onboarding-panel" data-panel="3">
-                <p class="onboarding-hint">设置自动采集的频率与首批关注标签。标签可留空，之后随时在设置里补充。</p>
+                <p class="onboarding-hint">用自然语言描述你感兴趣的新闻和看新闻的习惯，系统会自动提取主题、安排采集时间与每次条数。智能模式下不需要手动设置频率。</p>
                 <div class="onboarding-field">
-                    <label>采集间隔</label>
-                    <div class="onboarding-choice" id="onboardingIntervalChoice">
-                        <button type="button" data-interval="3">每 3 小时</button>
-                        <button type="button" data-interval="6">每 6 小时</button>
-                        <button type="button" data-interval="8">每 8 小时</button>
-                        <button type="button" data-interval="12">每 12 小时</button>
+                    <label>调度方式</label>
+                    <div class="onboarding-choice" id="onboardingScheduleChoice">
+                        <button type="button" data-schedule="smart">
+                            <span class="t">智能模式（推荐）</span>
+                            <span class="d">根据你的描述与阅读习惯自动排程，在你上线前提前采集；固定间隔作为最长等待兜底</span>
+                        </button>
+                        <button type="button" data-schedule="fixed">
+                            <span class="t">固定频率</span>
+                            <span class="d">按下面选择的时间间隔与每日开始时间执行，行为可预测</span>
+                        </button>
                     </div>
                 </div>
                 <div class="onboarding-field">
-                    <label>每日开始时间</label>
-                    <div class="onboarding-choice" id="onboardingStartChoice">
-                        <button type="button" data-start="0">0 点</button>
-                        <button type="button" data-start="4">4 点</button>
-                        <button type="button" data-start="8">8 点</button>
-                        <button type="button" data-start="12">12 点</button>
-                    </div>
+                    <label>你关注哪些新闻领域？</label>
+                    <textarea id="onboardingInterestsInput" class="preferences-textarea" rows="4" placeholder="例如：我关注 AI 大模型、芯片、美股科技公司、国际局势；不太想看娱乐八卦和营销号。"></textarea>
+                    <p class="onboarding-preset-note">系统会提取主题标签，作为采集与推荐的重点；否定描述会被排除。</p>
                 </div>
-                <div class="onboarding-field">
-                    <label>关注标签（选填）</label>
-                    <input type="text" id="onboardingTagsInput" placeholder="例如：AI、科技、财经（用逗号或、分隔，可留空）">
+                <div class="onboarding-field" id="onboardingSmartScheduleField">
+                    <label>你一天中通常什么时候有空看新闻？一次希望看到多少条？</label>
+                    <textarea id="onboardingScheduleInput" class="preferences-textarea" rows="3" placeholder="例如：一般早上 8 点通勤、晚上 9 点睡前会看；一次大概 10~15 条，太长看不完。"></textarea>
+                    <p class="onboarding-preset-note">系统会据此安排预热时段、兜底间隔和每次采集条数，之后会继续从阅读行为中学习。</p>
+                </div>
+                <div id="onboardingFixedFields">
+                    <div class="onboarding-field">
+                        <label>采集间隔</label>
+                        <div class="onboarding-choice" id="onboardingIntervalChoice">
+                            <button type="button" data-interval="3">每 3 小时</button>
+                            <button type="button" data-interval="6">每 6 小时</button>
+                            <button type="button" data-interval="8">每 8 小时</button>
+                            <button type="button" data-interval="12">每 12 小时</button>
+                        </div>
+                    </div>
+                    <div class="onboarding-field">
+                        <label>每日开始时间</label>
+                        <div class="onboarding-choice" id="onboardingStartChoice">
+                            <button type="button" data-start="0">0 点</button>
+                            <button type="button" data-start="4">4 点</button>
+                            <button type="button" data-start="8">8 点</button>
+                            <button type="button" data-start="12">12 点</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="onboarding-field">
                     <label>新增新闻的封面</label>
@@ -349,6 +377,7 @@
                         </button>
                     </div>
                 </div>
+                <p class="onboarding-status" id="onboardingAnalyzeStatus"></p>
             </section>
 
             <section class="onboarding-panel" data-panel="4">
@@ -707,7 +736,7 @@
         <div class="modal-header">
             <div class="modal-title-group">
                 <h3>模型与服务配置</h3>
-                <span class="modal-title-hint">大语言 / 文生图 / 搜索 / 向量服务统一管理，同一类型仅可启用一个配置</span>
+                <span class="modal-title-hint">大语言 / 文生图 / 搜索 / 向量服务统一管理；未配置搜索服务时，会自动回退到大模型的内置联网搜索</span>
             </div>
             <button class="modal-close" data-close>&times;</button>
         </div>
@@ -763,6 +792,11 @@
             <button class="modal-close" data-close>&times;</button>
         </div>
         <div class="modal-body">
+            <div class="form-group" id="configPresetGroup">
+                <label>预设模板</label>
+                <div class="preset-chips" id="configPresetChips"></div>
+                <div class="config-preset-note" id="configPresetNote"></div>
+            </div>
             <div class="form-group">
                 <label>服务商名称</label>
                 <input type="text" id="configProviderInput" maxlength="50">
@@ -787,6 +821,7 @@
             <div class="form-group" id="configModelGroup">
                 <label>模型 ID</label>
                 <input type="text" id="configModelInput">
+                <div class="model-chips" id="configModelChips"></div>
             </div>
             <p class="config-test-result" id="configTestResult"></p>
         </div>
@@ -839,42 +874,61 @@
 
             <div class="task-field">
                 <div class="task-field-head">
-                    <label class="task-label">时间间隔</label>
+                    <label class="task-label">调度方式</label>
                 </div>
-                <p class="task-hint">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.2"/>
-                        <path d="M8 7v3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                        <circle cx="8" cy="4.8" r="0.8" fill="currentColor"/>
-                    </svg>
-                    采集频率越高消耗的 AI Token 越多，请按需设置合理间隔
-                </p>
-                <div class="cron-presets" id="intervalChips">
-                    <button type="button" class="cron-chip" data-hours="1">每 1 小时</button>
-                    <button type="button" class="cron-chip" data-hours="3">每 3 小时</button>
-                    <button type="button" class="cron-chip" data-hours="6">每 6 小时</button>
-                    <button type="button" class="cron-chip" data-hours="8">每 8 小时</button>
-                    <button type="button" class="cron-chip" data-hours="12">每 12 小时</button>
-                    <button type="button" class="cron-chip" data-hours="24">每 24 小时</button>
+                <div class="cron-presets" id="scheduleModeChips">
+                    <button type="button" class="cron-chip" data-mode="fixed">固定频率</button>
+                    <button type="button" class="cron-chip" data-mode="smart">智能模式</button>
+                </div>
+                <div class="smart-panel" id="smartPanel" style="display:none">
+                    <p class="task-hint" id="smartHint">
+                        智能模式不需要手动设置频率、开始时间或提前量。系统会根据你的阅读/收藏/对话习惯，
+                        以及配置向导中描述的兴趣与空闲时间自动排程；固定间隔只作为最长等待兜底。
+                    </p>
+                    <div class="smart-windows" id="smartWindows"></div>
+                    <p class="smart-reason" id="smartReason"></p>
                 </div>
             </div>
 
-            <div class="task-field">
+            <div class="task-field" id="taskPreferencesField">
                 <div class="task-field-head">
-                    <label class="task-label">每日开始时间</label>
+                    <label class="task-label">兴趣与时间描述</label>
+                    <button type="button" class="btn-compact" id="editPreferencesBtn">修改描述</button>
                 </div>
-                <div class="cron-presets" id="startHourChips">
-                    <button type="button" class="cron-chip" data-hour="0">每日 0 点</button>
-                    <button type="button" class="cron-chip" data-hour="4">每日 4 点</button>
-                </div>
+                <p class="task-hint" id="taskPreferencesSummary">还没有分析兴趣与时间描述。</p>
             </div>
 
-            <div class="task-field">
-                <div class="task-field-head">
-                    <label class="task-label" for="taskTagsInput">关注标签</label>
+            <div id="taskFixedSettings">
+                <div class="task-field">
+                    <div class="task-field-head">
+                        <label class="task-label" id="taskIntervalLabel">时间间隔</label>
+                    </div>
+                    <p class="task-hint" id="taskIntervalHint">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.2"/>
+                            <path d="M8 7v3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                            <circle cx="8" cy="4.8" r="0.8" fill="currentColor"/>
+                        </svg>
+                        采集频率越高消耗的 AI Token 越多，请按需设置合理间隔
+                    </p>
+                    <div class="cron-presets" id="intervalChips">
+                        <button type="button" class="cron-chip" data-hours="1">每 1 小时</button>
+                        <button type="button" class="cron-chip" data-hours="3">每 3 小时</button>
+                        <button type="button" class="cron-chip" data-hours="6">每 6 小时</button>
+                        <button type="button" class="cron-chip" data-hours="8">每 8 小时</button>
+                        <button type="button" class="cron-chip" data-hours="12">每 12 小时</button>
+                        <button type="button" class="cron-chip" data-hours="24">每 24 小时</button>
+                    </div>
                 </div>
-                <div class="form-group" style="margin-bottom:0">
-                    <input type="text" id="taskTagsInput" placeholder="例如：AI、科技、财经（用逗号或、分隔）">
+
+                <div class="task-field">
+                    <div class="task-field-head">
+                        <label class="task-label">每日开始时间<span class="task-label-sub">（固定槽位基准）</span></label>
+                    </div>
+                    <div class="cron-presets" id="startHourChips">
+                        <button type="button" class="cron-chip" data-hour="0">每日 0 点</button>
+                        <button type="button" class="cron-chip" data-hour="4">每日 4 点</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -915,6 +969,14 @@
         activeConfig: { llm: '', image: '', search: '', embedding: '' },
         hasLlmKey: false,
         hasSearchKey: false,
+        searchReady: false,
+        searchSource: 'none',
+        searchLabel: '',
+        llmNativeSearch: false,
+        llmNativeSearchLabel: '',
+        presets: { llm: [], image: [], search: [] },
+        presetKey: '',
+        nativeSearchTest: null,
         editingConfig: null,
         editingConfigType: 'llm',
         deletingConfig: null,
@@ -1040,7 +1102,7 @@
             else if (action === 'my-later') window.location.href = '/my/later';
             else if (action === 'tags') { openTagsModal(); }
             else if (action === 'agent') { refreshConfig().then(() => { loadAgentForm(); refreshAgentLogs(); openModal('agentModal'); }); }
-            else if (action === 'llm') { refreshConfig().then(() => { renderAllConfigs(); openModal('modelConfigModal'); }); }
+            else if (action === 'llm') { Promise.all([refreshConfig(), loadPresets()]).then(() => { renderAllConfigs(); openModal('modelConfigModal'); }); }
             else if (action === 'task') { refreshConfig().then(() => { loadTaskForm(); openModal('taskModal'); }); }
             else if (action === 'onboarding') { refreshConfig().then(() => openOnboarding()); }
         });
@@ -1053,18 +1115,12 @@
         mode: '',
         interval: 8,
         start: 0,
+        schedule: 'smart',
         cover: 'off',
         savedLlm: false,
-        savedSearch: false
+        savedSearch: false,
+        analysis: null
     };
-
-    function parseTagInput(value) {
-        const seen = new Set();
-        return String(value || '')
-            .split(/[,，、]+/)
-            .map(s => s.trim())
-            .filter(s => s && !seen.has(s) && seen.add(s));
-    }
 
     function onboardingShowStep(step) {
         ONBOARDING.step = Math.min(ONBOARDING.total, Math.max(1, step));
@@ -1084,14 +1140,33 @@
     function renderOnboardingSummary() {
         const rows = [];
         const hasLlm = state.hasLlmKey || ONBOARDING.savedLlm;
-        const hasSearch = state.hasSearchKey || ONBOARDING.savedSearch;
+        const hasSearch = state.searchReady || ONBOARDING.savedSearch;
         rows.push(['工作模式', ONBOARDING.mode === 'assist' ? '辅助模式' : '自主模式', !ONBOARDING.mode]);
         rows.push(['大语言模型', hasLlm ? '已配置' : '未配置', !hasLlm]);
         if (ONBOARDING.mode !== 'assist') {
-            rows.push(['搜索服务', hasSearch ? '已配置' : '未配置', !hasSearch]);
-            rows.push(['采集间隔', `每 ${ONBOARDING.interval} 小时 · 每日 ${ONBOARDING.start} 点起`, false]);
-            rows.push(['关注标签', parseTagInput($('onboardingTagsInput').value).join('、') || '未设置（可稍后补充）', false]);
+            let searchText = hasSearch ? '已配置' : '未配置';
+            if (hasSearch && state.searchSource === 'native') {
+                searchText = `使用大模型内置联网${state.llmNativeSearchLabel ? '（' + state.llmNativeSearchLabel + '）' : ''}`;
+            }
+            rows.push(['搜索能力', searchText, !hasSearch]);
+            const scheduleText = ONBOARDING.schedule === 'smart' ? '智能模式（按描述与习惯自动排程）' : '固定频率';
+            rows.push(['调度方式', scheduleText, false]);
+            if (ONBOARDING.schedule === 'smart') {
+                const plan = (ONBOARDING.analysis && ONBOARDING.analysis.schedule) || {};
+                const hours = (plan.preferred_hours || []).map(h => `${h} 点`).join('、') || '默认 8/21 点';
+                const items = plan.items_per_run || 12;
+                const interval = plan.interval_hours || 8;
+                rows.push(['智能排程', `偏好 ${hours} · 每次约 ${items} 条 · 最长 ${interval} 小时兜底`, false]);
+            } else {
+                rows.push(['采集间隔', `每 ${ONBOARDING.interval} 小时 · 每日 ${ONBOARDING.start} 点起`, false]);
+            }
         }
+        const tags = (ONBOARDING.analysis && ONBOARDING.analysis.interests && ONBOARDING.analysis.interests.tags) || [];
+        const interestsText = ($('onboardingInterestsInput')?.value || '').trim();
+        const interestsDisplay = tags.length
+            ? tags.join('、')
+            : (interestsText ? interestsText.slice(0, 80) : '未填写（可稍后在向导中补充）');
+        rows.push(['兴趣主题', interestsDisplay, !tags.length && !interestsText]);
         const coverLabels = { svg: '大模型 SVG（低成本）', image: '文生图模型（高成本）', off: '不生成，使用默认封面' };
         rows.push(['新闻封面', coverLabels[ONBOARDING.cover] || '不生成', false]);
 
@@ -1123,6 +1198,18 @@
         });
     }
 
+    function onboardingSelectSchedule(value) {
+        ONBOARDING.schedule = value === 'fixed' ? 'fixed' : 'smart';
+        ONBOARDING.analysis = null;
+        document.querySelectorAll('#onboardingScheduleChoice button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.schedule === ONBOARDING.schedule);
+        });
+        const fixedFields = $('onboardingFixedFields');
+        const smartField = $('onboardingSmartScheduleField');
+        if (fixedFields) fixedFields.style.display = ONBOARDING.schedule === 'fixed' ? '' : 'none';
+        if (smartField) smartField.style.display = ONBOARDING.schedule === 'smart' ? '' : 'none';
+    }
+
     function onboardingSelectCover(value) {
         ONBOARDING.cover = value;
         document.querySelectorAll('#onboardingCoverChoice button').forEach(btn => {
@@ -1130,15 +1217,22 @@
         });
     }
 
-    function openOnboarding() {
+    function openOnboarding(startStep = 1) {
         ONBOARDING.savedLlm = false;
         ONBOARDING.savedSearch = false;
+        ONBOARDING.analysis = null;
         onboardingSelectMode(state.workMode || 'autonomous');
         onboardingSelectInterval(state.searchConfig?.task_interval_hours || 8);
         onboardingSelectStart(state.searchConfig?.task_start_hour || 0);
+        const data = state.searchConfig || {};
+        // 全新用户默认推荐智能模式；已经完成过向导的用户沿用已保存的设置
+        onboardingSelectSchedule(data.onboarding_done ? (data.task_schedule_mode || 'fixed') : 'smart');
         onboardingSelectCover('svg');
-        $('onboardingTagsInput').value = (state.searchConfig?.task_selected_tags || []).filter(Boolean).join('、');
-        onboardingShowStep(1);
+        $('onboardingInterestsInput').value = data.agent_interests_text || '';
+        $('onboardingScheduleInput').value = data.agent_schedule_text || '';
+        const status = $('onboardingAnalyzeStatus');
+        if (status) { status.className = 'onboarding-status'; status.textContent = ''; }
+        onboardingShowStep(startStep);
         openModal('onboardingModal');
     }
 
@@ -1170,6 +1264,25 @@
             status.textContent = '已保存并启用';
             ONBOARDING.savedLlm = true;
             await refreshConfig();
+            // MiMo 这类「对话工具型」联网必须实际探测一次；独立搜索接口在保存时已自动探测
+            if (data && data.id && data.native_search_kind === 'mimo' && !data.native_search) {
+                status.textContent = '已保存；正在检测大模型内置联网…';
+                try {
+                    const probe = await fetch(`/api/model-configs/${data.id}/detect-search`, { method: 'POST' });
+                    const probeData = await probe.json().catch(() => ({}));
+                    if (probe.ok && probeData.result && probeData.result.available) {
+                        status.className = 'onboarding-status ok';
+                        status.textContent = `已保存；${probeData.result.label || '内置联网'}可用`;
+                    } else {
+                        status.className = 'onboarding-status';
+                        status.textContent = '已保存；未检测到内置联网，稍后可在设置里配置搜索服务';
+                    }
+                    await refreshConfig();
+                } catch (e) {
+                    status.className = 'onboarding-status';
+                    status.textContent = '已保存；内置联网检测失败，可稍后在设置里重试';
+                }
+            }
             return true;
         } catch (e) {
             status.className = 'onboarding-status err';
@@ -1213,16 +1326,70 @@
         }
     }
 
+    async function analyzeOnboardingPreferences() {
+        const interests = ($('onboardingInterestsInput').value || '').trim();
+        const schedule = ($('onboardingScheduleInput').value || '').trim();
+        const status = $('onboardingAnalyzeStatus');
+        if (ONBOARDING.mode === 'assist') {
+            ONBOARDING.analysis = null;
+            return true;
+        }
+        if (!interests && !schedule) {
+            ONBOARDING.analysis = null;
+            if (status) { status.className = 'onboarding-status'; status.textContent = ''; }
+            return true;
+        }
+        const btn = $('onboardingNextBtn');
+        if (status) { status.className = 'onboarding-status'; status.textContent = '正在分析你的兴趣与时间偏好…'; }
+        if (btn) btn.disabled = true;
+        try {
+            const resp = await fetch('/api/config/preferences/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    interests_text: interests,
+                    schedule_text: schedule,
+                    mode: ONBOARDING.schedule,
+                })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.detail || '分析失败');
+            ONBOARDING.analysis = data;
+            const tagCount = (data.interests && data.interests.tags || []).length;
+            const hours = (data.schedule && data.schedule.preferred_hours || []).map(h => `${h} 点`).join('、');
+            if (status) {
+                status.className = 'onboarding-status ok';
+                status.textContent = `已识别 ${tagCount} 个兴趣主题${hours ? `；偏好时段 ${hours}` : ''}${data.schedule && data.schedule.items_per_run ? `；每次约 ${data.schedule.items_per_run} 条` : ''}`;
+            }
+            await refreshConfig();
+            return true;
+        } catch (e) {
+            ONBOARDING.analysis = null;
+            if (status) {
+                status.className = 'onboarding-status err';
+                status.textContent = `智能分析暂时不可用（${e.message || '网络错误'}），将按默认设置继续`;
+            }
+            return false;
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
     async function finishOnboarding() {
+        const interests = ($('onboardingInterestsInput').value || '').trim();
+        const schedule = ($('onboardingScheduleInput').value || '').trim();
         const payload = {
             onboarding_done: true,
-            work_mode: ONBOARDING.mode || 'autonomous'
+            work_mode: ONBOARDING.mode || 'autonomous',
+            agent_interests_text: interests,
+            agent_schedule_text: schedule,
         };
         if (ONBOARDING.mode !== 'assist') {
-            payload.task_interval_hours = ONBOARDING.interval;
-            payload.task_start_hour = ONBOARDING.start;
-            const tags = parseTagInput($('onboardingTagsInput').value);
-            if (tags.length) payload.task_selected_tags = tags;
+            payload.task_schedule_mode = ONBOARDING.schedule;
+            if (ONBOARDING.schedule === 'fixed') {
+                payload.task_interval_hours = ONBOARDING.interval;
+                payload.task_start_hour = ONBOARDING.start;
+            }
         }
         if (ONBOARDING.cover === 'image' && !imageConfigReady()) {
             payload.agent_cover_mode = 'off';
@@ -1270,6 +1437,9 @@
             return;
         }
         if (ONBOARDING.step === 3) {
+            if (ONBOARDING.mode !== 'assist') {
+                await analyzeOnboardingPreferences();
+            }
             onboardingShowStep(4);
             return;
         }
@@ -1284,6 +1454,9 @@
     });
     document.querySelectorAll('#onboardingStartChoice button').forEach(btn => {
         btn.addEventListener('click', () => onboardingSelectStart(btn.dataset.start));
+    });
+    document.querySelectorAll('#onboardingScheduleChoice button').forEach(btn => {
+        btn.addEventListener('click', () => onboardingSelectSchedule(btn.dataset.schedule));
     });
     document.querySelectorAll('#onboardingCoverChoice button').forEach(btn => {
         btn.addEventListener('click', () => onboardingSelectCover(btn.dataset.cover));
@@ -1350,6 +1523,11 @@
             };
             state.hasLlmKey = !!data.has_llm_key;
             state.hasSearchKey = !!data.has_search_key;
+            state.searchReady = !!data.search_ready;
+            state.searchSource = data.search_source || 'none';
+            state.searchLabel = data.search_label || '';
+            state.llmNativeSearch = !!data.llm_native_search;
+            state.llmNativeSearchLabel = data.llm_native_search_label || '';
             state.workMode = data.work_mode || '';
             state.agentRecommend = !!data.agent_recommend_enabled;
             state.dbMode = data.db_mode || 'system';
@@ -1424,7 +1602,8 @@
         const w = { llm: false, search: false };
         if (state.workMode !== 'autonomous') return w;
         w.llm = !state.hasLlmKey;
-        w.search = !state.hasSearchKey;
+        // 独立搜索服务或大模型内置联网，任一可用即不算缺失
+        w.search = !state.searchReady;
         return w;
     }
 
@@ -1859,36 +2038,191 @@
             /* ===== 模型与服务配置（大语言 / 文生图 / 搜索） ===== */
     const CONFIG_TYPE_LABEL = { llm: '大语言模型', image: '文生图模型', search: '搜索服务', embedding: '向量模型' };
 
+    async function loadPresets() {
+        try {
+            const resp = await fetch('/api/model-configs/presets');
+            if (!resp.ok) return;
+            state.presets = await resp.json();
+        } catch (e) {
+            console.warn('加载预设模板失败', e);
+        }
+    }
+
+    function presetList(configType) {
+        return state.presets[configType] || [];
+    }
+
+    function currentPreset(configType) {
+        const list = presetList(configType);
+        if (state.presetKey) {
+            const found = list.find(p => p.key === state.presetKey);
+            if (found) return found;
+        }
+        const url = ($('configUrlInput')?.value || '').trim();
+        const name = ($('configProviderInput')?.value || '').trim();
+        return list.find(p => p.key !== 'custom' && (
+            (p.label && name && p.label === name)
+            || (p.base_url && url && url.startsWith(p.base_url))
+        )) || null;
+    }
+
+    function presetForSave(configType, providerName, url) {
+        const list = presetList(configType);
+        const explicit = list.find(p => p.key === state.presetKey);
+        if (explicit && explicit.key !== 'custom') {
+            const urlMatches = explicit.base_url && url && (url === explicit.base_url || url.startsWith(explicit.base_url));
+            const nameMatches = explicit.label && providerName && explicit.label === providerName;
+            if (urlMatches || nameMatches) return explicit;
+        }
+        return list.find(p => p.key !== 'custom' && (
+            (p.base_url && url && (url === p.base_url || url.startsWith(p.base_url)))
+            || (p.label && providerName && p.label === providerName)
+        )) || null;
+    }
+
+    function renderConfigModelChips(configType) {
+        const container = $('configModelChips');
+        if (!container) return;
+        if (configType === 'search' || configType === 'embedding') {
+            container.innerHTML = '';
+            return;
+        }
+        const preset = currentPreset(configType);
+        const models = (preset && preset.models) || [];
+        const value = ($('configModelInput')?.value || '').trim();
+        container.innerHTML = models.map(model => `
+            <button type="button" class="model-chip ${model === value ? 'active' : ''}" data-model="${escapeHtml(model)}">${escapeHtml(model)}</button>
+        `).join('');
+        container.querySelectorAll('.model-chip').forEach(btn => {
+            btn.addEventListener('click', () => {
+                $('configModelInput').value = btn.dataset.model || '';
+                state.nativeSearchTest = null;
+                renderConfigModelChips(configType);
+                resetConfigTestResult();
+            });
+        });
+    }
+
+    function renderPresetNote(configType) {
+        const note = $('configPresetNote');
+        if (!note) return;
+        const preset = currentPreset(configType);
+        if (!preset) {
+            note.textContent = '选择预设可自动填充 Base URL 与常用模型；也可以直接手动填写。';
+            return;
+        }
+        const parts = [];
+        if (preset.note) parts.push(preset.note);
+        else if (preset.hint) parts.push(preset.hint);
+        if (preset.native_search) parts.push(`内置联网：${preset.native_search.label}`);
+        if (preset.native_search_note) parts.push(preset.native_search_note);
+        note.textContent = parts.join(' ');
+        if (preset.docs) {
+            const link = document.createElement('a');
+            link.href = preset.docs;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = '官方文档';
+            note.appendChild(document.createTextNode(' '));
+            note.appendChild(link);
+        }
+    }
+
+    function renderConfigPresets(configType) {
+        const container = $('configPresetChips');
+        const group = $('configPresetGroup');
+        if (!container || !group) return;
+        if (configType === 'embedding') {
+            group.style.display = 'none';
+            renderConfigModelChips(configType);
+            return;
+        }
+        group.style.display = '';
+        const list = presetList(configType).filter(p => p.key !== 'custom');
+        container.innerHTML = list.map(preset => `
+            <button type="button" class="preset-chip ${state.presetKey === preset.key ? 'active' : ''}" data-key="${escapeHtml(preset.key)}">${escapeHtml(preset.label)}</button>
+        `).join('') + `
+            <button type="button" class="preset-chip ${state.presetKey === 'custom' ? 'active' : ''}" data-key="custom">自定义</button>
+        `;
+        container.querySelectorAll('.preset-chip').forEach(btn => {
+            btn.addEventListener('click', () => applyConfigPreset(configType, btn.dataset.key));
+        });
+        if (configType === 'search' && !(state.editingConfig && state.editingConfig.has_api_key)) {
+            const preset = currentPreset(configType);
+            $('configApiKeyInput').placeholder = preset && preset.auth === 'none'
+                ? '此服务通常无需 API Key'
+                : '输入 API Key';
+        }
+        renderConfigModelChips(configType);
+        renderPresetNote(configType);
+    }
+
+    function applyConfigPreset(configType, key) {
+        const preset = presetList(configType).find(p => p.key === key);
+        state.presetKey = key || '';
+        state.nativeSearchTest = null;
+        if (preset) {
+            if (preset.key === 'custom') {
+                $('configProviderInput').value = preset.label || '自定义';
+            } else {
+                $('configProviderInput').value = preset.label || '';
+                $('configUrlInput').value = preset.base_url || '';
+                if (configType !== 'search') {
+                    $('configModelInput').value = (preset.models && preset.models[0]) || '';
+                }
+            }
+            if (configType === 'search') {
+                $('configApiKeyInput').placeholder = preset.auth === 'none'
+                    ? '此服务通常无需 API Key'
+                    : '输入 API Key';
+            }
+        }
+        renderConfigPresets(configType);
+        resetConfigTestResult();
+    }
+
     function renderConfigList(config_type) {
         const containerId = { llm: 'configListLlm', image: 'configListImage', search: 'configListSearch', embedding: 'configListEmbedding' }[config_type];
         const container = $(containerId);
         if (!container) return;
         const configs = state.configs[config_type] || [];
         const activeId = state.activeConfig[config_type];
+        const nativeNotice = (config_type === 'search' && state.searchSource === 'native')
+            ? `<div class="native-search-notice">
+                    <strong>未启用独立搜索服务</strong>
+                    <span>当前使用「${escapeHtml(state.searchLabel || state.llmNativeSearchLabel || '大模型内置搜索')}」的内置联网搜索。配置独立搜索服务可获得更稳定的结果。</span>
+               </div>`
+            : '';
 
         if (!configs.length) {
             container.innerHTML = `
+                ${nativeNotice}
                 <div class="llm-empty">
                     <svg width="40" height="40" viewBox="0 0 16 16" fill="none">
                         <rect x="4.5" y="4.5" width="7" height="7" rx="1" stroke="currentColor" stroke-width="0.8"/>
                         <path d="M6.5 2v2.5M9.5 2v2.5M6.5 11.5V14M9.5 11.5V14M2 6.5h2.5M2 9.5h2.5M11.5 6.5H14M11.5 9.5H14" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"/>
                     </svg>
-                    <p>暂无配置</p>
-                    <span>点击上方「新增」创建第一个${CONFIG_TYPE_LABEL[config_type]}配置</span>
+                    <p>${nativeNotice ? '正在使用大模型内置联网' : '暂无配置'}</p>
+                    <span>${nativeNotice ? '也可以新增独立搜索服务，进一步提升稳定性' : `点击上方「新增」创建第一个${CONFIG_TYPE_LABEL[config_type]}配置`}</span>
                 </div>
             `;
             return;
         }
 
-        container.innerHTML = configs.map(cfg => {
+        container.innerHTML = nativeNotice + configs.map(cfg => {
             const isActive = String(cfg.id) === String(activeId);
             const activeStyle = isActive
                 ? 'background:#c8a85214;border-color:#c8a85255;box-shadow:inset 3px 0 0 #c8a852;'
                 : '';
             const big = cfg.config_type === 'search' ? (cfg.provider_name || cfg.name) : (cfg.name || cfg.model_id);
-            const small = cfg.config_type === 'search'
+            const smallText = cfg.config_type === 'search'
                 ? '搜索服务'
                 : (cfg.provider_name || cfg.provider);
+            const nativeBadge = cfg.config_type === 'llm' && cfg.native_available
+                ? `<span class="native-badge" title="${escapeHtml(cfg.native_search_detail || '已检测到内置联网搜索')}">内置联网</span>`
+                : (cfg.config_type === 'llm' && cfg.native_search_kind
+                    ? `<span class="native-badge off" title="${escapeHtml(cfg.native_search_detail || '尚未检测内置联网搜索')}">${cfg.native_search_checked_at ? '联网未就绪' : '待检测'}</span>`
+                    : '');
             return `
                 <div class="llm-config-item ${isActive ? 'is-active' : ''}" data-id="${cfg.id}" style="${activeStyle}">
                     <div class="llm-config-main">
@@ -1896,9 +2230,16 @@
                             ${escapeHtml(big)}
                             ${isActive ? '<span class="llm-enabled-badge" style="background:#c8a852;color:#0b0b0f">已启用</span>' : ''}
                         </div>
-                        <div class="llm-config-sub">${escapeHtml(small)}${cfg.has_api_key ? '' : ' · 未填配置 API Key'}</div>
+                        <div class="llm-config-sub">${escapeHtml(smallText)}${nativeBadge}${cfg.config_type === 'search' && cfg.requires_key === false ? ' · 无需 API Key' : (cfg.has_api_key ? '' : ' · 未填配置 API Key')}</div>
                     </div>
                     <div class="llm-config-actions">
+                        ${cfg.config_type === 'llm' && cfg.native_search_kind && !cfg.native_search ? `
+                        <button type="button" class="btn-icon cfg-probe-btn" title="检测内置联网能力">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
+                                <path d="M2 8h12M8 2c1.8 2 2.6 4 2.6 6S9.8 12 8 14c-1.8-2-2.6-4-2.6-6S6.2 4 8 2z" stroke="currentColor" stroke-width="1.1"/>
+                            </svg>
+                        </button>` : ''}
                         <button type="button" class="btn-icon cfg-enable-btn ${isActive ? 'btn-icon-active' : ''}" title="${isActive ? '取消启用' : '启用'}">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path d="M8 1.5v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -1922,6 +2263,9 @@
 
         container.querySelectorAll('.cfg-enable-btn').forEach(btn => {
             btn.addEventListener('click', () => toggleConfigEnable(config_type, btn.closest('.llm-config-item').dataset.id));
+        });
+        container.querySelectorAll('.cfg-probe-btn').forEach(btn => {
+            btn.addEventListener('click', () => detectConfigSearch(btn.closest('.llm-config-item').dataset.id, btn));
         });
         container.querySelectorAll('.cfg-edit-btn').forEach(btn => {
             btn.addEventListener('click', () => openConfigEdit(config_type, btn.closest('.llm-config-item').dataset.id));
@@ -1961,12 +2305,14 @@
     function openConfigEdit(config_type, configId) {
         state.editingConfigType = config_type;
         state.editingConfig = configId ? state.configs[config_type].find(c => String(c.id) === String(configId)) : null;
+        state.nativeSearchTest = null;
 
         $('configEditTitle').textContent = state.editingConfig ? '编辑配置' : '新增配置';
         const modelGroup = $('configModelGroup');
         if (modelGroup) modelGroup.style.display = config_type === 'search' ? 'none' : '';
 
         const cfg = state.editingConfig;
+        state.presetKey = cfg ? (cfg.provider_key || cfg.provider || '') : '';
         $('configProviderInput').value = cfg ? (cfg.provider_name || cfg.provider || '') : '';
         $('configUrlInput').value = cfg ? (cfg.base_url || '') : '';
         $('configModelInput').value = cfg ? (cfg.model_id || '') : '';
@@ -1975,6 +2321,7 @@
         $('configKeyHint').textContent = cfg && cfg.has_api_key ? '已配置 API Key，留空表示不修改' : '';
         $('configApiKeyInput').placeholder = cfg && cfg.has_api_key ? '已配置，留空不修改' : '输入 API Key';
 
+        renderConfigPresets(config_type);
         resetConfigTestResult();
         openModal('configEditModal');
     }
@@ -1983,17 +2330,21 @@
         const config_type = state.editingConfigType;
         const payload = {
             provider: $('configProviderInput').value.trim(),
+            provider_name: $('configProviderInput').value.trim(),
             base_url: $('configUrlInput').value.trim(),
             model_id: $('configModelInput').value.trim(),
             config_type,
             api_key: $('configApiKeyInput').value.trim(),
+            config_id: state.editingConfig ? state.editingConfig.id : null,
         };
         const resultEl = $('configTestResult');
         if (!payload.base_url) { showToast('请输入 Base URL', 'error'); return; }
         if (config_type !== 'search' && !payload.model_id) { showToast('请输入模型 ID', 'error'); return; }
         const btn = $('testConfigBtn');
+        const saveBtn = $('saveConfigBtn');
         btn.disabled = true;
         btn.textContent = '测试中…';
+        if (saveBtn) saveBtn.disabled = true;
         resultEl.style.display = 'none';
         try {
             const resp = await fetch('/api/model-configs/test', {
@@ -2005,6 +2356,14 @@
             resultEl.textContent = data.message || '测试完成';
             resultEl.className = 'config-test-result ' + (data.ok ? 'ok' : 'fail');
             resultEl.style.display = '';
+            if (config_type === 'llm' && data.native_search) {
+                state.nativeSearchTest = {
+                    available: !!data.native_search.available,
+                    detail: data.native_search.detail || '',
+                };
+            } else {
+                state.nativeSearchTest = null;
+            }
         } catch (e) {
             resultEl.textContent = '测试失败：网络错误';
             resultEl.className = 'config-test-result fail';
@@ -2012,10 +2371,28 @@
         } finally {
             btn.disabled = false;
             btn.textContent = '测试连接';
+            if (saveBtn) saveBtn.disabled = false;
         }
     }
 
     $('testConfigBtn').addEventListener('click', testConfigNow);
+
+    ['configProviderInput', 'configUrlInput', 'configModelInput', 'configApiKeyInput'].forEach(id => {
+        const el = $(id);
+        if (!el) return;
+        el.addEventListener('input', () => {
+            state.nativeSearchTest = null;
+            const type = state.editingConfigType;
+            if (id === 'configProviderInput' || id === 'configUrlInput') {
+                state.presetKey = '';
+                renderConfigPresets(type);
+            } else {
+                renderConfigModelChips(type);
+                renderPresetNote(type);
+            }
+            resetConfigTestResult();
+        });
+    });
 
     $('saveConfigBtn').addEventListener('click', async () => {
         const config_type = state.editingConfigType;
@@ -2028,6 +2405,25 @@
         if (!url) { showToast('请输入 Base URL', 'error'); return; }
         if (config_type !== 'search' && !model) { showToast('请输入模型 ID', 'error'); return; }
 
+        const preset = presetForSave(config_type, provider, url);
+        const payload = {
+            provider: preset ? preset.key : provider,
+            provider_name: provider || (preset ? preset.label : ''),
+            name: model,
+            base_url: url,
+            model_id: model,
+            config_type,
+            api_key: apiKey,
+        };
+        if (state.nativeSearchTest) {
+            payload.native_search = !!state.nativeSearchTest.available;
+            payload.native_search_detail = state.nativeSearchTest.detail || '';
+        }
+
+        const saveBtn = $('saveConfigBtn');
+        const originalText = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = '保存中…';
         try {
             let resp;
             if (state.editingConfig) {
@@ -2035,17 +2431,18 @@
                 resp = await fetch(`/api/model-configs/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: model, base_url: url, model_id: model, api_key: apiKey })
+                    body: JSON.stringify(payload)
                 });
             } else {
                 resp = await fetch('/api/model-configs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider, base_url: url, model_id: model, config_type, api_key: apiKey, enabled: false })
+                    body: JSON.stringify({ ...payload, enabled: false })
                 });
             }
             if (resp.ok) {
                 closeModal('configEditModal');
+                state.nativeSearchTest = null;
                 // 乐观更新本地状态，保证即时反馈（不依赖刷新接口是否成功）
                 let saved = null;
                 try { saved = await resp.json(); } catch (e) {}
@@ -2068,11 +2465,39 @@
             }
         } catch (e) {
             showToast('保存失败', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalText;
         }
     });
 
-    async function toggleConfigEnable(config_type, id) {
-        const cfg = (state.configs[config_type] || []).find(c => String(c.id) === String(id));
+    async function detectConfigSearch(id, btn) {
+        if (btn) { btn.disabled = true; btn.classList.add('btn-icon-active'); }
+        showToast('正在检测内置联网能力…', 'info');
+        try {
+            const resp = await fetch(`/api/model-configs/${id}/detect-search`, { method: 'POST' });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                showToast(data.detail || '检测失败', 'error');
+                return;
+            }
+            const result = data.result || {};
+            if (result.available) {
+                showToast(result.label ? `${result.label} 可用` : '内置联网可用', 'success');
+            } else {
+                showToast(result.detail || '未检测到内置联网能力', 'error');
+            }
+            try { await refreshConfig(); } catch (e) {}
+            renderAllConfigs();
+            renderWarnings();
+        } catch (e) {
+            showToast('检测失败：网络错误', 'error');
+        } finally {
+            if (btn) { btn.disabled = false; btn.classList.remove('btn-icon-active'); }
+        }
+    }
+
+    async function toggleConfigEnable(config_type, id) {        const cfg = (state.configs[config_type] || []).find(c => String(c.id) === String(id));
         const turningOff = !!(cfg && cfg.enabled);
         try {
             const resp = await fetch(`/api/model-configs/${id}/${turningOff ? 'disable' : 'enable'}`, { method: 'POST' });
@@ -2434,7 +2859,7 @@
     $('agentLogAgentSel').addEventListener('change', renderAgentLogs);
 
     /* ===== 自动任务配置 ===== */
-    state.taskForm = { intervalHours: 8, startHour: 0 };
+    state.taskForm = { intervalHours: 8, startHour: 0, scheduleMode: 'fixed' };
 
     // 由「时间间隔 + 每日开始时间」固定生成每日触发点（写死逻辑，与后端一致）
     function taskSlotsFor(intervalHours, startHour) {
@@ -2468,6 +2893,10 @@
     // 切换间隔/开始时间后按当前选中配置即时推算「下次执行」
     function updateTaskNextRun() {
         const form = state.taskForm;
+        if (form.scheduleMode === 'smart') {
+            $('taskStatusNextRun').textContent = '由智能调度计算（保存后生效）';
+            return;
+        }
         const slots = taskSlotsFor(form.intervalHours, form.startHour);
         const next = nextRunFromSlots(slots);
         $('taskStatusNextRun').textContent = next ? next.toLocaleString() : '-';
@@ -2478,17 +2907,37 @@
 
         state.taskForm.intervalHours = data.task_interval_hours || 8;
         state.taskForm.startHour = data.task_start_hour || 0;
-
-        const saved = data.task_selected_tags;
-        $('taskTagsInput').value = Array.isArray(saved) ? saved.filter(Boolean).join('、') : '';
+        state.taskForm.scheduleMode = data.task_schedule_mode === 'smart' ? 'smart' : 'fixed';
 
         renderTaskForm();
         refreshTaskStatus();
     }
 
+    function renderTaskPreferences() {
+        const data = state.searchConfig || {};
+        const tags = data.agent_interests_tags || [];
+        const plan = data.agent_schedule_plan || {};
+        const parts = [];
+        parts.push(tags.length ? `兴趣：${tags.slice(0, 8).join('、')}` : '兴趣：未分析');
+        if (plan.preferred_hours && plan.preferred_hours.length) {
+            parts.push(`偏好时段：${plan.preferred_hours.map(h => `${h}:00`).join('、')}`);
+        }
+        if (plan.items_per_run) parts.push(`每次约 ${plan.items_per_run} 条`);
+        if (plan.interval_hours) parts.push(`最长 ${plan.interval_hours} 小时兜底`);
+        const el = $('taskPreferencesSummary');
+        if (el) el.textContent = parts.join(' · ');
+    }
+
     function renderTaskForm() {
         const form = state.taskForm;
 
+        document.querySelectorAll('#scheduleModeChips .cron-chip').forEach(chip => {
+            chip.classList.toggle('active', chip.dataset.mode === form.scheduleMode);
+        });
+        const smartPanel = $('smartPanel');
+        if (smartPanel) smartPanel.style.display = form.scheduleMode === 'smart' ? '' : 'none';
+        const fixedSettings = $('taskFixedSettings');
+        if (fixedSettings) fixedSettings.style.display = form.scheduleMode === 'fixed' ? '' : 'none';
         document.querySelectorAll('#intervalChips .cron-chip').forEach(chip => {
             chip.classList.toggle('active', parseInt(chip.dataset.hours) === form.intervalHours);
         });
@@ -2496,7 +2945,9 @@
             chip.classList.toggle('active', parseInt(chip.dataset.hour) === form.startHour);
         });
 
+        renderTaskPreferences();
         updateTaskNextRun();
+        if (form.scheduleMode === 'smart') refreshTaskStatus();
     }
 
     // 切换间隔 / 开始时间后立即重算「下次执行」
@@ -2514,6 +2965,46 @@
         });
     });
 
+    document.querySelectorAll('#scheduleModeChips .cron-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            state.taskForm.scheduleMode = chip.dataset.mode === 'smart' ? 'smart' : 'fixed';
+            renderTaskForm();
+        });
+    });
+
+    $('editPreferencesBtn').addEventListener('click', () => {
+        closeModal('taskModal');
+        refreshConfig().then(() => openOnboarding(3));
+    });
+
+    function renderSmartStatus(data) {
+        const windowsEl = $('smartWindows');
+        const reasonEl = $('smartReason');
+        if (!windowsEl || !reasonEl) return;
+        const smart = data && data.smart;
+        if (!smart) {
+            windowsEl.innerHTML = '<span class="smart-empty">保存后开始学习你的活跃时段</span>';
+            reasonEl.textContent = '';
+            return;
+        }
+        if (!smart.ready || !(smart.windows || []).length) {
+            windowsEl.innerHTML = '<span class="smart-empty">学习期：暂无稳定的活跃时段，先按固定频率兜底</span>';
+        } else {
+            windowsEl.innerHTML = (smart.windows || []).map(item => `
+                <span class="smart-window">
+                    <b>${escapeHtml(item.label || '')}</b>
+                    <span>权重 ${item.score == null ? '-' : item.score}</span>
+                </span>
+            `).join('');
+        }
+        const parts = [];
+        if (smart.source === 'plan') parts.push('依据：你的时间描述');
+        else if (smart.source === 'learned') parts.push('依据：实际阅读习惯');
+        if (smart.reason) parts.push(smart.reason);
+        if (smart.next_reason) parts.push(`下次：${smart.next_reason}`);
+        reasonEl.textContent = parts.join(' · ');
+    }
+
     async function refreshTaskStatus() {
         try {
             const resp = await fetch('/api/scheduler/status');
@@ -2522,6 +3013,24 @@
             runningEl.textContent = data.running ? '运行中' : '等待中';
             runningEl.classList.toggle('on', data.running);
             $('taskStatusLastRun').textContent = data.last_run ? new Date(data.last_run).toLocaleString() : '-';
+            renderSmartStatus(data);
+            const saved = state.searchConfig || {};
+            const form = state.taskForm;
+            const formMatchesSaved = (
+                form.scheduleMode === (saved.task_schedule_mode || 'fixed')
+                && (form.scheduleMode !== 'fixed' || (
+                    form.intervalHours === (saved.task_interval_hours || 8)
+                    && form.startHour === (saved.task_start_hour || 0)
+                ))
+            );
+            if (formMatchesSaved && data.schedule_mode === form.scheduleMode) {
+                const next = data.next_run ? new Date(data.next_run) : null;
+                $('taskStatusNextRun').textContent = next
+                    ? next.toLocaleString()
+                    : (form.scheduleMode === 'smart' ? '等待智能调度计算' : '-');
+            } else {
+                updateTaskNextRun();
+            }
         } catch (e) {
             console.error('Failed to load scheduler status:', e);
         }
@@ -2535,11 +3044,11 @@
 
     $('saveTaskBtn').addEventListener('click', async () => {
         const form = state.taskForm;
-        const payload = {
-            task_interval_hours: form.intervalHours,
-            task_start_hour: form.startHour,
-            task_selected_tags: parseTagInput($('taskTagsInput').value)
-        };
+        const payload = { task_schedule_mode: form.scheduleMode };
+        if (form.scheduleMode === 'fixed') {
+            payload.task_interval_hours = form.intervalHours;
+            payload.task_start_hour = form.startHour;
+        }
 
         try {
             const resp = await fetch('/api/config', {
@@ -2710,6 +3219,7 @@
 
     /* ===== 初始化 ===== */
     refreshConfig();
+    loadPresets();
     setInterval(() => {
         if ($('taskModal').classList.contains('show')) refreshTaskStatus();
     }, 15000);

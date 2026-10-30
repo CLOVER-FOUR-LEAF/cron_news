@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.env_store import read_env_file
 from app.logging_setup import get_logger
 from app.models import News
-from app.services import llm_client, memory_service, tag_service
+from app.services import llm_client, memory_service, preferences, tag_service
 from app.services.json_utils import extract_json_object
 from app.services.model_configs import get_active_endpoint
 
@@ -78,6 +78,7 @@ async def plan_tag_queries(
         return heuristic
 
     memory_ctx = await memory_service.build_prompt_context(db, "collect")
+    interests_ctx = preferences.interests_text()
     recent = await _recent_titles(db)
     recent_text = "\n".join(f"- {title}" for title in recent[:80]) or "（近期无收录）"
     tags_text = "、".join(tags) if tags else "（未设置关注标签）"
@@ -86,7 +87,7 @@ async def plan_tag_queries(
         "你是资讯采集策略规划师。用户关注一组标签，你要为每个标签生成互补的搜索查询词，"
         "并额外生成泛热点查询，避免只看到关注领域。\n"
         "要求：\n"
-        "1. 必须结合用户记忆中的跟踪任务、兴趣与「需要避免」。\n"
+        "1. 必须结合用户记忆中的跟踪任务、兴趣、用户兴趣描述与「需要避免」。\n"
         "2. 查询词要指向具体事件、公司、产品、人物或政策，例如「英伟达 财报」「OpenAI 新模型发布」；"
         "不要写「科技新闻」「财经新闻」「今日要闻」这类会搜到门户首页的泛词。\n"
         "3. 同一标签覆盖不同细分方向，优先近期未覆盖的角度与最新进展。\n"
@@ -98,6 +99,7 @@ async def plan_tag_queries(
     )
     user_prompt = (
         (memory_ctx + "\n\n" if memory_ctx else "")
+        + (f"用户兴趣描述：{interests_ctx}\n\n" if interests_ctx else "")
         + f"关注标签：{tags_text}\n\n"
         + "近期已收录标题（避免重复角度）：\n"
         + recent_text

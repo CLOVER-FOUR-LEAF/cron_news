@@ -85,6 +85,7 @@ def ensure_schema(sync_conn):
     _ensure_news_batch_column(sync_conn)
     _ensure_brief_columns(sync_conn)
     _ensure_model_config_api_key_column(sync_conn)
+    _ensure_model_config_native_search_columns(sync_conn)
 
     from app.services.fts import ensure_fts
 
@@ -238,3 +239,28 @@ def _ensure_model_config_api_key_column(sync_conn):
     cols = [c["name"] for c in inspector.get_columns("model_configs")]
     if "api_key_enc" not in cols:
         sync_conn.execute(text("ALTER TABLE model_configs ADD COLUMN api_key_enc TEXT"))
+
+
+def _timestamp_ddl_type(sync_conn) -> str:
+    """PostgreSQL 没有 DATETIME 类型；SQLite / MySQL / MariaDB 使用 DATETIME。"""
+    return "TIMESTAMP" if sync_conn.dialect.name == "postgresql" else "DATETIME"
+
+
+def _ensure_model_config_native_search_columns(sync_conn):
+    """大模型内置联网搜索能力：旧库平滑补列。"""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(sync_conn)
+    if "model_configs" not in inspector.get_table_names():
+        return
+    cols = [c["name"] for c in inspector.get_columns("model_configs")]
+    timestamp = _timestamp_ddl_type(sync_conn)
+    additions = [
+        ("native_search", "ALTER TABLE model_configs ADD COLUMN native_search BOOLEAN DEFAULT FALSE"),
+        ("native_search_kind", "ALTER TABLE model_configs ADD COLUMN native_search_kind VARCHAR(30) DEFAULT ''"),
+        ("native_search_detail", "ALTER TABLE model_configs ADD COLUMN native_search_detail VARCHAR(300) DEFAULT ''"),
+        ("native_search_checked_at", f"ALTER TABLE model_configs ADD COLUMN native_search_checked_at {timestamp}"),
+    ]
+    for col, ddl in additions:
+        if col not in cols:
+            sync_conn.execute(text(ddl))

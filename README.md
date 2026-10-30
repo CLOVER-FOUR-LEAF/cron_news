@@ -28,7 +28,7 @@
 | **工作模式切换** | 辅助 / 自主两种模式，随时可在设置中切换 |
 | **自主模式** | 内置 Agent 按设定频率调用搜索与大模型 API，自动采集、撰写正文、生成推荐与简报 |
 | **辅助模式** | 项目本身不调用模型，作为展示平台，通过 REST API 供外部 Agent 推送新闻、写入简报 |
-| **Agent 配置管理** | 关注标签、大语言/文生图/搜索配置、定时任务、系统提示词、功能开关（智能推荐/每日简报/自动生成封面）均可在界面管理 |
+| **Agent 配置管理** | 自然语言兴趣/时间描述、大语言/文生图/搜索配置（含 DeepSeek / MiMo / Kimi / 智谱 / OpenCode Go 等预设与内置联网检测）、定时任务（固定 / 智能模式）、系统提示词、功能开关（智能推荐/每日简报/自动生成封面）均可在界面管理 |
 | **对话问答（Phase 1）** | `/chat` 页面：工具循环检索本地新闻库、读取全文/简报/收藏，回答带来源引用，SSE 输出工具进度 |
 | **长期记忆（Phase 2）** | 五个 Agent 共用 Markdown 记忆；对话工具可读写，阅读行为自动生成画像，反馈触发记忆管家反思 |
 | **个性化推荐（Phase 2）** | 行为统计 + 记忆 + 正负反馈打分，带推荐理由；与详情页的新闻间关联互补 |
@@ -308,17 +308,20 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 1. 打开 <http://localhost:18080>（Docker 部署默认端口，直接启动为 8000），首次进入选择工作模式（辅助 / 自主）。
 2. 在右上角 **设置** 中完成配置：
-   - 首次打开会进入**快速开始向导**，按步骤填写工作模式、模型服务、采集频率与封面方式；也可以点「跳过向导」稍后在设置里配置。
-   - **模型与服务配置**：新增并启用一个大语言模型、一个搜索服务（自主模式必需）；封面想要写实效果再启用一个文生图模型，否则用大模型 SVG 即可。
-   - **关注标签**：在首页标签栏或「设置 → 关注标签」中关注主题；采集 Agent 会优先围绕这些标签搜索。
-   - **自动任务配置**：设定采集频率与关注标签。
+   - 首次打开会进入**快速开始向导**，按步骤填写工作模式、模型服务、兴趣与时间描述、封面方式；也可以点「跳过向导」稍后在设置里配置。
+   - **模型与服务配置**：新增并启用一个大语言模型；搜索能力有两种来源——独立的搜索服务（Tavily / 博查 / Brave / Serper 等），或大模型自带的联网搜索（DeepSeek / Kimi / 智谱 / MiMo，保存或测试连接时自动探测）。封面想要写实效果再启用一个文生图模型，否则用大模型 SVG 即可。
+   - **兴趣与时间描述**：在向导第 3 步用自然语言描述你关注的新闻领域、通常什么时候有空、一次想看多少条；系统会调用模型提取主题标签与排程。之后可在「设置 → 配置向导」或自动任务里的「修改描述」随时调整。
+   - **关注标签**：首页标签栏与「设置 → 关注标签」仍然可用，采集时会与兴趣描述提取出的主题合并。
+   - **自动任务配置**：只需选择「固定频率 / 智能模式」。智能模式下不再需要手动设置时间间隔、开始时间、提前量或关注标签，全部由兴趣描述与阅读习惯决定；固定模式仍可手动选择间隔与开始时间。
 3. 自主模式下点击「立即执行」或等待定时任务，Agent 会自动采集新闻、撰写正文并生成封面 / 简报。
 
 ---
 
 ## 常见问题
 
-- **自主模式运行需要什么？** 至少启用一个大语言模型和一个搜索服务，并填写对应服务商 API Key。
+- **自主模式运行需要什么？** 至少启用一个大语言模型。搜索能力可以单独配置一个搜索服务，也可以使用大模型自带的联网搜索（DeepSeek / Kimi / 智谱 / MiMo）；保存大模型或点「测试连接」时会自动探测，探测通过后不配置搜索服务也能正常采集。两者都不可用时，定时任务会跳过并在运行日志里说明原因。
+- **为什么配置完 DeepSeek / MiMo 就可以不买搜索 API？** 这些厂商提供官方联网搜索接口。平台会在「测试连接」时实际调用一次：DeepSeek / Kimi / 智谱使用独立的 `/tools/search`、`/web_search` 接口；MiMo 使用对话接口的 `web_search` 工具，需要先在 MiMo 控制台开通联网插件。检测通过后会显示「内置联网」徽标，采集时自动回退到它。
+- **智能模式需要多少数据？** 至少约 12 次站内行为、覆盖 3 天以上才会切换为实际习惯；在此之前使用配置向导里的时间描述临时排程，没有描述时按固定频率执行。学习来源包括阅读、开始阅读、收藏、稍后再读、对话消息与反馈时间，全部只在本机统计，不调用模型。
 - **如何启用每日简报 / 智能推荐 / 自动生成封面？** 进入 **设置 → Agent 管理**，打开对应开关。封面方式可选「大模型 SVG」（只需大语言模型）或「文生图」（需先启用文生图模型）。
 - **向导关掉了怎么再打开？** 设置菜单 →「配置向导」，随时可以重新走一遍。
 - **提示词在哪里调整？** **设置 → Agent 管理 → 提示词管理**，可分别定制定时资讯、智能推荐、AI 简报、对话助手、记忆管家的系统提示词。
@@ -328,25 +331,45 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## 预设厂商参考
 
-新增配置时在「模型与服务配置 → 新增」中直接填写服务商名称、Base URL、API Key 与模型 ID 即可。以下为常见预设厂商信息（大语言 / 文生图 / 搜索），API Key 需在各厂商后台自行申请，填写后在平台内**加密存储**。
+新增配置时选择「预设模板」即可自动填充 Base URL 与常用模型，也可以手动填写。API Key 需在各厂商后台自行申请，填写后在平台内**加密存储**。
 
-| 厂商名称 | 支持类型 | Base URL | API 后台 / 申请地址 |
-|---------|---------|----------|---------------------|
-| DeepSeek | 大语言 | `https://api.deepseek.com/v1` | <https://platform.deepseek.com/> |
-| Kimi（月之暗面） | 大语言 | `https://api.moonshot.cn/v1` | <https://platform.moonshot.cn/> |
-| 智谱 AI | 大语言 | `https://open.bigmodel.cn/api/paas/v4` | <https://open.bigmodel.cn/> |
-| MiniMax | 大语言 | `https://api.minimax.chat/v1` | <https://platform.minimaxi.com/> |
-| MiMo（小米） | 大语言 / 搜索 | `https://api.mimo.xiaomi.com/v1` | <https://platform.mimo.xiaomi.com/> |
-| 阿里云百炼 | 大语言 / 文生图 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | <https://bailian.console.aliyun.com/> |
-| 字节方舟 | 大语言 / 文生图 | `https://ark.cn-beijing.volces.com/api/v3` | <https://console.volcengine.com/ark/> |
-| 腾讯混元 | 大语言 | `https://api.hunyuan.cloud.tencent.com/v1` | <https://console.cloud.tencent.com/hunyuan> |
-| Tavily | 搜索 | `https://api.tavily.com` | <https://app.tavily.com/> |
+| 厂商名称 | 支持类型 | Base URL | 内置联网 | API 后台 / 申请地址 |
+|---------|---------|----------|---------|---------------------|
+| DeepSeek | 大语言 | `https://api.deepseek.com/v1` | ✅ 自动检测 | <https://platform.deepseek.com/> |
+| MiMo（小米） | 大语言 | `https://api.xiaomimimo.com/v1` | ✅ 需开通插件后测试 | <https://platform.mimo.xiaomi.com/> |
+| Kimi（月之暗面） | 大语言 | `https://api.moonshot.cn/v1` | ✅ 自动检测 | <https://platform.kimi.com/> |
+| 智谱 GLM | 大语言 | `https://open.bigmodel.cn/api/paas/v4` | ✅ 自动检测 | <https://open.bigmodel.cn/> |
+| 阿里云百炼 | 大语言 / 文生图 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 需另配搜索 | <https://bailian.console.aliyun.com/> |
+| 字节方舟 | 大语言 / 文生图 | `https://ark.cn-beijing.volces.com/api/v3` | 需另配搜索 | <https://console.volcengine.com/ark/> |
+| MiniMax | 大语言 | `https://api.minimaxi.com/v1` | — | <https://platform.minimaxi.com/> |
+| 腾讯混元 | 大语言 | `https://api.hunyuan.cloud.tencent.com/v1` | — | <https://console.cloud.tencent.com/hunyuan> |
+| OpenCode Go | 大语言（聚合网关） | `https://opencode.ai/inference/go/openai/v1` | — | <https://opencode.ai/> |
+| OpenRouter | 大语言（聚合网关） | `https://openrouter.ai/api/v1` | — | <https://openrouter.ai/models> |
 
-> 以上 Base URL 为 OpenAI 兼容接口地址；文生图模型请使用各厂商文档中提供的文生图模型 ID（如阿里云百炼 `wanx2.1-t2i-turbo`、字节方舟 `seedream-3-0-t2i` 等）。其他厂商可按相同格式自定义配置。
+> 以上 Base URL 为 OpenAI 兼容接口地址。OpenCode Go 的协议路由较特殊：平台只走 OpenAI Chat Completions，请选择 Chat 协议模型（如 `deepseek-v4-pro`、`glm-5.3`、`kimi-k3.1-pro`、`mimo-v2.6-pro`）；Claude / Gemini 等仅支持 Anthropic / Google 协议的模型无法使用，旧地址 `https://opencode.ai/zen/go/v1` 也可尝试。文生图模型请使用各厂商文档中提供的模型 ID（如阿里云百炼 `wanx2.1-t2i-turbo`、字节方舟 `doubao-seedream-3-0-t2i` 等）。
+
+### 大模型内置联网搜索
+
+平台会在以下时机探测大模型是否自带联网搜索：
+
+- 新建/修改大模型配置时（DeepSeek / Kimi / 智谱这类独立搜索接口会自动探测一次）；
+- 点「测试连接」时（所有厂商都会尝试，MiMo 这类对话工具型也在这里验证）；
+- 启用某个尚未探测过的大模型时（仅自动探测独立搜索接口，避免启用动作被慢请求拖住）。
+
+支持的适配器：
+
+| 厂商 | 调用方式 | 说明 |
+|------|----------|------|
+| DeepSeek | `POST /v1/tools/search` | 与模型共用 API Key；搜索词会自动带上时间窗 |
+| Kimi | `POST /v1/tools/search` | 与模型共用 API Key；`text_query` + `limit` |
+| 智谱 GLM | `POST /api/paas/v4/web_search` | 与模型共用 API Key；支持 `search_recency_filter` |
+| MiMo | `POST /chat/completions` + `tools:[{"type":"web_search"}]` | 需在 MiMo 控制台开通联网插件；引用来自 `message.annotations` |
+
+检测通过后，大模型卡片会显示「内置联网」徽标；未配置独立搜索服务时，采集与对话助手的 `search_web` 会自动回退到它。若结果不理想，仍可随时新增一个独立搜索服务——独立服务优先。
 
 ### 搜索服务厂商模板
 
-不同搜索厂商的接口、鉴权方式与返回结构各不相同，平台为每个厂商提供**独立适配层**（`app/services/search_providers.py`），新增「搜索服务」配置时会提供厂商模板下拉，自动填充 Base URL，并在保存/测试时使用对应的调用方式。无法识别的厂商按「自定义」处理（兼容 `POST {base_url}/search` 的 Tavily 风格接口）。
+不同搜索厂商的接口、鉴权方式与返回结构各不相同，平台为每个厂商提供**独立适配层**（`app/services/search_providers.py`），新增「搜索服务」配置时会提供厂商模板，自动填充 Base URL，并在保存/测试时使用对应的调用方式。无法识别的厂商按「自定义」处理（兼容 `POST {base_url}/search` 的 Tavily 风格接口）。
 
 | 模板 | Base URL | 鉴权 | 说明 |
 |------|----------|------|------|
@@ -354,10 +377,44 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 | 博查 Bocha | `https://api.bochaai.com` | Bearer | 国内可直连，Key 在 <https://key.bochaai.com/> 获取，单次请求上限 10 条 |
 | SearXNG | 自建实例地址 | 一般无需 | 自建元搜索（如 `http://host:8080`），返回 `format=json` |
 | Exa | `https://api.exa.ai` | Bearer | 语义搜索，<https://exa.ai/> 申请 Key |
+| Brave Search | `https://api.search.brave.com` | `X-Subscription-Token` | 独立索引，免费额度较充足 |
+| Serper | `https://google.serper.dev` | `X-API-KEY` | Serper.dev 提供的 Google 结果，按次计费 |
+| SerpAPI | `https://serpapi.com` | 查询参数 `api_key` | SerpAPI 的 Google 搜索接口 |
+| Jina Search | `https://s.jina.ai` | Bearer | 返回标题、链接与正文摘要 |
+| Firecrawl | `https://api.firecrawl.dev` | Bearer | 搜索 + 可选正文抓取，自动兼容 v2/v1 接口 |
 | 自定义 | 任意 | Bearer | 兼容 `POST /search`（请求体含 `query`/`max_results`，返回 `{"results":[...]}`） |
 
 ### 运行日志与定时任务
 
 - 服务启动后会将运行日志同时输出到 **stdout**（`docker logs` 可见）与 **`logs/app.log`**（按大小轮转，可挂载到宿主机持久化）。
-- 定时任务（自主模式下）每次执行、或因「搜索服务未配置 / 非自主模式」等原因**跳过**时，都会写入**运行日志**（界面「设置 → Agent 管理 → 运行日志」可见）并说明原因，不再静默失效。
+- 定时任务（自主模式下）每次执行、或因「搜索能力未就绪 / 非自主模式」等原因**跳过**时，都会写入**运行日志**（界面「设置 → Agent 管理 → 运行日志」可见）并说明原因，不再静默失效。
 - 启动时若距上次采集超过一个采集周期，会自动**补跑一次**，避免刚部署/重启后长时间没有新内容。
+
+### 自然语言兴趣与时间偏好
+
+配置向导第 3 步不再要求用户逐项选择标签、间隔、开始时间或提前量，而是提供两个较大的输入框：
+
+1. **你关注哪些新闻领域？** 例如「我关注 AI 大模型、芯片、美股科技公司、国际局势；不想看娱乐八卦」。
+2. **你一天中通常什么时候有空看新闻？一次希望看到多少条？** 例如「早上 8 点通勤、晚上 9 点睡前看，一次大概 10 条」。
+
+提交后，后端会调用当前大模型做一次结构化分析，得到：
+
+- 兴趣主题标签（用于采集规划与推荐）；
+- 偏好时段、兜底间隔、固定槽位起点、提前量、每次采集条数、每个标签的查询数；
+- 否定描述（不想看/少推）会被排除在主题之外。
+
+分析结果写入 `.env`：`AGENT_INTERESTS_TEXT / AGENT_INTERESTS_TAGS / AGENT_SCHEDULE_TEXT / AGENT_SCHEDULE_PLAN`。智能模式下还会自动写入 `TASK_INTERVAL_HOURS / TASK_START_HOUR / TASK_SMART_LEAD_MINUTES`，并设置 `AGENT_MAX_ITEMS_PER_RUN` 与 `AGENT_COLLECT_QUERIES_PER_TAG`。没有配置大模型或分析失败时，会用确定性规则兜底，保证向导仍能完成。
+
+### 智能定时（按习惯提前采集）
+
+「设置 → 自动任务配置」现在只有**调度方式**需要选择：
+
+- **固定频率**：手动选择时间间隔与每日开始时间，严格按固定槽位执行。
+- **智能模式**：不再显示频率、开始时间、提前量或标签输入。系统会：
+  - 新用户阶段先用向导里的「时间描述」临时排程（偏好时段、兜底间隔、提前量、每次条数）；
+  - 从阅读、开始阅读、收藏、稍后再读、对话消息、反馈时间中持续学习，按 14 天半衰期聚合 24 小时活跃画像；
+  - 样本足够后自动切换为实际习惯，固定在用户活跃窗口前预热采集；
+  - 固定间隔仍作为**最长等待**兜底，两次采集之间还有最小间隔，避免频繁调用模型。
+- 任务弹窗会显示已识别的兴趣主题、偏好时段、每次条数、兜底间隔，以及当前依据（时间描述 / 实际阅读习惯）；点「修改描述」可直接回到向导第 3 步。
+- 学习是确定性的本地统计，不调用模型。样本不足（少于约 12 次行为或不足 3 天）时使用时间描述或固定频率兜底。
+- 相关配置项：`TASK_SCHEDULE_MODE=smart`；其余排程参数由偏好分析自动生成。
