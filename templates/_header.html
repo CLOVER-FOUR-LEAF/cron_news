@@ -330,15 +330,56 @@
                         </button>
                     </div>
                 </div>
-                <div class="onboarding-field">
-                    <label>你关注哪些新闻领域？</label>
-                    <textarea id="onboardingInterestsInput" class="preferences-textarea" rows="4" placeholder="例如：我关注 AI 大模型、芯片、美股科技公司、国际局势；不太想看娱乐八卦和营销号。"></textarea>
-                    <p class="onboarding-preset-note">系统会提取主题标签，作为采集与推荐的重点；否定描述会被排除。</p>
+                <div class="pref-card">
+                    <div class="pref-card-head">
+                        <div class="pref-card-title">
+                            <span class="pref-icon">
+                                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                                    <path d="M2 3.2h12M2 8h8M2 12.8h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <div>
+                                <b>你关注哪些新闻领域？</b>
+                                <small>用一段自然语言描述即可，系统会提取主题标签；否定描述会被排除。</small>
+                            </div>
+                        </div>
+                    </div>
+                    <textarea id="onboardingInterestsInput" class="preferences-textarea preferences-textarea-lg" rows="5" maxlength="2000" placeholder="例如：我关注 AI 大模型、芯片、美股科技公司、国际局势；不太想看娱乐八卦和营销号。"></textarea>
+                    <div class="pref-card-foot">
+                        <div class="pref-examples">
+                            <span>试试：</span>
+                            <button type="button" class="pref-example" data-target="onboardingInterestsInput" data-text="AI 大模型、芯片、美股科技公司">AI 与芯片</button>
+                            <button type="button" class="pref-example" data-target="onboardingInterestsInput" data-text="国际局势、地缘政治、军事">国际与军事</button>
+                            <button type="button" class="pref-example" data-target="onboardingInterestsInput" data-text="新能源车、消费电子、机器人">新能源与硬件</button>
+                        </div>
+                        <span class="pref-counter" id="interestsCounter">0 / 2000</span>
+                    </div>
                 </div>
-                <div class="onboarding-field" id="onboardingSmartScheduleField">
-                    <label>你一天中通常什么时候有空看新闻？一次希望看到多少条？</label>
-                    <textarea id="onboardingScheduleInput" class="preferences-textarea" rows="3" placeholder="例如：一般早上 8 点通勤、晚上 9 点睡前会看；一次大概 10~15 条，太长看不完。"></textarea>
-                    <p class="onboarding-preset-note">系统会据此安排预热时段、兜底间隔和每次采集条数，之后会继续从阅读行为中学习。</p>
+                <div class="pref-card" id="onboardingSmartScheduleField">
+                    <div class="pref-card-head">
+                        <div class="pref-card-title">
+                            <span class="pref-icon">
+                                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
+                                    <path d="M8 4.5V8l2.4 1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <div>
+                                <b>你一天中通常什么时候有空？一次想看多少条？</b>
+                                <small>系统会据此安排预热时段、兜底间隔和每次采集量，之后继续从阅读行为中学习。</small>
+                            </div>
+                        </div>
+                    </div>
+                    <textarea id="onboardingScheduleInput" class="preferences-textarea" rows="4" maxlength="2000" placeholder="例如：一般早上 8 点通勤、晚上 9 点睡前会看；一次大概 10~15 条，太长看不完。"></textarea>
+                    <div class="pref-card-foot">
+                        <div class="pref-examples">
+                            <span>试试：</span>
+                            <button type="button" class="pref-example" data-target="onboardingScheduleInput" data-text="早上 8 点通勤、晚上 9 点睡前看，一次 10 条">早晚各一次</button>
+                            <button type="button" class="pref-example" data-target="onboardingScheduleInput" data-text="午休 12 点看一次，晚上 8 点再看一次，每次 15 条">午休 + 晚间</button>
+                            <button type="button" class="pref-example" data-target="onboardingScheduleInput" data-text="只有晚上 10 点后有空，一次 20 条">夜间集中看</button>
+                        </div>
+                        <span class="pref-counter" id="scheduleCounter">0 / 2000</span>
+                    </div>
                 </div>
                 <div id="onboardingFixedFields">
                     <div class="onboarding-field">
@@ -567,20 +608,35 @@
 </div>
 
 <div id="tagsModal" class="modal">
-    <div class="modal-content modal-wide">
+    <div class="modal-content tags-modal">
         <div class="modal-header">
             <div class="modal-title-group">
                 <h3>关注标签</h3>
-                <span class="modal-title-hint">关注后，采集与推荐会优先围绕这些标签</span>
+                <span class="modal-title-hint">关注后，采集与推荐会优先围绕这些标签；标签较多时可用搜索与筛选快速找到</span>
             </div>
             <button class="modal-close" data-close>&times;</button>
         </div>
-        <div class="modal-body">
-            <div id="tagFollowList">
+        <div class="modal-body tags-modal-body">
+            <div class="tags-toolbar">
+                <label class="tags-search">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                        <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.3"/>
+                        <path d="M10.4 10.4L14 14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                    </svg>
+                    <input id="tagSearchInput" type="text" placeholder="搜索标签…" autocomplete="off">
+                </label>
+                <div class="tags-filter" id="tagFilterChips">
+                    <button type="button" class="tags-filter-chip active" data-filter="all">全部</button>
+                    <button type="button" class="tags-filter-chip" data-filter="followed">已关注</button>
+                </div>
+                <span class="tags-summary" id="tagSummary"></span>
+            </div>
+            <div id="tagFollowList" class="tag-follow-grid">
                 <div class="loading">加载中...</div>
             </div>
         </div>
         <div class="modal-footer">
+            <span class="tags-footer-hint" id="tagFooterHint"></span>
             <button class="btn-primary" data-close>完成</button>
         </div>
     </div>
@@ -893,9 +949,11 @@
             <div class="task-field" id="taskPreferencesField">
                 <div class="task-field-head">
                     <label class="task-label">兴趣与时间描述</label>
-                    <button type="button" class="btn-compact" id="editPreferencesBtn">修改描述</button>
+                    <button type="button" class="btn-secondary btn-compact" id="editPreferencesBtn">修改描述</button>
                 </div>
-                <p class="task-hint" id="taskPreferencesSummary">还没有分析兴趣与时间描述。</p>
+                <div class="task-pref-card" id="taskPreferencesSummary">
+                    <span class="smart-empty">还没有分析兴趣与时间描述。</span>
+                </div>
             </div>
 
             <div id="taskFixedSettings">
@@ -984,7 +1042,9 @@
         avatar: '',
         workMode: '',
         pendingWorkMode: null,
-        tagItems: []
+        tagItems: [],
+        tagFilter: 'all',
+        tagSearch: ''
     };
 
     const $ = id => document.getElementById(id);
@@ -1217,6 +1277,36 @@
         });
     }
 
+    function updatePrefCounter(inputId, counterId) {
+        const input = $(inputId);
+        const counter = $(counterId);
+        if (!input || !counter) return;
+        counter.textContent = `${input.value.length} / ${input.maxLength > 0 ? input.maxLength : 2000}`;
+    }
+
+    function updateAllPrefCounters() {
+        updatePrefCounter('onboardingInterestsInput', 'interestsCounter');
+        updatePrefCounter('onboardingScheduleInput', 'scheduleCounter');
+    }
+
+    document.querySelectorAll('.pref-example').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = $(btn.dataset.target);
+            const text = (btn.dataset.text || '').trim();
+            if (!target || !text) return;
+            const current = target.value.trim();
+            if (!current.includes(text)) {
+                target.value = current ? `${current}；${text}` : text;
+            }
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            target.focus();
+        });
+    });
+    ['onboardingInterestsInput', 'onboardingScheduleInput'].forEach(id => {
+        const input = $(id);
+        if (input) input.addEventListener('input', updateAllPrefCounters);
+    });
+
     function openOnboarding(startStep = 1) {
         ONBOARDING.savedLlm = false;
         ONBOARDING.savedSearch = false;
@@ -1230,6 +1320,7 @@
         onboardingSelectCover('svg');
         $('onboardingInterestsInput').value = data.agent_interests_text || '';
         $('onboardingScheduleInput').value = data.agent_schedule_text || '';
+        updateAllPrefCounters();
         const status = $('onboardingAnalyzeStatus');
         if (status) { status.className = 'onboarding-status'; status.textContent = ''; }
         onboardingShowStep(startStep);
@@ -1973,9 +2064,79 @@
     /* ===== 关注标签 ===== */
     async function openTagsModal() {
         const container = $('tagFollowList');
+        state.tagFilter = 'all';
+        state.tagSearch = '';
+        const search = $('tagSearchInput');
+        if (search) search.value = '';
+        document.querySelectorAll('#tagFilterChips .tags-filter-chip').forEach(chip => {
+            chip.classList.toggle('active', chip.dataset.filter === 'all');
+        });
         container.innerHTML = '<div class="loading">加载中...</div>';
         openModal('tagsModal');
         await loadTagFollowList();
+    }
+
+    function filteredTagItems() {
+        const keyword = (state.tagSearch || '').trim().toLowerCase();
+        let items = (state.tagItems || []).slice();
+        if (state.tagFilter === 'followed') items = items.filter(item => item.followed);
+        if (keyword) {
+            items = items.filter(item => String(item.tag || '').toLowerCase().includes(keyword));
+        }
+        // 已关注优先，其次按新闻数量、标签名排序
+        items.sort((a, b) => {
+            if (!!b.followed !== !!a.followed) return b.followed ? 1 : -1;
+            if ((Number(b.count) || 0) !== (Number(a.count) || 0)) {
+                return (Number(b.count) || 0) - (Number(a.count) || 0);
+            }
+            return String(a.tag || '').localeCompare(String(b.tag || ''), 'zh-CN');
+        });
+        return items;
+    }
+
+    function renderTagFollowList() {
+        const container = $('tagFollowList');
+        if (!container) return;
+        const all = state.tagItems || [];
+        const items = filteredTagItems();
+        const followedCount = all.filter(item => item.followed).length;
+        const summary = $('tagSummary');
+        if (summary) summary.textContent = `共 ${all.length} 个标签 · 已关注 ${followedCount} 个`;
+        const footer = $('tagFooterHint');
+        if (footer) footer.textContent = followedCount ? `当前关注 ${followedCount} 个标签` : '还没有关注标签';
+
+        if (!items.length) {
+            const keyword = (state.tagSearch || '').trim();
+            container.innerHTML = `
+                <div class="tags-empty">
+                    <svg width="34" height="34" viewBox="0 0 16 16" fill="none">
+                        <path d="M2 7.2V3.2c0-.7.5-1.2 1.2-1.2h4L14 8.8 8.8 14 2 7.2z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+                        <circle cx="5.2" cy="5.2" r="1" fill="currentColor"/>
+                    </svg>
+                    <p>${keyword ? `没有找到包含「${escapeHtml(keyword)}」的标签` : (state.tagFilter === 'followed' ? '还没有关注任何标签' : '暂无可关注标签')}</p>
+                    <span>${keyword || state.tagFilter === 'followed' ? '试试清空搜索或切换到「全部」' : '采集一轮后会自动生成标签'}</span>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = items.map((item) => {
+            const color = item.color || '#8a8690';
+            const followed = !!item.followed;
+            const index = (state.tagItems || []).findIndex(source => source.tag === item.tag);
+            return `
+                <button type="button" class="tag-follow-card ${followed ? 'followed' : ''}" data-index="${index}" data-follow="${followed ? '1' : '0'}" aria-pressed="${followed}">
+                    <span class="tag-follow-dot" style="background:${color}"></span>
+                    <span class="tag-follow-main">
+                        <span class="tag-follow-name">${escapeHtml(item.tag)}</span>
+                        <span class="tag-follow-count">${Number(item.count) || 0} 条新闻</span>
+                    </span>
+                    <span class="tag-follow-state">${followed ? '已关注' : '+ 关注'}</span>
+                </button>`;
+        }).join('');
+
+        container.querySelectorAll('.tag-follow-card').forEach(card => {
+            card.addEventListener('click', () => toggleTagFollow(card));
+        });
     }
 
     async function loadTagFollowList() {
@@ -1983,57 +2144,52 @@
         try {
             const resp = await fetch('/api/tags');
             const data = await resp.json();
-            const items = data.items || [];
-            if (!items.length) {
-                container.innerHTML = '<div class="empty-state"><p>暂无可关注标签</p></div>';
-                return;
-            }
-            container.innerHTML = items.map((item, index) => {
-                const color = item.color || '#8a8690';
-                const followed = !!item.followed;
-                return `
-                    <div class="tag-follow-row" data-index="${index}">
-                        <span class="tag-follow-dot" style="background:${color}"></span>
-                        <span class="tag-follow-name">${escapeHtml(item.tag)}</span>
-                        <span class="tag-follow-count">${Number(item.count) || 0} 条</span>
-                        <button type="button" class="btn-compact tag-follow-btn ${followed ? 'active' : ''}" data-follow="${followed ? '1' : '0'}">${followed ? '已关注' : '关注'}</button>
-                    </div>`;
-            }).join('');
-            state.tagItems = items;
-            container.querySelectorAll('.tag-follow-btn').forEach(btn => {
-                btn.addEventListener('click', () => toggleTagFollow(btn));
-            });
+            state.tagItems = data.items || [];
+            renderTagFollowList();
         } catch (e) {
-            container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+            container.innerHTML = '<div class="tags-empty"><p>加载失败</p><span>请稍后重试</span></div>';
         }
     }
 
-    async function toggleTagFollow(btn) {
-        const row = btn.closest('.tag-follow-row');
-        const index = row ? parseInt(row.dataset.index, 10) : -1;
-        const tag = (state.tagItems || [])[index]?.tag || '';
-        if (!tag) return;
-        const follow = btn.dataset.follow !== '1';
-        btn.disabled = true;
+    async function toggleTagFollow(card) {
+        const index = card ? parseInt(card.dataset.index, 10) : -1;
+        const item = (state.tagItems || [])[index];
+        if (!item) return;
+        const follow = card.dataset.follow !== '1';
+        card.disabled = true;
+        card.classList.add('busy');
         try {
             const resp = await fetch('/api/tags/follow', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tag, follow })
+                body: JSON.stringify({ tag: item.tag, follow })
             });
             if (!resp.ok) {
                 const data = await resp.json().catch(() => ({}));
                 throw new Error(data.detail || '操作失败');
             }
-            btn.dataset.follow = follow ? '1' : '0';
-            btn.textContent = follow ? '已关注' : '关注';
-            btn.classList.toggle('active', follow);
+            item.followed = follow;
+            renderTagFollowList();
         } catch (e) {
             showToast(e.message || '操作失败', 'error');
-        } finally {
-            btn.disabled = false;
+            card.disabled = false;
+            card.classList.remove('busy');
         }
     }
+
+    $('tagSearchInput').addEventListener('input', () => {
+        state.tagSearch = $('tagSearchInput').value;
+        renderTagFollowList();
+    });
+    document.querySelectorAll('#tagFilterChips .tags-filter-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            state.tagFilter = chip.dataset.filter || 'all';
+            document.querySelectorAll('#tagFilterChips .tags-filter-chip').forEach(item => {
+                item.classList.toggle('active', item === chip);
+            });
+            renderTagFollowList();
+        });
+    });
 
             /* ===== 模型与服务配置（大语言 / 文生图 / 搜索） ===== */
     const CONFIG_TYPE_LABEL = { llm: '大语言模型', image: '文生图模型', search: '搜索服务', embedding: '向量模型' };
@@ -2915,17 +3071,31 @@
 
     function renderTaskPreferences() {
         const data = state.searchConfig || {};
+        const el = $('taskPreferencesSummary');
+        if (!el) return;
         const tags = data.agent_interests_tags || [];
         const plan = data.agent_schedule_plan || {};
-        const parts = [];
-        parts.push(tags.length ? `兴趣：${tags.slice(0, 8).join('、')}` : '兴趣：未分析');
-        if (plan.preferred_hours && plan.preferred_hours.length) {
-            parts.push(`偏好时段：${plan.preferred_hours.map(h => `${h}:00`).join('、')}`);
+        if (!tags.length && !Object.keys(plan).length) {
+            el.innerHTML = '<span class="smart-empty">还没有分析兴趣与时间描述。点「修改描述」，让系统了解你关注的领域和空闲时间。</span>';
+            return;
         }
-        if (plan.items_per_run) parts.push(`每次约 ${plan.items_per_run} 条`);
-        if (plan.interval_hours) parts.push(`最长 ${plan.interval_hours} 小时兜底`);
-        const el = $('taskPreferencesSummary');
-        if (el) el.textContent = parts.join(' · ');
+        const tagHtml = tags.length
+            ? tags.slice(0, 10).map(tag => `<span class="task-pref-tag">${escapeHtml(tag)}</span>`).join('')
+            : '<span class="task-pref-muted">未提取到主题</span>';
+        const meta = [];
+        if (plan.preferred_hours && plan.preferred_hours.length) {
+            meta.push(`偏好 ${plan.preferred_hours.map(h => `${h}:00`).join(' / ')}`);
+        }
+        if (plan.items_per_run) meta.push(`每次约 ${plan.items_per_run} 条`);
+        if (plan.interval_hours) meta.push(`最长 ${plan.interval_hours} 小时兜底`);
+        if (plan.lead_minutes) meta.push(`提前 ${plan.lead_minutes} 分钟预热`);
+        el.innerHTML = `
+            <div class="task-pref-row">
+                <span class="task-pref-label">兴趣</span>
+                <div class="task-pref-tags">${tagHtml}</div>
+            </div>
+            ${meta.length ? `<div class="task-pref-meta">${meta.map(item => `<span>${escapeHtml(item)}</span>`).join('')}</div>` : ''}
+        `;
     }
 
     function renderTaskForm() {
